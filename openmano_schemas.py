@@ -28,7 +28,6 @@ __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$09-oct-2014 09:09:48$"
 
 #Basis schemas
-patern_name="^[ -~]+$"
 passwd_schema={"type" : "string", "minLength":1, "maxLength":60}
 nameshort_schema={"type" : "string", "minLength":1, "maxLength":60, "pattern" : "^[^,;()'\"]+$"}
 name_schema={"type" : "string", "minLength":1, "maxLength":255, "pattern" : "^[^,;()'\"]+$"}
