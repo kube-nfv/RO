@@ -1188,7 +1188,7 @@ def http_get_instance_id(tenant_id, instance_id):
             nfvo.refresh_instance(mydb, tenant_id, instance_dict)
         except (nfvo.NfvoException, db_base_Exception) as e:
             logger.warn("nfvo.refresh_instance couldn't refresh the status of the instance: %s" % str(e))
-        #obtain data with results upated
+        #obtain data with results udpated
         instance = mydb.get_instance_scenario(instance_id, tenant_id)
         convert_datetime2str(instance)
         #print json.dumps(instance, indent=4)
