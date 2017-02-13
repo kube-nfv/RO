@@ -237,21 +237,19 @@ fi
 fi  #[[ -z "$NO_PACKAGES" ]]
 
 #check and ask for database user password. Must be done after database installation
-if [[ -n $QUIET_MODE ]]
-then 
-    echo -e "\nCheking database connection and ask for credentials"
-    while ! mysqladmin -s -u$DBUSER $DBPASSWD_PARAM status >/dev/null
-    do
-        [ -n "$logintry" ] &&  echo -e "\nInvalid database credentials!!!. Try again (Ctrl+c to abort)"
-        [ -z "$logintry" ] &&  echo -e "\nProvide database credentials"
-        read -e -p "database user? ($DBUSER) " DBUSER_
-        [ -n "$DBUSER_" ] && DBUSER=$DBUSER_
-        read -e -s -p "database password? (Enter for not using password) " DBPASSWD_
-        [ -n "$DBPASSWD_" ] && DBPASSWD="$DBPASSWD_" && DBPASSWD_PARAM="-p$DBPASSWD_"
-        [ -z "$DBPASSWD_" ] && DBPASSWD=""           && DBPASSWD_PARAM=""
-        logintry="yes"
-    done
-fi
+echo -e "\nChecking database connection and ask for credentials"
+while ! mysqladmin -s -u$DBUSER $DBPASSWD_PARAM status >/dev/null
+do
+    [[ -n $QUIET_MODE ]] && echo -e "\nInvalid database credentials!!! Cannot continue in unattended mode" && exit 1
+    [ -n "$logintry" ] &&  echo -e "\nInvalid database credentials!!! Try again (Ctrl+c to abort)"
+    [ -z "$logintry" ] &&  echo -e "\nProvide database credentials"
+    read -e -p "database user? ($DBUSER) " DBUSER_
+    [ -n "$DBUSER_" ] && DBUSER=$DBUSER_
+    read -e -s -p "database password? (Enter for not using password) " DBPASSWD_
+    [ -n "$DBPASSWD_" ] && DBPASSWD="$DBPASSWD_" && DBPASSWD_PARAM="-p$DBPASSWD_"
+    [ -z "$DBPASSWD_" ] && DBPASSWD=""           && DBPASSWD_PARAM=""
+    logintry="yes"
+done
 
 if [[ -z "$NO_PACKAGES" ]]
 then
