@@ -57,11 +57,11 @@ The task content are (M: stored at memory, D: stored at database):
 
 import threading
 import time
-import Queue
+import queue
 import logging
-import vimconn
+from . import vimconn
 import yaml
-from db_base import db_base_Exception
+from .db_base import db_base_Exception
 from lib_osm_openvim.ovim import ovimException
 
 __author__ = "Alfonso Tierno, Pablo Montes"
@@ -116,7 +116,7 @@ class vim_thread(threading.Thread):
         self.db_lock = db_lock
 
         self.task_lock = task_lock
-        self.task_queue = Queue.Queue(2000)
+        self.task_queue = queue.Queue(2000)
 
         self.refresh_tasks = []
         """Contains time ordered task list for refreshing the status of VIM VMs and nets"""
@@ -206,7 +206,7 @@ class vim_thread(threading.Thread):
             try:
                 now = time.time()
                 vim_dict = self.vim.refresh_vms_status(vm_to_refresh_list)
-                for vim_id, vim_info in vim_dict.items():
+                for vim_id, vim_info in list(vim_dict.items()):
                     # look for task
                     task_need_update = False
                     task = vm_to_refresh_dict[vim_id]
@@ -309,7 +309,7 @@ class vim_thread(threading.Thread):
             try:
                 now = time.time()
                 vim_dict = self.vim.refresh_nets_status(net_to_refresh_list)
-                for vim_id, vim_info in vim_dict.items():
+                for vim_id, vim_info in list(vim_dict.items()):
                     # look for task
                     task = net_to_refresh_dict[vim_id]
                     self.logger.debug("get-net net_id=%s result=%s", task["vim_id"], str(vim_info))
@@ -557,7 +557,7 @@ class vim_thread(threading.Thread):
         try:
             self.task_queue.put(task, False)
             return None
-        except Queue.Full:
+        except queue.Full:
             raise vimconn.vimconnException(self.name + ": timeout inserting a task")
 
     def del_task(self, task):
@@ -688,7 +688,7 @@ class vim_thread(threading.Thread):
         vm_vim_id = task["vim_id"]
         interfaces = task["extra"].get("interfaces", ())
         try:
-            for iface in interfaces.values():
+            for iface in list(interfaces.values()):
                 if iface.get("sdn_port_id"):
                     try:
                         with self.db_lock:

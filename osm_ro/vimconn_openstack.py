@@ -35,7 +35,7 @@ to the VIM connector's SFC resources as follows:
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research, Igor D.C."
 __date__  = "$22-sep-2017 23:59:59$"
 
-import vimconn
+from . import vimconn
 import json
 import logging
 import netaddr
@@ -55,7 +55,7 @@ from glanceclient import client as glClient
 import glanceclient.client as gl1Client
 import glanceclient.exc as gl1Exceptions
 from  cinderclient import client as cClient
-from httplib import HTTPException
+from http.client import HTTPException
 from neutronclient.neutron import client as neClient
 from neutronclient.common import exceptions as neExceptions
 from requests.exceptions import ConnectionError
@@ -383,7 +383,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 project = self.keystone.tenants.create(tenant_name, tenant_description)
             return project.id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
 
     def delete_tenant(self, tenant_id):
@@ -396,7 +396,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 self.keystone.tenants.delete(tenant_id)
             return tenant_id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
 
     def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
@@ -780,7 +780,7 @@ class vimconnector(vimconn.vimconnector):
                 new_image_nova.metadata.setdefault('location',image_dict['location'])
                 metadata_to_load = image_dict.get('metadata')
                 if metadata_to_load:
-                    for k,v in yaml.load(metadata_to_load).iteritems():
+                    for k,v in yaml.load(metadata_to_load).items():
                         new_image_nova.metadata.setdefault(k,v)
                 return new_image.id
             except (nvExceptions.Conflict, ksExceptions.ClientException, nvExceptions.ClientException) as e:
@@ -1073,7 +1073,7 @@ class vimconnector(vimconn.vimconnector):
                 elapsed_time = 0
                 while keep_waiting and elapsed_time < volume_timeout:
                     keep_waiting = False
-                    for volume_id in block_device_mapping.itervalues():
+                    for volume_id in block_device_mapping.values():
                         if self.cinder.volumes.get(volume_id).status != 'available':
                             keep_waiting = True
                     if keep_waiting:
@@ -1083,7 +1083,7 @@ class vimconnector(vimconn.vimconnector):
                 #if we exceeded the timeout rollback
                 if elapsed_time >= volume_timeout:
                     #delete the volumes we just created
-                    for volume_id in block_device_mapping.itervalues():
+                    for volume_id in block_device_mapping.values():
                         self.cinder.volumes.delete(volume_id)
 
                     #delete ports we just created
@@ -1187,7 +1187,7 @@ class vimconnector(vimconn.vimconnector):
         except Exception as e:
             # delete the volumes we just created
             if block_device_mapping:
-                for volume_id in block_device_mapping.itervalues():
+                for volume_id in block_device_mapping.values():
                     self.cinder.volumes.delete(volume_id)
 
             # Delete the VM
@@ -1504,8 +1504,8 @@ class vimconnector(vimconn.vimconnector):
         #find unused VLAN ID
         for vlanID_range in self.config.get('dataplane_net_vlan_range'):
             try:
-                start_vlanid , end_vlanid = map(int, vlanID_range.replace(" ", "").split("-"))
-                for vlanID in xrange(start_vlanid, end_vlanid + 1):
+                start_vlanid , end_vlanid = list(map(int, vlanID_range.replace(" ", "").split("-")))
+                for vlanID in range(start_vlanid, end_vlanid + 1):
                     if vlanID not in used_vlanIDs:
                         return vlanID
             except Exception as exp:
@@ -1530,7 +1530,7 @@ class vimconnector(vimconn.vimconnector):
                 raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}.You must provide "\
                 "'dataplane_net_vlan_range' in format [start_ID - end_ID].".format(vlanID_range))
 
-            start_vlanid , end_vlanid = map(int,vlan_range.split("-"))
+            start_vlanid , end_vlanid = list(map(int,vlan_range.split("-")))
             if start_vlanid <= 0 :
                 raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
                 "Start ID can not be zero. For VLAN "\
@@ -1601,7 +1601,7 @@ class vimconnector(vimconn.vimconnector):
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
         if self.debug:
-            print("delete_tenant " + error_text)
+            print(("delete_tenant " + error_text))
         return error_value, error_text
 
     def get_hosts_info(self):
@@ -1625,7 +1625,7 @@ class vimconnector(vimconn.vimconnector):
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
         if self.debug:
-            print("get_hosts_info " + error_text)
+            print(("get_hosts_info " + error_text))
         return error_value, error_text
 
     def get_hosts(self, vim_tenant):
@@ -1654,7 +1654,7 @@ class vimconnector(vimconn.vimconnector):
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
         if self.debug:
-            print("get_hosts " + error_text)
+            print(("get_hosts " + error_text))
         return error_value, error_text
 
     def new_classification(self, name, ctype, definition):

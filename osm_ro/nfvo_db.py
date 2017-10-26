@@ -27,7 +27,7 @@ NFVO DB engine. It implements all the methods to interact with the Openmano Data
 __author__="Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ ="$28-aug-2014 10:05:01$"
 
-import db_base
+from . import db_base
 import MySQLdb as mdb
 import json
 import yaml
@@ -66,7 +66,7 @@ class nfvo_db(db_base.db_base):
                     #print "Adding new vms to the NFVO database"
                     #For each vm, we must create the appropriate vm in the NFVO database.
                     vmDict = {}
-                    for _,vm in VNFCDict.iteritems():
+                    for _,vm in VNFCDict.items():
                         #This code could make the name of the vms grow and grow.
                         #If we agree to follow this convention, we should check with a regex that the vnfc name is not including yet the vnf name  
                         #vm['name'] = "%s-%s" % (vnf_name,vm['name'])
@@ -218,7 +218,7 @@ class nfvo_db(db_base.db_base):
                     #print "Adding new vms to the NFVO database"
                     #For each vm, we must create the appropriate vm in the NFVO database.
                     vmDict = {}
-                    for _,vm in VNFCDict.iteritems():
+                    for _,vm in VNFCDict.items():
                         #This code could make the name of the vms grow and grow.
                         #If we agree to follow this convention, we should check with a regex that the vnfc name is not including yet the vnf name  
                         #vm['name'] = "%s-%s" % (vnf_name,vm['name'])
@@ -389,7 +389,7 @@ class nfvo_db(db_base.db_base):
                     
                     scenario_uuid =  self._new_row_internal('scenarios', INSERT_, add_uuid=True, root_uuid=None, created_time=created_time)
                     #sce_nets
-                    for net in scenario_dict['nets'].values():
+                    for net in list(scenario_dict['nets'].values()):
                         net_dict={'scenario_id': scenario_uuid}
                         net_dict["name"] = net["name"]
                         net_dict["type"] = net["type"]
@@ -418,7 +418,7 @@ class nfvo_db(db_base.db_base):
                             self._new_row_internal('ip_profiles', myIPProfileDict)
 
                     # sce_vnfs
-                    for k, vnf in scenario_dict['vnfs'].items():
+                    for k, vnf in list(scenario_dict['vnfs'].items()):
                         INSERT_ = {'scenario_id': scenario_uuid,
                                    'name': k,
                                    'vnf_id': vnf['uuid'],
@@ -433,7 +433,7 @@ class nfvo_db(db_base.db_base):
                                                               root_uuid=scenario_uuid, created_time=created_time)
                         vnf['scn_vnf_uuid']=scn_vnf_uuid
                         # sce_interfaces
-                        for iface in vnf['ifaces'].values():
+                        for iface in list(vnf['ifaces'].values()):
                             # print 'iface', iface
                             if 'net_key' not in iface:
                                 continue
@@ -488,7 +488,7 @@ class nfvo_db(db_base.db_base):
                         WHERE_={'tenant_id': tenant_id, 'uuid': scenario_uuid}
                         item_changed += self._update_rows('scenarios', UPDATE_, WHERE_, modified_time=modified_time)
                     #sce_nets
-                    for node_id, node in nodes.items():
+                    for node_id, node in list(nodes.items()):
                         if "graph" in node:
                             #node["graph"] = yaml.safe_dump(node["graph"],default_flow_style=True,width=256)
                             #TODO, must be json because of the GUI, change to yaml
@@ -759,7 +759,7 @@ class nfvo_db(db_base.db_base):
                 with self.con:
                     self.cur = self.con.cursor()
                     for table in tables:
-                        for table_name, row_list in table.items():
+                        for table_name, row_list in list(table.items()):
                             index = 0
                             if isinstance(row_list, dict):
                                 row_list = (row_list, )  #create a list with the single value
@@ -810,7 +810,7 @@ class nfvo_db(db_base.db_base):
                             net["vim_id_sites"]["datacenter_site_id"] = {datacenter_site_id: net['vim_id']}
                         sce_net_id = net.get("uuid")
                         
-                        for datacenter_site_id,vim_id in net["vim_id_sites"].iteritems():
+                        for datacenter_site_id,vim_id in net["vim_id_sites"].items():
                             INSERT_={'vim_net_id': vim_id, 'created': net.get('created', False), 'instance_scenario_id':instance_uuid } #,  'type': net['type']
                             INSERT_['datacenter_id'] = datacenter_site_id 
                             INSERT_['datacenter_tenant_id'] = scenarioDict["datacenter2tenant"][datacenter_site_id]

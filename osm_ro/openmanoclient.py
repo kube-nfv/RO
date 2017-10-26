@@ -40,7 +40,7 @@ version_date = "Oct 2017"
 if sys.version_info.major == 3:
     from urllib.parse import quote
 elif sys.version_info.major == 2:
-    from urllib import quote
+    from urllib.parse import quote
 
 class OpenmanoException(Exception):
     '''Common Exception for all openmano client exceptions'''

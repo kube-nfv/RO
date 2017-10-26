@@ -62,7 +62,7 @@ def format_in(http_response, schema):
         #print "Input data: ", str(client_data)
         return True, client_data
     except js_e.ValidationError as exc:
-        print "validate_in error, jsonschema exception ", exc.message, "at", exc.path
+        print("validate_in error, jsonschema exception ", exc.message, "at", exc.path)
         return False, ("validate_in error, jsonschema exception ", exc.message, "at", exc.path)
 
 def remove_extra_items(data, schema):
@@ -75,8 +75,8 @@ def remove_extra_items(data, schema):
         #TODO deal with patternProperties
         if 'properties' not in schema:
             return None
-        for k in data.keys():
-            if k not in schema['properties'].keys():
+        for k in list(data.keys()):
+            if k not in list(schema['properties'].keys()):
                 del data[k]
                 deleted.append(k)
             else:
@@ -102,7 +102,7 @@ def convert_bandwidth(data, reverse=False):
         None
     '''
     if type(data) is dict:
-        for k in data.keys():
+        for k in list(data.keys()):
             if type(data[k]) is dict or type(data[k]) is tuple or type(data[k]) is list:
                 convert_bandwidth(data[k], reverse)
         if "bandwidth" in data:
@@ -119,7 +119,7 @@ def convert_bandwidth(data, reverse=False):
                     if value % 1000 == 0: data["bandwidth"]=str(value/1000) + " Gbps"
                     else: data["bandwidth"]=str(value) + " Mbps"
             except:
-                print "convert_bandwidth exception for type", type(data["bandwidth"]), " data", data["bandwidth"]
+                print("convert_bandwidth exception for type", type(data["bandwidth"]), " data", data["bandwidth"])
                 return
     if type(data) is tuple or type(data) is list:
         for k in data:
@@ -133,7 +133,7 @@ def convert_datetime2str(var):
     It enters recursively in the dict var finding this kind of variables
     '''
     if type(var) is dict:
-        for k,v in var.items():
+        for k,v in list(var.items()):
             if type(v) is datetime.datetime:
                 var[k]= v.strftime('%Y-%m-%dT%H:%M:%S')
             elif type(v) is dict or type(v) is list or type(v) is tuple: 
@@ -153,7 +153,7 @@ def convert_str2boolean(data, items):
         None
     '''
     if type(data) is dict:
-        for k in data.keys():
+        for k in list(data.keys()):
             if type(data[k]) is dict or type(data[k]) is tuple or type(data[k]) is list:
                 convert_str2boolean(data[k], items)
             if k in items:

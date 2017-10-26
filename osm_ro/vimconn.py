@@ -31,7 +31,7 @@ __date__ ="$14-aug-2017 23:59:59$"
 import logging
 import paramiko
 import socket
-import StringIO
+import io
 import yaml
 import sys
 from email.mime.multipart import MIMEMultipart
@@ -799,7 +799,7 @@ class vimconnector():
             client = paramiko.SSHClient()
             try:
                 if ro_key:
-                    pkey = paramiko.RSAKey.from_private_key(StringIO.StringIO(ro_key))
+                    pkey = paramiko.RSAKey.from_private_key(io.StringIO(ro_key))
                 else:
                     pkey = None
                 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())

@@ -37,7 +37,7 @@ import time
 import logging
 
 from jsonschema import validate as js_v, exceptions as js_e
-from openmano_schemas import vnfd_schema_v01, vnfd_schema_v02, \
+from .openmano_schemas import vnfd_schema_v01, vnfd_schema_v02, \
                             nsd_schema_v01, nsd_schema_v02, nsd_schema_v03, scenario_edit_schema, \
                             scenario_action_schema, instance_scenario_action_schema, instance_scenario_create_schema_v01, \
                             tenant_schema, tenant_edit_schema,\
@@ -45,9 +45,9 @@ from openmano_schemas import vnfd_schema_v01, vnfd_schema_v02, \
                             object_schema, netmap_new_schema, netmap_edit_schema, sdn_controller_schema, sdn_controller_edit_schema, \
                             sdn_port_mapping_schema, sdn_external_port_schema
 
-import nfvo
-import utils
-from db_base import db_base_Exception
+from . import nfvo
+from . import utils
+from .db_base import db_base_Exception
 from functools import wraps
 
 global mydb
@@ -67,7 +67,7 @@ HTTP_Internal_Server_Error= 500
 
 def delete_nulls(var):
     if type(var) is dict:
-        for k in var.keys():
+        for k in list(var.keys()):
             if var[k] is None: del var[k]
             elif type(var[k]) is dict or type(var[k]) is list or type(var[k]) is tuple: 
                 if delete_nulls(var[k]): del var[k]
@@ -83,7 +83,7 @@ def convert_datetime2str(var):
     It enters recursively in the dict var finding this kind of variables
     '''
     if type(var) is dict:
-        for k,v in var.items():
+        for k,v in list(var.items()):
             if type(v) is float and k in ("created_at", "modified_at"):
                 var[k] = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(v) )
             elif type(v) is dict or type(v) is list or type(v) is tuple: 
@@ -166,10 +166,10 @@ def change_keys_http2db(data, http_db, reverse=False):
             change_keys_http2db(d, http_db, reverse)
     elif type(data) is dict or type(data) is bottle.FormsDict:
         if reverse:
-            for k,v in http_db.items():
+            for k,v in list(http_db.items()):
                 if v in data: data[k]=data.pop(v)
         else:
-            for k,v in http_db.items():
+            for k,v in list(http_db.items()):
                 if k in data: data[v]=data.pop(k)
 
 def format_out(data):
@@ -767,7 +767,7 @@ def http_getnetmap_datacenter_id(tenant_id, datacenter_id, netmap_id=None):
         if netmap_id and len(netmaps)==1:
             data={'netmap' : netmaps[0]}
         elif netmap_id and len(netmaps)==0:
-            bottle.abort(HTTP_Not_Found, "No netmap found with " + " and ".join(map(lambda x: str(x[0])+": "+str(x[1]), where_.iteritems())) )
+            bottle.abort(HTTP_Not_Found, "No netmap found with " + " and ".join([str(x[0])+": "+str(x[1]) for x in iter(where_.items())]) )
             return 
         else:
             data={'netmaps' : netmaps}
@@ -799,7 +799,7 @@ def http_delnetmap_datacenter_id(tenant_id, datacenter_id, netmap_id=None):
         #change_keys_http2db(content, http2db_tenant, reverse=True)
         deleted = mydb.delete_row(FROM='datacenter_nets', WHERE= where_) 
         if deleted == 0 and netmap_id:
-            bottle.abort(HTTP_Not_Found, "No netmap found with " + " and ".join(map(lambda x: str(x[0])+": "+str(x[1]), where_.iteritems())) )
+            bottle.abort(HTTP_Not_Found, "No netmap found with " + " and ".join([str(x[0])+": "+str(x[1]) for x in iter(where_.items())]) )
         if netmap_id:
             return format_out({"result": "netmap %s deleted" % netmap_id})
         else:
