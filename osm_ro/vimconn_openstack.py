@@ -35,7 +35,7 @@ to the VIM connector's SFC resources as follows:
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research, Igor D.C."
 __date__  = "$22-sep-2017 23:59:59$"
 
-from . import vimconn
+import vimconn
 import json
 import logging
 import netaddr
@@ -55,6 +55,7 @@ from glanceclient import client as glClient
 import glanceclient.client as gl1Client
 import glanceclient.exc as gl1Exceptions
 from  cinderclient import client as cClient
+#from httplib import HTTPException
 from http.client import HTTPException
 from neutronclient.neutron import client as neClient
 from neutronclient.common import exceptions as neExceptions
@@ -156,21 +157,31 @@ class vimconnector(vimconn.vimconnector):
         '''Called before any operation, it check if credentials has changed
         Throw keystoneclient.apiclient.exceptions.AuthorizationFailure
         '''
-        #TODO control the timing and possible token timeout, but it seams that python client does this task for us :-) 
+        #TODO control the timing and possible token timeout, but it seams that python client does this task for us :-)
         if self.session['reload_client']:
             if self.config.get('APIversion'):
                 self.api_version3 = self.config['APIversion'] == 'v3.3' or self.config['APIversion'] == '3'
             else:  # get from ending auth_url that end with v3 or with v2.0
-                self.api_version3 =  self.url.split("/")[-1] == "v3"
+                self.api_version3 =  self.url.endswith("/v3") or self.url.endswith("/v3/")
             self.session['api_version3'] = self.api_version3
             if self.api_version3:
+                if self.config.get('project_domain_id') or self.config.get('project_domain_name'):
+                    project_domain_id_default = None
+                else:
+                    project_domain_id_default = 'default'
+                if self.config.get('user_domain_id') or self.config.get('user_domain_name'):
+                    user_domain_id_default = None
+                else:
+                    user_domain_id_default = 'default'
                 auth = v3.Password(auth_url=self.url,
                                    username=self.user,
                                    password=self.passwd,
                                    project_name=self.tenant_name,
                                    project_id=self.tenant_id,
-                                   project_domain_id=self.config.get('project_domain_id', 'default'),
-                                   user_domain_id=self.config.get('user_domain_id', 'default'))
+                                   project_domain_id=self.config.get('project_domain_id', project_domain_id_default),
+                                   user_domain_id=self.config.get('user_domain_id', user_domain_id_default),
+                                   project_domain_name=self.config.get('project_domain_name'),
+                                   user_domain_name=self.config.get('user_domain_name'))
             else:
                 auth = v2.Password(auth_url=self.url,
                                    username=self.user,
@@ -383,7 +394,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 project = self.keystone.tenants.create(tenant_name, tenant_description)
             return project.id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError) as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
 
     def delete_tenant(self, tenant_id):
@@ -396,7 +407,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 self.keystone.tenants.delete(tenant_id)
             return tenant_id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError) as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ConnectionError)  as e:
             self._format_exception(e)
 
     def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
@@ -541,13 +552,13 @@ class vimconnector(vimconn.vimconnector):
                 net_id:         #VIM id of this network
                     status:     #Mandatory. Text with one of:
                                 #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...) 
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
                                 #  OTHER (Vim reported other status not understood)
                                 #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, INACTIVE, DOWN (admin down), 
+                                #  ACTIVE, INACTIVE, DOWN (admin down),
                                 #  BUILD (on building process)
                                 #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR 
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
 
         '''
@@ -698,7 +709,7 @@ class vimconnector(vimconn.vimconnector):
                             #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
                             #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
 
-                #create flavor                 
+                #create flavor
                 new_flavor=self.nova.flavors.create(name,
                                 ram,
                                 vcpus,
@@ -774,13 +785,13 @@ class vimconnector(vimconn.vimconnector):
                     with open(image_dict['location']) as fimage:
                         new_image = self.glancev1.images.create(name=image_dict['name'], is_public=image_dict.get('public',"yes")=="yes",
                             container_format="bare", data=fimage, disk_format=disk_format)
-                #insert metadata. We cannot use 'new_image.properties.setdefault' 
+                #insert metadata. We cannot use 'new_image.properties.setdefault'
                 #because nova and glance are "INDEPENDENT" and we are using nova for reading metadata
                 new_image_nova=self.nova.images.find(id=new_image.id)
                 new_image_nova.metadata.setdefault('location',image_dict['location'])
                 metadata_to_load = image_dict.get('metadata')
                 if metadata_to_load:
-                    for k,v in yaml.load(metadata_to_load).items():
+                    for k,v in yaml.load(metadata_to_load).iteritems():
                         new_image_nova.metadata.setdefault(k,v)
                 return new_image.id
             except (nvExceptions.Conflict, ksExceptions.ClientException, nvExceptions.ClientException) as e:
@@ -831,15 +842,18 @@ class vimconnector(vimconn.vimconnector):
             filter_dict_os=filter_dict.copy()
             #First we filter by the available filter fields: name, id. The others are removed.
             filter_dict_os.pop('checksum',None)
-            image_list=self.nova.images.findall(**filter_dict_os)
-            if len(image_list)==0:
+            image_list = self.nova.images.findall(**filter_dict_os)
+            if len(image_list) == 0:
                 return []
             #Then we filter by the rest of filter fields: checksum
             filtered_list = []
             for image in image_list:
-                image_class=self.glance.images.get(image.id)
-                if 'checksum' not in filter_dict or image_class['checksum']==filter_dict.get('checksum'):
-                    filtered_list.append(image_class.copy())
+                try:
+                    image_class = self.glance.images.get(image.id)
+                    if 'checksum' not in filter_dict or image_class['checksum']==filter_dict.get('checksum'):
+                        filtered_list.append(image_class.copy())
+                except gl1Exceptions.HTTPNotFound:
+                    pass
             return filtered_list
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
@@ -1073,7 +1087,7 @@ class vimconnector(vimconn.vimconnector):
                 elapsed_time = 0
                 while keep_waiting and elapsed_time < volume_timeout:
                     keep_waiting = False
-                    for volume_id in block_device_mapping.values():
+                    for volume_id in block_device_mapping.itervalues():
                         if self.cinder.volumes.get(volume_id).status != 'available':
                             keep_waiting = True
                     if keep_waiting:
@@ -1083,7 +1097,7 @@ class vimconnector(vimconn.vimconnector):
                 #if we exceeded the timeout rollback
                 if elapsed_time >= volume_timeout:
                     #delete the volumes we just created
-                    for volume_id in block_device_mapping.values():
+                    for volume_id in block_device_mapping.itervalues():
                         self.cinder.volumes.delete(volume_id)
 
                     #delete ports we just created
@@ -1187,7 +1201,7 @@ class vimconnector(vimconn.vimconnector):
         except Exception as e:
             # delete the volumes we just created
             if block_device_mapping:
-                for volume_id in block_device_mapping.values():
+                for volume_id in block_device_mapping.itervalues():
                     self.cinder.volumes.delete(volume_id)
 
             # Delete the VM
@@ -1218,13 +1232,13 @@ class vimconnector(vimconn.vimconnector):
         Params:
             vm_id: uuid of the VM
             console_type, can be:
-                "novnc" (by default), "xvpvnc" for VNC types, 
+                "novnc" (by default), "xvpvnc" for VNC types,
                 "rdp-html5" for RDP types, "spice-html5" for SPICE types
         Returns dict with the console parameters:
                 protocol: ssh, ftp, http, https, ...
-                server:   usually ip address 
-                port:     the http, ssh, ... port 
-                suffix:   extra text, e.g. the http path and query string   
+                server:   usually ip address
+                port:     the http, ssh, ... port
+                suffix:   extra text, e.g. the http path and query string
         '''
         self.logger.debug("Getting VM CONSOLE from VIM")
         try:
@@ -1315,14 +1329,14 @@ class vimconnector(vimconn.vimconnector):
                 vm_id:          #VIM id of this Virtual Machine
                     status:     #Mandatory. Text with one of:
                                 #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...) 
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
                                 #  OTHER (Vim reported other status not understood)
                                 #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running), 
+                                #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running),
                                 #  CREATING (on building process), ERROR
                                 #  ACTIVE:NoMgmtIP (Active but any of its interface has an IP address
                                 #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR 
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
                     interfaces:
                      -  vim_info:         #Text with plain information obtained from vim (yaml.safe_dump)
@@ -1365,13 +1379,13 @@ class vimconnector(vimconn.vimconnector):
                         interface["mac_address"] = port.get("mac_address")
                         interface["vim_net_id"] = port["network_id"]
                         interface["vim_interface_id"] = port["id"]
-                        # check if OS-EXT-SRV-ATTR:host is there, 
+                        # check if OS-EXT-SRV-ATTR:host is there,
                         # in case of non-admin credentials, it will be missing
                         if vm_vim.get('OS-EXT-SRV-ATTR:host'):
                             interface["compute_node"] = vm_vim['OS-EXT-SRV-ATTR:host']
                         interface["pci"] = None
 
-                        # check if binding:profile is there, 
+                        # check if binding:profile is there,
                         # in case of non-admin credentials, it will be missing
                         if port.get('binding:profile'):
                             if port['binding:profile'].get('pci_slot'):
@@ -1504,8 +1518,8 @@ class vimconnector(vimconn.vimconnector):
         #find unused VLAN ID
         for vlanID_range in self.config.get('dataplane_net_vlan_range'):
             try:
-                start_vlanid , end_vlanid = list(map(int, vlanID_range.replace(" ", "").split("-")))
-                for vlanID in range(start_vlanid, end_vlanid + 1):
+                start_vlanid , end_vlanid = map(int, vlanID_range.replace(" ", "").split("-"))
+                for vlanID in xrange(start_vlanid, end_vlanid + 1):
                     if vlanID not in used_vlanIDs:
                         return vlanID
             except Exception as exp:
@@ -1530,7 +1544,7 @@ class vimconnector(vimconn.vimconnector):
                 raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}.You must provide "\
                 "'dataplane_net_vlan_range' in format [start_ID - end_ID].".format(vlanID_range))
 
-            start_vlanid , end_vlanid = list(map(int,vlan_range.split("-")))
+            start_vlanid , end_vlanid = map(int,vlan_range.split("-"))
             if start_vlanid <= 0 :
                 raise vimconn.vimconnConflictException("Invalid dataplane_net_vlan_range {}."\
                 "Start ID can not be zero. For VLAN "\
@@ -1601,7 +1615,7 @@ class vimconnector(vimconn.vimconnector):
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
         if self.debug:
-            print(("delete_tenant " + error_text))
+            print("delete_tenant " + error_text)
         return error_value, error_text
 
     def get_hosts_info(self):
@@ -1625,7 +1639,7 @@ class vimconnector(vimconn.vimconnector):
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
         if self.debug:
-            print(("get_hosts_info " + error_text))
+            print("get_hosts_info " + error_text)
         return error_value, error_text
 
     def get_hosts(self, vim_tenant):
@@ -1654,7 +1668,7 @@ class vimconnector(vimconn.vimconnector):
         #TODO insert exception vimconn.HTTP_Unauthorized
         #if reaching here is because an exception
         if self.debug:
-            print(("get_hosts " + error_text))
+            print("get_hosts " + error_text)
         return error_value, error_text
 
     def new_classification(self, name, ctype, definition):

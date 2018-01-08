@@ -27,7 +27,7 @@ mbayramov@vmware.com
 """
 from progressbar import Percentage, Bar, ETA, FileTransferSpeed, ProgressBar
 
-from . import vimconn
+import vimconn
 import os
 import traceback
 import itertools
@@ -42,7 +42,10 @@ from xml.etree import ElementTree as XmlElementTree
 from lxml import etree as lxmlElementTree
 
 import yaml
-from pyvcloud import Http
+
+#from pyvcloud import Http
+import http.client as Http
+
 from pyvcloud.vcloudair import VCA
 from pyvcloud.schema.vcd.v1_5.schemas.vcloud import sessionType, organizationType, \
     vAppType, organizationListType, vdcType, catalogType, queryRecordViewType, \
@@ -58,7 +61,7 @@ import logging
 import json
 import time
 import uuid
-import http.client
+import httplib
 import hashlib
 import socket
 import struct
@@ -456,7 +459,7 @@ class vimconnector(vimconn.vimconnector):
                     raise vimconn.vimconnNotFoundException("Fail to get tenant {}".format(tenant_id))
 
                 lxmlroot_respond = lxmlElementTree.fromstring(response.content)
-                namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
+                namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
                 namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
                 vdc_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']",namespaces).attrib['href']
                 vdc_remove_href = vdc_remove_href + '?recursive=true&force=true'
@@ -871,7 +874,7 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnNotFoundException("Fail to get image {}".format(image_id))
 
         lxmlroot_respond = lxmlElementTree.fromstring(response.content)
-        namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
+        namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
         namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
 
         catalogItems_section = lxmlroot_respond.find("xmlns:CatalogItems",namespaces)
@@ -894,7 +897,7 @@ class vimconnector(vimconn.vimconnector):
                                                                                     image_id))
 
             lxmlroot_respond = lxmlElementTree.fromstring(response.content)
-            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
+            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
             namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
             catalogitem_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']",namespaces).attrib['href']
 
@@ -982,8 +985,8 @@ class vimconnector(vimconn.vimconnector):
             for catalog in vca.get_catalogs():
                 if catalog_name != catalog.name:
                     continue
-                link = [link for link in catalog.get_Link() if link.get_type() == "application/vnd.vmware.vcloud.media+xml" and
-                                           link.get_rel() == 'add']
+                link = filter(lambda link: link.get_type() == "application/vnd.vmware.vcloud.media+xml" and
+                                           link.get_rel() == 'add', catalog.get_Link())
                 assert len(link) == 1
                 data = """
                 <UploadVAppTemplateParams name="%s" xmlns="http://www.vmware.com/vcloud/v1.5" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"><Description>%s vApp Template</Description></UploadVAppTemplateParams>
@@ -1031,8 +1034,9 @@ class vimconnector(vimconn.vimconnector):
                     if response.status_code == requests.codes.ok:
                         media = mediaType.parseString(response.content, True)
                         number_of_files = len(media.get_Files().get_File())
-                        for index in range(0, number_of_files):
-                            links_list = [link for link in media.get_Files().get_File()[index].get_Link() if link.get_rel() == 'upload:default']
+                        for index in xrange(0, number_of_files):
+                            links_list = filter(lambda link: link.get_rel() == 'upload:default',
+                                                media.get_Files().get_File()[index].get_Link())
                             for link in links_list:
                                 # we skip ovf since it already uploaded.
                                 if 'ovf' in link.get_href():
@@ -1048,7 +1052,7 @@ class vimconnector(vimconn.vimconnector):
                                 hrefvmdk = link.get_href()
 
                                 if progress:
-                                    print(("Uploading file: {}".format(file_vmdk)))
+                                    print("Uploading file: {}".format(file_vmdk))
                                 if progress:
                                     widgets = ['Uploading file: ', Percentage(), ' ', Bar(), ' ', ETA(), ' ',
                                                FileTransferSpeed()]
@@ -1302,7 +1306,8 @@ class vimconnector(vimconn.vimconnector):
             return None
         # UUID has following format https://host/api/vApp/vapp-30da58a3-e7c7-4d09-8f68-d4c8201169cf
         try:
-            refs = [ref for ref in vdc.ResourceEntities.ResourceEntity if ref.name == vapp_name and ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml']
+            refs = filter(lambda ref: ref.name == vapp_name and ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml',
+                          vdc.ResourceEntities.ResourceEntity)
             if len(refs) == 1:
                 return refs[0].href.split("vapp")[1][1:]
         except Exception as e:
@@ -1324,7 +1329,9 @@ class vimconnector(vimconn.vimconnector):
                 :param vapp_uuid:
         """
         try:
-            refs = [ref for ref in vdc.ResourceEntities.ResourceEntity if ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml']
+            refs = filter(lambda ref:
+                          ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml',
+                          vdc.ResourceEntities.ResourceEntity)
             for ref in refs:
                 vappid = ref.href.split("vapp")[1][1:]
                 # find vapp with respected vapp uuid
@@ -1348,7 +1355,8 @@ class vimconnector(vimconn.vimconnector):
         """
 
         try:
-            refs = [ref for ref in vdc.ResourceEntities.ResourceEntity if ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml']
+            refs = filter(lambda ref: ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml',
+                          vdc.ResourceEntities.ResourceEntity)
             for ref in refs:
                 # we care only about UUID the rest doesn't matter
                 vappid = ref.href.split("vapp")[1][1:]
@@ -1484,7 +1492,7 @@ class vimconnector(vimconn.vimconnector):
 
         # client must provide at least one entry in net_list if not we report error
         #If net type is mgmt, then configure it as primary net & use its NIC index as primary NIC
-        #If no mgmt, then the 1st NN in netlist is considered as primary net. 
+        #If no mgmt, then the 1st NN in netlist is considered as primary net.
         primary_net = None
         primary_netname = None
         network_mode = 'bridged'
@@ -1651,7 +1659,7 @@ class vimconnector(vimconn.vimconnector):
                                   - NONE (No IP addressing mode specified.)"""
 
                 if primary_netname is not None:
-                    nets = [n for n in self.vca.get_networks(self.tenant_name) if n.name == interface_net_name]
+                    nets = filter(lambda n: n.name == interface_net_name, self.vca.get_networks(self.tenant_name))
                     if len(nets) == 1:
                         self.logger.info("new_vminstance(): Found requested network: {}".format(nets[0].name))
 
@@ -1901,7 +1909,7 @@ class vimconnector(vimconn.vimconnector):
                         wait_time +=INTERVAL_TIME
 
                     if not undeployed:
-                        self.logger.debug("delete_vminstance(): Failed to undeploy vApp {} ".format(vm__vim_uuid)) 
+                        self.logger.debug("delete_vminstance(): Failed to undeploy vApp {} ".format(vm__vim_uuid))
 
                 # delete vapp
                 self.logger.info("Start deletion of vApp {} ".format(vapp_name))
@@ -2170,7 +2178,7 @@ class vimconnector(vimconn.vimconnector):
                 result = self.vca.block_until_completed(power_task)
                 self.instance_actions_result("resume", result, vapp_name)
             elif "shutoff" in action_dict or "shutdown" in action_dict:
-                action_name , value = list(action_dict.items())[0]
+                action_name , value = action_dict.items()[0]
                 self.logger.info("action_vminstance: {} vApp: {}".format(action_name, vapp_name))
                 power_off_task = the_vapp.undeploy(action='powerOff')
                 result = self.vca.block_until_completed(power_off_task)
@@ -2304,7 +2312,7 @@ class vimconnector(vimconn.vimconnector):
             org_dict = self.get_org(self.org_uuid)
             if org_dict and 'networks' in org_dict:
                 org_network_dict = org_dict['networks']
-                for net_uuid,net_name in org_network_dict.items():
+                for net_uuid,net_name in org_network_dict.iteritems():
                     if net_name == network_name:
                         return net_uuid
 
@@ -2458,7 +2466,8 @@ class vimconnector(vimconn.vimconnector):
         vm_list_rest_call = ''.join(url_list)
 
         if not (not vca.vcloud_session or not vca.vcloud_session.organization):
-            refs = [ref for ref in vca.vcloud_session.organization.Link if ref.name == vdc_name and ref.type_ == 'application/vnd.vmware.vcloud.vdc+xml']
+            refs = filter(lambda ref: ref.name == vdc_name and ref.type_ == 'application/vnd.vmware.vcloud.vdc+xml',
+                          vca.vcloud_session.organization.Link)
             if len(refs) == 1:
                 response = Http.get(url=vm_list_rest_call,
                                     headers=vca.vcloud_session.get_vcloud_headers(),
@@ -3393,7 +3402,7 @@ class vimconnector(vimconn.vimconnector):
             return None
         try:
             lxmlroot_respond = lxmlElementTree.fromstring(response.content)
-            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
+            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
             namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
 
             for item in lxmlroot_respond.iterfind('xmlns:Item',namespaces):
@@ -4222,7 +4231,7 @@ class vimconnector(vimconn.vimconnector):
         try:
             #Find but type & max of instance IDs assigned to disks
             lxmlroot_respond = lxmlElementTree.fromstring(response.content)
-            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
+            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.iteritems() if prefix}
             namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
             instance_id = 0
             for item in lxmlroot_respond.iterfind('xmlns:Item',namespaces):
@@ -4498,7 +4507,7 @@ class vimconnector(vimconn.vimconnector):
             catalog = self.get_catalog_obj(image_id, catalogs)
             if catalog:
                 template_name = self.get_catalogbyid(image_id, catalogs)
-                catalog_items = [catalogItemRef for catalogItemRef in catalog.get_CatalogItems().get_CatalogItem() if catalogItemRef.get_name() == template_name]
+                catalog_items = filter(lambda catalogItemRef: catalogItemRef.get_name() == template_name, catalog.get_CatalogItems().get_CatalogItem())
                 if len(catalog_items) == 1:
                     response = Http.get(catalog_items[0].get_href(),
                                         headers=vca.vcloud_session.get_vcloud_headers(),
@@ -4956,7 +4965,7 @@ class vimconnector(vimconn.vimconnector):
         if "used_vlanIDs" not in self.persistent_info:
                 self.persistent_info["used_vlanIDs"] = {}
         else:
-            used_ids = list(self.persistent_info["used_vlanIDs"].values())
+            used_ids = self.persistent_info["used_vlanIDs"].values()
 
         for vlanID_range in self.config.get('vlanID_range'):
             start_vlanid , end_vlanid = vlanID_range.split("-")
@@ -4964,7 +4973,7 @@ class vimconnector(vimconn.vimconnector):
                 raise vimconn.vimconnConflictException("Invalid vlan ID range {}".format(
                                                                         vlanID_range))
 
-            for id in range(int(start_vlanid), int(end_vlanid) + 1):
+            for id in xrange(int(start_vlanid), int(end_vlanid) + 1):
                 if id not in used_ids:
                     vlan_id = id
                     self.persistent_info["used_vlanIDs"][network_name] = vlan_id
@@ -5192,5 +5201,3 @@ class vimconnector(vimconn.vimconnector):
             vdc = self.vca.get_vdc(self.tenant_name)
 
         return vdc
-
-

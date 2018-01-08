@@ -66,13 +66,13 @@ import sys
 from pyvcloud import Http
 
 import logging
-from . import vimconn
+import vimconn
 import time
 import uuid
 import urllib3
 import requests
 
-from .vimconn_vmware import vimconnector
+from vimconn_vmware import vimconnector
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from prettytable import PrettyTable
 
@@ -231,7 +231,7 @@ def print_vdc_list(org_dict=None):
         return
     try:
         vdcs_dict = {}
-        if 'vdcs' in org_dict:
+        if org_dict.has_key('vdcs'):
             vdcs_dict = org_dict['vdcs']
         vdc_table = PrettyTable(['vdc uuid', 'vdc name'])
         for k in vdcs_dict:
@@ -258,7 +258,7 @@ def print_network_list(org_dict=None):
         return
     try:
         network_dict = {}
-        if 'networks' in org_dict:
+        if org_dict.has_key('networks'):
             network_dict = org_dict['networks']
         network_table = PrettyTable(['network uuid', 'network name'])
         for k in network_dict:
@@ -289,7 +289,7 @@ def print_org_details(org_dict=None):
         print_vdc_list(org_dict=org_dict)
         print_network_list(org_dict=org_dict)
 
-        if 'catalogs' in org_dict:
+        if org_dict.has_key('catalogs'):
             catalogs_dict = org_dict['catalogs']
 
         catalog_table = PrettyTable(['catalog uuid', 'catalog name'])
@@ -367,8 +367,8 @@ def list_actions(vim=None, action=None, namespace=None):
 
 def print_network_details(network_dict=None):
     try:
-        network_table = PrettyTable(list(network_dict.keys()))
-        entry = [list(network_dict.values())]
+        network_table = PrettyTable(network_dict.keys())
+        entry = [network_dict.values()]
         network_table.add_row(entry[0])
         print(network_table)
     except KeyError:
@@ -380,8 +380,8 @@ def osm_print(generic_dict=None):
 
     try:
         for element in generic_dict:
-            table = PrettyTable(list(element.keys()))
-            entry = [list(element.values())]
+            table = PrettyTable(element.keys())
+            entry = [element.values()]
             table.add_row(entry[0])
         print(table)
     except KeyError:
@@ -429,13 +429,13 @@ def view_actions(vim=None, action=None, namespace=None):
             if not namespace.uuid:
                 vapp_uuid = vim.get_vappid(vdc=namespace.vcdvdc, vapp_name=namespace.vapp_name)
                 if vapp_uuid is None:
-                    print(("Can't find vapp by given name {}".format(namespace.vapp_name)))
+                    print("Can't find vapp by given name {}".format(namespace.vapp_name))
                     return
 
-            print(" namespace {}".format(namespace))
+            print " namespace {}".format(namespace)
             if vapp_dict is not None and namespace.osm:
                 vm_info_dict = vim.get_vminstance(vim_vm_uuid=vapp_uuid)
-                print(vm_info_dict)
+                print vm_info_dict
             if vapp_dict is not None and namespace.osm != True:
                 vapp_dict = vim.get_vapp(vdc_name=namespace.vcdvdc, vapp_name=vapp_uuid, isuuid=True)
                 print_vapp(vapp_dict=vapp_dict)
@@ -447,10 +447,10 @@ def view_actions(vim=None, action=None, namespace=None):
         # if request name based we need find UUID
         # TODO optimize it or move to external function
         if not namespace.uuid:
-            if 'networks' not in myorg:
-                print(("Network {} is undefined in vcloud director for org {} vdc {}".format(namespace.network_name,
+            if not myorg.has_key('networks'):
+                print("Network {} is undefined in vcloud director for org {} vdc {}".format(namespace.network_name,
                                                                                             vim.name,
-                                                                                            vim.tenant_name)))
+                                                                                            vim.tenant_name))
                 return
 
             my_org_net = myorg['networks']
@@ -459,7 +459,7 @@ def view_actions(vim=None, action=None, namespace=None):
                     network_uuid = network
                     break
 
-        print(print_network_details(network_dict=vim.get_vcd_network(network_uuid=network_uuid)))
+        print print_network_details(network_dict=vim.get_vcd_network(network_uuid=network_uuid))
 
 
 def create_actions(vim=None, action=None, namespace=None):
@@ -476,16 +476,16 @@ def create_actions(vim=None, action=None, namespace=None):
         logger.debug("Creating a network in vcloud director".format(namespace.network_name))
         network_uuid = vim.create_network(namespace.network_name)
         if network_uuid is not None:
-            print(("Crated new network {} and uuid: {}".format(namespace.network_name, network_uuid)))
+            print ("Crated new network {} and uuid: {}".format(namespace.network_name, network_uuid))
         else:
-            print(("Failed create a new network {}".format(namespace.network_name)))
+            print ("Failed create a new network {}".format(namespace.network_name))
     elif action == 'vdc' or namespace.action == 'vdc':
         logger.debug("Creating a new vdc in vcloud director.".format(namespace.vdc_name))
         vdc_uuid = vim.create_vdc(namespace.vdc_name)
         if vdc_uuid is not None:
-            print(("Crated new vdc {} and uuid: {}".format(namespace.vdc_name, vdc_uuid)))
+            print ("Crated new vdc {} and uuid: {}".format(namespace.vdc_name, vdc_uuid))
         else:
-            print(("Failed create a new vdc {}".format(namespace.vdc_name)))
+            print ("Failed create a new vdc {}".format(namespace.vdc_name))
     else:
         return None
 
@@ -518,11 +518,11 @@ def upload_image(vim=None, image_file=None):
     try:
         catalog_uuid = vim.get_image_id_from_path(path=image_file, progress=True)
         if catalog_uuid is not None and validate_uuid4(catalog_uuid):
-            print(("Image uploaded and uuid {}".format(catalog_uuid)))
+            print("Image uploaded and uuid {}".format(catalog_uuid))
             return True
     except vimconn.vimconnException as upload_exception:
-        print(("Failed uploaded {} image".format(image_file)))
-        print(("Error Reason: {}".format(upload_exception.message)))
+        print("Failed uploaded {} image".format(image_file))
+        print("Error Reason: {}".format(upload_exception.message))
     return False
 
 
@@ -552,22 +552,22 @@ def boot_image(vim=None, image_name=None, vm_name=None):
             if vim_catalog is None:
                 return None
 
-        print((" Booting {} image id {} ".format(vm_name, vim_catalog)))
+        print (" Booting {} image id {} ".format(vm_name, vim_catalog))
         vm_uuid = vim.new_vminstance(name=vm_name, image_id=vim_catalog)
         if vm_uuid is not None and validate_uuid4(vm_uuid):
-            print(("Image booted and vm uuid {}".format(vm_uuid)))
+            print("Image booted and vm uuid {}".format(vm_uuid))
             vapp_dict = vim.get_vapp(vdc_name=namespace.vcdvdc, vapp_name=vm_uuid, isuuid=True)
             if vapp_dict is not None:
                 print_vapp(vapp_dict=vapp_dict)
         return True
     except vimconn.vimconnNotFoundException as notFound:
-        print(("Failed boot {} image".format(image_name)))
-        print((notFound.message))
+        print("Failed boot {} image".format(image_name))
+        print(notFound.message)
     except vimconn.vimconnException as vimconError:
-        print(("Failed boot {} image".format(image_name)))
-        print((vimconError.message))
+        print("Failed boot {} image".format(image_name))
+        print(vimconError.message)
     except:
-        print(("Failed boot {} image".format(image_name)))
+        print("Failed boot {} image".format(image_name))
 
 
         return False
@@ -610,7 +610,7 @@ def vmwarecli(command=None, action=None, namespace=None):
 
     if namespace.vcdvdc is None:
         while True:
-            vcduser = eval(input("Enter vcd username: "))
+            vcduser = input("Enter vcd username: ")
             if vcduser is not None and len(vcduser) > 0:
                 break
     else:
@@ -618,7 +618,7 @@ def vmwarecli(command=None, action=None, namespace=None):
 
     if namespace.vcdpassword is None:
         while True:
-            vcdpasword = eval(input("Please enter vcd password: "))
+            vcdpasword = input("Please enter vcd password: ")
             if vcdpasword is not None and len(vcdpasword) > 0:
                 break
     else:
@@ -626,7 +626,7 @@ def vmwarecli(command=None, action=None, namespace=None):
 
     if namespace.vcdhost is None:
         while True:
-            vcdhost = eval(input("Please enter vcd host name or ip: "))
+            vcdhost = input("Please enter vcd host name or ip: ")
             if vcdhost is not None and len(vcdhost) > 0:
                 break
     else:
@@ -634,7 +634,7 @@ def vmwarecli(command=None, action=None, namespace=None):
 
     if namespace.vcdorg is None:
         while True:
-            vcdorg = eval(input("Please enter vcd organization name: "))
+            vcdorg = input("Please enter vcd organization name: ")
             if vcdorg is not None and len(vcdorg) > 0:
                 break
     else:
@@ -796,7 +796,7 @@ if __name__ == '__main__':
 
     namespace = parser.parse_args()
     # put command_line args to mapping
-    command_line_args = {k: v for k, v in list(vars(namespace).items()) if v}
+    command_line_args = {k: v for k, v in vars(namespace).items() if v}
 
     d = defaults.copy()
     d.update(os.environ)

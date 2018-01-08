@@ -28,25 +28,25 @@ vimconn implement an Abstract class for the vim connector plugins
 __author__="Alfonso Tierno, Igor D.C."
 __date__ ="$14-aug-2017 23:59:59$"
 
+import io
 import logging
 import paramiko
 import socket
-import io
 import yaml
 import sys
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-#Error variables 
+#Error variables
 HTTP_Bad_Request = 400
-HTTP_Unauthorized = 401 
-HTTP_Not_Found = 404 
-HTTP_Method_Not_Allowed = 405 
+HTTP_Unauthorized = 401
+HTTP_Not_Found = 404
+HTTP_Method_Not_Allowed = 405
 HTTP_Request_Timeout = 408
 HTTP_Conflict = 409
 HTTP_Not_Implemented = 501
-HTTP_Service_Unavailable = 503 
-HTTP_Internal_Server_Error = 500 
+HTTP_Service_Unavailable = 503
+HTTP_Internal_Server_Error = 500
 
 class vimconnException(Exception):
     """Common and base class Exception for all vimconnector exceptions"""
@@ -58,7 +58,7 @@ class vimconnConnectionException(vimconnException):
     """Connectivity error with the VIM"""
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
         vimconnException.__init__(self, message, http_code)
-    
+
 class vimconnUnexpectedResponse(vimconnException):
     """Get an wrong response from VIM"""
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
@@ -92,9 +92,9 @@ class vimconnNotImplemented(vimconnException):
 
 class vimconnector():
     """Abstract base class for all the VIM connector plugins
-    These plugins must implement a vimconnector class derived from this 
+    These plugins must implement a vimconnector class derived from this
     and all these privated methods
-    """ 
+    """
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
                  config={}, persitent_info={}):
         """Constructor of VIM
@@ -127,9 +127,9 @@ class vimconnector():
         self.logger = logging.getLogger('openmano.vim')
         if log_level:
             self.logger.setLevel( getattr(logging, log_level) )
-        if not self.url_admin:  #try to use normal url 
+        if not self.url_admin:  #try to use normal url
             self.url_admin = self.url
-    
+
     def __getitem__(self,index):
         if index=='tenant_id':
             return self.tenant_id
@@ -151,7 +151,7 @@ class vimconnector():
             return self.config
         else:
             raise KeyError("Invalid key '%s'" %str(index))
-        
+
     def __setitem__(self,index, value):
         if index=='tenant_id':
             self.tenant_id = value
@@ -429,7 +429,7 @@ class vimconnector():
                           - name: interface name
                             dedicated: yes|no|yes:sriov;  for PT, SRIOV or only one SRIOV for the physical NIC
                             bandwidth: X Gbps; requested guarantee bandwidth
-                            vpci: requested virtual PCI address   
+                            vpci: requested virtual PCI address
                 disk: disk size
                 is_public:
                  #TODO to concrete
@@ -457,7 +457,7 @@ class vimconnector():
            Returns the image_id or raises a vimconnNotFoundException
         """
         raise vimconnNotImplemented( "Should have implemented this" )
-        
+
     def get_image_list(self, filter_dict={}):
         """Obtain tenant images from VIM
         Filter_dict can be:
@@ -522,11 +522,11 @@ class vimconnector():
         Returns the instance identifier or raises an exception on error
         """
         raise vimconnNotImplemented( "Should have implemented this" )
-        
+
     def get_vminstance(self,vm_id):
         """Returns the VM instance information from VIM"""
         raise vimconnNotImplemented( "Should have implemented this" )
-        
+
     def delete_vminstance(self, vm_id):
         """Removes a VM instance from VIM
         Returns the instance identifier"""
@@ -539,14 +539,14 @@ class vimconnector():
                 vm_id:          #VIM id of this Virtual Machine
                     status:     #Mandatory. Text with one of:
                                 #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...) 
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
                                 #  OTHER (Vim reported other status not understood)
                                 #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running), 
+                                #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running),
                                 #  BUILD (on building process), ERROR
                                 #  ACTIVE:NoMgmtIP (Active but any of its interface has an IP address
                                 #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR 
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
                     interfaces: list with interface info. Each item a dictionary with:
                         vim_info:         #Text with plain information obtained from vim (yaml.safe_dump)
@@ -559,25 +559,25 @@ class vimconnector():
                         vlan:             #physical VLAN used for VF
         """
         raise vimconnNotImplemented( "Should have implemented this" )
-    
+
     def action_vminstance(self, vm_id, action_dict):
         """Send and action over a VM instance from VIM
         Returns the vm_id if the action was successfully sent to the VIM"""
         raise vimconnNotImplemented( "Should have implemented this" )
-    
+
     def get_vminstance_console(self, vm_id, console_type="vnc"):
         """
         Get a console for the virtual machine
         Params:
             vm_id: uuid of the VM
             console_type, can be:
-                "novnc" (by default), "xvpvnc" for VNC types, 
+                "novnc" (by default), "xvpvnc" for VNC types,
                 "rdp-html5" for RDP types, "spice-html5" for SPICE types
         Returns dict with the console parameters:
                 protocol: ssh, ftp, http, https, ...
-                server:   usually ip address 
-                port:     the http, ssh, ... port 
-                suffix:   extra text, e.g. the http path and query string   
+                server:   usually ip address
+                port:     the http, ssh, ... port
+                suffix:   extra text, e.g. the http path and query string
         """
         raise vimconnNotImplemented( "Should have implemented this" )
 
@@ -840,17 +840,17 @@ class vimconnector():
     def get_processor_rankings(self):
         """Get the processor rankings in the VIM database"""
         raise vimconnNotImplemented( "Should have implemented this" )
-    
+
     def new_host(self, host_data):
         """Adds a new host to VIM"""
         """Returns status code of the VIM response"""
         raise vimconnNotImplemented( "Should have implemented this" )
-    
+
     def new_external_port(self, port_data):
         """Adds a external port to VIM"""
         """Returns the port identifier"""
         raise vimconnNotImplemented( "Should have implemented this" )
-        
+
     def new_external_network(self,net_name,net_type):
         """Adds a external network to VIM (shared)"""
         """Returns the network identifier"""
@@ -865,4 +865,3 @@ class vimconnector():
         """Adds a VM instance to VIM"""
         """Returns the instance identifier"""
         raise vimconnNotImplemented( "Should have implemented this" )
-

@@ -28,7 +28,7 @@ AWS-connector implements all the methods to interact with AWS using the BOTO cli
 __author__ = "Saboor Ahmad"
 __date__ = "10-Apr-2017"
 
-from . import vimconn
+import vimconn
 import yaml
 import logging
 import netaddr
@@ -275,7 +275,7 @@ class vimconnector(vimconn.vimconnector):
             pub_subs = pub_split[:3]
             subnets = pub_subs + pri_subs
 
-        return list(map(str, subnets))
+        return map(str, subnets)
 
     def new_network(self, net_name, net_type, ip_profile=None, shared=False, vlan=None):
         """Adds a tenant network to VIM
@@ -470,7 +470,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug("Getting flavor id from data")
         try:
             flavor = None
-            for key, values in self.flavor_info.items():
+            for key, values in self.flavor_info.iteritems():
                 if (values["ram"], values["cpus"], values["disk"]) == (
                 flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"]):
                     flavor = (key, values)

@@ -29,7 +29,7 @@ __date__ ="$4-Apr-2016 10:05:01$"
 
 import MySQLdb as mdb
 import uuid as myUuid
-from . import  utils as af
+import  utils as af
 import json
 #import yaml
 import time
@@ -65,7 +65,7 @@ def _convert_datetime2str(var):
     It enters recursively in the dict var finding this kind of variables
     '''
     if type(var) is dict:
-        for k,v in list(var.items()):
+        for k,v in var.items():
             if type(v) is datetime.datetime:
                 var[k]= v.strftime('%Y-%m-%dT%H:%M:%S')
             elif type(v) is dict or type(v) is list or type(v) is tuple: 
@@ -85,7 +85,7 @@ def _convert_bandwidth(data, reverse=False, logger=None):
         None
     '''
     if type(data) is dict:
-        for k in list(data.keys()):
+        for k in data.keys():
             if type(data[k]) is dict or type(data[k]) is tuple or type(data[k]) is list:
                 _convert_bandwidth(data[k], reverse, logger)
         if "bandwidth" in data:
@@ -120,7 +120,7 @@ def _convert_str2boolean(data, items):
         None
     '''
     if type(data) is dict:
-        for k in list(data.keys()):
+        for k in data.keys():
             if type(data[k]) is dict or type(data[k]) is tuple or type(data[k]) is list:
                 _convert_str2boolean(data[k], items)
             if k in items:
@@ -320,7 +320,7 @@ class db_base():
     
     def __remove_quotes(self, data):
         '''remove single quotes ' of any string content of data dictionary'''
-        for k,v in list(data.items()):
+        for k,v in data.items():
             if type(v) == str:
                 if "'" in v: 
                     data[k] = data[k].replace("'","_")
@@ -334,11 +334,11 @@ class db_base():
         Return: the number of updated rows, exception if error
         '''
                 #gettting uuid 
-        values = ",".join(map(self.__tuple2db_format_set, iter(UPDATE.items()) ))
+        values = ",".join(map(self.__tuple2db_format_set, UPDATE.iteritems() ))
         if modified_time:
             values += ",modified_at={:f}".format(modified_time)
         cmd= "UPDATE " + table +" SET " + values +\
-            " WHERE " + " and ".join(map(self.__tuple2db_format_where, iter(WHERE.items()) ))
+            " WHERE " + " and ".join(map(self.__tuple2db_format_where, WHERE.iteritems() ))
         self.logger.debug(cmd)
         self.cur.execute(cmd) 
         return self.cur.rowcount
@@ -400,7 +400,7 @@ class db_base():
             self.cur.execute(cmd)
         #insertion
         cmd= "INSERT INTO " + table +" SET " + \
-            ",".join(map(self.__tuple2db_format_set, iter(INSERT.items()) )) 
+            ",".join(map(self.__tuple2db_format_set, INSERT.iteritems() )) 
         if created_time:
             cmd += ",created_at=%f" % created_time
         if confidential_data:
@@ -501,11 +501,11 @@ class db_base():
         #print 'from_', from_
         if 'WHERE' in sql_dict and len(sql_dict['WHERE']) > 0:
             w=sql_dict['WHERE']
-            where_ = "WHERE " + " AND ".join(map(self.__tuple2db_format_where, iter(w.items()))) 
+            where_ = "WHERE " + " AND ".join(map(self.__tuple2db_format_where, w.iteritems())) 
         else: where_ = ""
         if 'WHERE_NOT' in sql_dict and len(sql_dict['WHERE_NOT']) > 0: 
             w=sql_dict['WHERE_NOT']
-            where_2 = " AND ".join(map(self.__tuple2db_format_where_not, iter(w.items())))
+            where_2 = " AND ".join(map(self.__tuple2db_format_where_not, w.iteritems()))
             if len(where_)==0:   where_ = "WHERE " + where_2
             else:                where_ = where_ + " AND " + where_2
         #print 'where_', where_
@@ -563,14 +563,14 @@ class db_base():
         where_or = ""
         w=sql_dict.get('WHERE')
         if w:
-            where_and = " AND ".join(map(self.__tuple2db_format_where, iter(w.items()) ))
+            where_and = " AND ".join(map(self.__tuple2db_format_where, w.iteritems() ))
         w=sql_dict.get('WHERE_NOT')
         if w: 
             if where_and: where_and += " AND "
-            where_and += " AND ".join(map(self.__tuple2db_format_where_not, iter(w.items()) ) )
+            where_and += " AND ".join(map(self.__tuple2db_format_where_not, w.iteritems() ) )
         w=sql_dict.get('WHERE_OR')
         if w:
-            where_or =  " OR ".join(map(self.__tuple2db_format_where, iter(w.items()) ))
+            where_or =  " OR ".join(map(self.__tuple2db_format_where, w.iteritems() ))
         if where_and and where_or:
             if sql_dict.get("WHERE_AND_OR") == "AND":
                 where_ = "WHERE " + where_and + " AND (" + where_or + ")"
@@ -619,7 +619,7 @@ class db_base():
         what = 'uuid' if af.check_valid_uuid(uuid_name) else 'name'
         cmd =  " SELECT * FROM {} WHERE {}='{}'".format(table, what, uuid_name)
         if WHERE_OR:
-            where_or =  " OR ".join(map(self.__tuple2db_format_where, iter(WHERE_OR.items()) ))
+            where_or =  " OR ".join(map(self.__tuple2db_format_where, WHERE_OR.iteritems() ))
             if WHERE_AND_OR == "AND":
                 cmd += " AND (" + where_or + ")"
             else:
@@ -657,7 +657,7 @@ class db_base():
                     rows = self.cur.fetchall()
                     return self.cur.rowcount, rows
             except (mdb.Error, AttributeError) as e:
-                print("nfvo_db.get_uuid DB Exception %d: %s" % (e.args[0], e.args[1]))
+                print "nfvo_db.get_uuid DB Exception %d: %s" % (e.args[0], e.args[1])
                 r,c = self._format_error(e)
                 if r!=-HTTP_Request_Timeout or retry_==1: return r,c
 

@@ -49,7 +49,7 @@ class CommandProgressbar(object):
             Args  : None
             Return : None
         """
-        print('\b.', end=' ')
+        print '\b.',
         sys.stdout.flush()
 
     def start_progressbar(self):

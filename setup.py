@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 #from distutils.core import setup
 #from distutils.command.install_data import install_data
@@ -19,6 +19,7 @@ _requirements = [
     "bottle",
     #"mysqlclient",
     #"MySQLdb",
+    "mysqlclient",
     "jsonschema",
     "paramiko",
     "argcomplete",
@@ -38,6 +39,16 @@ _requirements = [
     #"lib_osm_openvim",
     #"osm_im",
     "pycrypto",
+    "bcrypt",
+    "netaddr",
+    "pyparsing",
+    "iso8601",
+    "debtcollector",
+    "monotonic",
+    "stevedore",
+    "positional",
+    # vmware dependencies
+    "progressbar2",
 ]
 
 setup(name=_name,
@@ -66,4 +77,3 @@ setup(name=_name,
       setup_requires=['setuptools-version-command'],
       #test_suite='nose.collector',
       )
-

@@ -27,7 +27,7 @@ import os
 import subprocess
 import yaml
 from lxml import etree as ET
-from .command_progress import CommandProgressbar
+from command_progress import CommandProgressbar
 
 #file paths
 MODULE_DIR = os.path.dirname(__file__)
@@ -288,7 +288,7 @@ class OVFConverter(object):
             root = OVF_tree.getroot()
 
             #Collect namespaces
-            nsmap = {k:v for k,v in root.nsmap.items() if k}
+            nsmap = {k:v for k,v in root.nsmap.iteritems() if k}
             nsmap["xmlns"]= "http://schemas.dmtf.org/ovf/envelope/1"
 
             #Edit OVF template
@@ -370,7 +370,7 @@ class OVFConverter(object):
 
             if os.path.isfile(self.output_path):
                 logger.info("Successfully written output OVF at {}".format(self.output_path))
-                print(("Output OVF is at :  {}".format(self.output_path)))
+                print("Output OVF is at :  {}".format(self.output_path))
                 return self.output_path
             else:
                 error_msg = "ERROR: Error occurred while creating OVF file"
@@ -431,7 +431,7 @@ class OVFConverter(object):
         os_info = self.__read_yaml_file(OS_INFO_FILE_PATH)
         try:
             if self.os_type and os_info:
-                for os_id , os_type in os_info.items():
+                for os_id , os_type in os_info.iteritems():
                     if self.os_type.lower() == os_type.lower():
                         osID = os_id
                         osType = os_type
@@ -461,7 +461,7 @@ class OVFConverter(object):
         disk_controller_info = self.__read_yaml_file(DISK_CONTROLLER_INFO_FILE_PATH)
         try:
             if self.disk_controller and disk_controller_info:
-                for key , value in disk_controller_info.items():
+                for key , value in disk_controller_info.iteritems():
                     if self.disk_controller.lower() in key.lower():
                         disk_controller['controllerName'] = key
                         disk_controller['resourceType'] = str(value["ResourceType"])

@@ -43,11 +43,11 @@ connectors: prepare
 	# python-novaclient is required for that
 	rm -f build/osm_ro/openmanolinkervimconn.py
 	cd build/osm_ro; for i in `ls vimconn_*.py |sed "s/\.py//"` ; do echo "import $$i" >> openmanolinkervimconn.py; done
-	python build/osm_ro/openmanolinkervimconn.py
+	python3 build/osm_ro/openmanolinkervimconn.py 2>&1
 	rm -f build/osm_ro/openmanolinkervimconn.py
 
 build: connectors prepare
-	python -m py_compile build/osm_ro/*.py
+	python3 -m py_compile build/osm_ro/*.py
 #	cd build && tox -e flake8
 
 lib-openvim:
@@ -65,11 +65,11 @@ osm-im:
 
 package: prepare
 #	apt-get install -y python-stdeb
-	cd build && python setup.py --command-packages=stdeb.command sdist_dsc --with-python2=True
+	cd build && python3 setup.py --command-packages=stdeb.command sdist_dsc --with-python2=True
 	cd build && cp osm_ro/scripts/python-osm-ro.postinst deb_dist/osm-ro*/debian/
 	cd build/deb_dist/osm-ro* && dpkg-buildpackage -rfakeroot -uc -us
 	mkdir -p .build
-	cp build/deb_dist/python-*.deb .build/
+	cp build/deb_dist/python3-*.deb .build/
 
 snap:
 	echo "Nothing to be done yet"
@@ -103,5 +103,3 @@ run-docker:
 
 stop-docker:
 	docker-compose -f docker/openmano-compose.yml down
-
-

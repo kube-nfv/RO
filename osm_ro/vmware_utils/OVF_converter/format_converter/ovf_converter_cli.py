@@ -23,7 +23,7 @@
 ##
 
 import argparse
-from .converter import OVFConverter , get_version
+from converter import OVFConverter , get_version
 
 def execute_cli():
 

@@ -27,16 +27,19 @@ vimconnector implements all the methods to interact with openvim using the openv
 __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$26-aug-2014 11:09:29$"
 
-from . import vimconn
+import vimconn
 import requests
 import json
 import yaml
 import logging
-from .openmano_schemas import id_schema, name_schema, nameshort_schema, description_schema, \
+from openmano_schemas import id_schema, name_schema, nameshort_schema, description_schema, \
                             vlan1000_schema, integer0_schema
 from jsonschema import validate as js_v, exceptions as js_e
-from urllib.parse import quote
-
+try:
+    from urllib import quote  # Python 2.X
+except ImportError:
+    from urllib.parse import quote  # Python 3+
+    
 '''contain the openvim virtual machine status to openmano status'''
 vmStatus2manoFormat={'ACTIVE':'ACTIVE',
                      'PAUSED':'PAUSED',
@@ -334,14 +337,14 @@ class vimconnector(vimconn.vimconnector):
             self.tenant = tenant_id
 
     def __setitem__(self,index, value):
-        '''Set individuals parameters 
+        '''Set individuals parameters
         Throw TypeError, KeyError
         '''
         if index=='tenant_id':
             self.tenant = value
         elif index=='tenant_name':
             self.tenant = None
-        vimconn.vimconnector.__setitem__(self,index, value)    
+        vimconn.vimconnector.__setitem__(self,index, value)
 
     def _get_my_tenant(self):
         '''Obtain uuid of my tenant from name
@@ -377,12 +380,12 @@ class vimconnector(vimconn.vimconnector):
         try:
             client_data = http_response.json()
             js_v(client_data, schema)
-            #print "Input data: ", str(client_data)
+            #print("Input data: ", str(client_data))
             return True, client_data
         except js_e.ValidationError as exc:
             print("validate_in error, jsonschema exception ", exc.message, "at", exc.path)
             return False, ("validate_in error, jsonschema exception ", exc.message, "at", exc.path)
-    
+
     def _remove_extra_items(self, data, schema):
         deleted=[]
         if type(data) is tuple or type(data) is list:
@@ -390,8 +393,8 @@ class vimconnector(vimconn.vimconnector):
                 a= self._remove_extra_items(d, schema['items'])
                 if a is not None: deleted.append(a)
         elif type(data) is dict:
-            for k in list(data.keys()):
-                if 'properties' not in schema or k not in list(schema['properties'].keys()):
+            for k in data.keys():
+                if 'properties' not in schema or k not in schema['properties'].keys():
                     del data[k]
                     deleted.append(k)
                 else:
@@ -400,11 +403,11 @@ class vimconnector(vimconn.vimconnector):
         if len(deleted) == 0: return None
         elif len(deleted) == 1: return deleted[0]
         else: return deleted
-        
+
     def _format_request_exception(self, request_exception):
         '''Transform a request exception into a vimconn exception'''
         if isinstance(request_exception, js_e.ValidationError):
-            raise vimconn.vimconnUnexpectedResponse("jsonschema exception '{}' at '{}'".format(request_exception.message, request_exception.path))            
+            raise vimconn.vimconnUnexpectedResponse("jsonschema exception '{}' at '{}'".format(request_exception.message, request_exception.path))
         elif isinstance(request_exception, requests.exceptions.HTTPError):
             raise vimconn.vimconnUnexpectedResponse(type(request_exception).__name__ + ": " + str(request_exception))
         else:
@@ -420,12 +423,12 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnNotFoundException(request_response.text)
         elif request_response.status_code == vimconn.HTTP_Conflict:
             raise vimconn.vimconnConflictException(request_response.text)
-        else: 
+        else:
             raise vimconn.vimconnUnexpectedResponse("VIM HTTP_response {}, {}".format(request_response.status_code, str(request_response.text)))
 
     def new_tenant(self,tenant_name,tenant_description):
         '''Adds a new tenant to VIM with this name and description, returns the tenant identifier'''
-        #print "VIMConnector: Adding a new tenant to VIM"
+        #print("VIMConnector: Adding a new tenant to VIM")
         payload_dict = {"tenant": {"name":tenant_name,"description": tenant_description, "enabled": True}}
         payload_req = json.dumps(payload_dict)
         try:
@@ -434,11 +437,11 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.post(url, headers = self.headers_req, data=payload_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             js_v(response, new_tenant_response_schema)
             #r = self._remove_extra_items(response, new_tenant_response_schema)
-            #if r is not None: 
+            #if r is not None:
             #    self.logger.warn("Warning: remove extra items %s", str(r))
             tenant_id = response['tenant']['id']
             return tenant_id
@@ -453,7 +456,7 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.delete(url, headers = self.headers_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             return tenant_id
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
@@ -468,7 +471,7 @@ class vimconnector(vimconn.vimconnector):
         '''
         filterquery=[]
         filterquery_text=''
-        for k,v in filter_dict.items():
+        for k,v in filter_dict.iteritems():
             filterquery.append(str(k)+'='+str(v))
         if len(filterquery)>0:
             filterquery_text='?'+ '&'.join(filterquery)
@@ -478,7 +481,7 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.get(url, headers = self.headers_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             return vim_response.json()["tenants"]
         except requests.exceptions.RequestException as e:
             self._format_request_exception(e)
@@ -499,17 +502,17 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.post(url, headers = self.headers_req, data=json.dumps({"network": payload_req}) )
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             js_v(response, new_network_response_schema)
             #r = self._remove_extra_items(response, new_network_response_schema)
-            #if r is not None: 
+            #if r is not None:
             #    self.logger.warn("Warning: remove extra items %s", str(r))
             network_id = response['network']['id']
             return network_id
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
-        
+
     def get_network_list(self, filter_dict={}):
         '''Obtain tenant networks of VIM
         Filter_dict can be:
@@ -528,7 +531,7 @@ class vimconnector(vimconn.vimconnector):
                 del filter_dict["tenant_id"]
             filterquery=[]
             filterquery_text=''
-            for k,v in filter_dict.items():
+            for k,v in filter_dict.iteritems():
                 filterquery.append(str(k)+'='+str(v))
             if len(filterquery)>0:
                 filterquery_text='?'+ '&'.join(filterquery)
@@ -537,7 +540,7 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.get(url, headers = self.headers_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             return response['networks']
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
@@ -551,12 +554,12 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.get(url, headers = self.headers_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             return response['network']
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
-            
+
     def delete_network(self, net_id):
         '''Deletes a tenant network from VIM'''
         '''Returns the network identifier'''
@@ -567,7 +570,7 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.delete(url, headers=self.headers_req)
             self._check_http_request_response(vim_response)
             #self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             return net_id
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
@@ -581,16 +584,16 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.get(url, headers = self.headers_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             js_v(response, get_flavor_response_schema)
             r = self._remove_extra_items(response, get_flavor_response_schema)
-            if r is not None: 
+            if r is not None:
                 self.logger.warn("Warning: remove extra items %s", str(r))
             return response['flavor']
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
-        
+
     def new_flavor(self, flavor_data):
         '''Adds a tenant flavor to VIM'''
         '''Returns the flavor identifier'''
@@ -607,11 +610,11 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.post(url, headers = self.headers_req, data=payload_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             js_v(response, new_flavor_response_schema)
             r = self._remove_extra_items(response, new_flavor_response_schema)
-            if r is not None: 
+            if r is not None:
                 self.logger.warn("Warning: remove extra items %s", str(r))
             flavor_id = response['flavor']['id']
             return flavor_id
@@ -628,7 +631,7 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.delete(url, headers=self.headers_req)
             self._check_http_request_response(vim_response)
             #self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             return flavor_id
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
@@ -642,11 +645,11 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.get(url, headers = self.headers_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             js_v(response, get_image_response_schema)
             r = self._remove_extra_items(response, get_image_response_schema)
-            if r is not None: 
+            if r is not None:
                 self.logger.warn("Warning: remove extra items %s", str(r))
             return response['image']
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
@@ -669,17 +672,17 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.post(url, headers = self.headers_req, data=payload_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             js_v(response, new_image_response_schema)
             r = self._remove_extra_items(response, new_image_response_schema)
-            if r is not None: 
+            if r is not None:
                 self.logger.warn("Warning: remove extra items %s", str(r))
             image_id = response['image']['id']
             return image_id
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
-            
+
     def delete_image(self, image_id):
         '''Deletes a tenant image from VIM'''
         '''Returns the deleted image_id'''
@@ -690,7 +693,7 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.delete(url, headers=self.headers_req)
             self._check_http_request_response(vim_response)
             #self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             return image_id
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
@@ -704,11 +707,11 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.get(url)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             js_v(response, get_images_response_schema)
             #r = self._remove_extra_items(response, get_images_response_schema)
-            #if r is not None: 
+            #if r is not None:
             #    self.logger.warn("Warning: remove extra items %s", str(r))
             if len(response['images'])==0:
                 raise vimconn.vimconnNotFoundException("Image not found at VIM with path '%s'", path)
@@ -733,7 +736,7 @@ class vimconnector(vimconn.vimconnector):
             self._get_my_tenant()
             filterquery=[]
             filterquery_text=''
-            for k,v in filter_dict.items():
+            for k,v in filter_dict.iteritems():
                 filterquery.append(str(k)+'='+str(v))
             if len(filterquery)>0:
                 filterquery_text='?'+ '&'.join(filterquery)
@@ -742,7 +745,7 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.get(url, headers = self.headers_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             return response['images']
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
@@ -763,25 +766,25 @@ class vimconnector(vimconn.vimconnector):
             print("new_vminstancefromJSON Exception: ", e.args)
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print(vim_response)
-        #print vim_response.status_code
+        #print(vim_response.status_code)
         if vim_response.status_code == 200:
-            #print vim_response.json()
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(vim_response.json())
+            #print(json.dumps(vim_response.json(), indent=4))
             res,http_content = self._format_in(vim_response, new_image_response_schema)
-            #print http_content
+            #print(http_content)
             if res:
                 r = self._remove_extra_items(http_content, new_image_response_schema)
                 if r is not None: print("Warning: remove extra items ", r)
-                #print http_content
+                #print(http_content)
                 vminstance_id = http_content['server']['id']
                 print("Tenant image id: ",vminstance_id)
                 return vim_response.status_code,vminstance_id
             else: return -vimconn.HTTP_Bad_Request,http_content
         else:
-            #print vim_response.text
+            #print(vim_response.text)
             jsonerror = self._format_jsonerror(vim_response)
             text = 'Error in VIM "%s": not possible to add new vm instance. HTTP Response: %d. Error: %s' % (self.url, vim_response.status_code, jsonerror)
-            #print text
+            #print(text)
             return -vim_response.status_code,text
 
     def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
@@ -795,7 +798,7 @@ class vimconnector(vimconn.vimconnector):
                 net_id: network uuid to connect
                 vpci: virtual vcpi to assign
                 model: interface model, virtio, e2000, ...
-                mac_address: 
+                mac_address:
                 use: 'data', 'bridge',  'mgmt'
                 type: 'virtual', 'PF', 'VF', 'VFnotShared'
                 vim_id: filled/added by this function
@@ -807,9 +810,9 @@ class vimconnector(vimconn.vimconnector):
             self._get_my_tenant()
 #            net_list = []
 #            for k,v in net_dict.items():
-#                print k,v
+#                print(k,v)
 #                net_list.append('{"name":"' + k + '", "uuid":"' + v + '"}')
-#            net_list_string = ', '.join(net_list) 
+#            net_list_string = ', '.join(net_list)
             virtio_net_list=[]
             for net in net_list:
                 if not net.get("net_id"):
@@ -835,11 +838,11 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.post(url, headers = self.headers_req, data=payload_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             js_v(response, new_vminstance_response_schema)
             #r = self._remove_extra_items(response, new_vminstance_response_schema)
-            #if r is not None: 
+            #if r is not None:
             #    self.logger.warn("Warning: remove extra items %s", str(r))
             vminstance_id = response['server']['id']
 
@@ -862,21 +865,21 @@ class vimconnector(vimconn.vimconnector):
                         for iface in numa.get('interfaces',() ):
                             if net['name'] == iface['name']:
                                 net['vim_id'] = iface['iface_id']
-                                #Code bellow is not needed, current openvim connect dataplane interfaces 
+                                #Code bellow is not needed, current openvim connect dataplane interfaces
                                 #if net.get("net_id"):
                                 ##connect dataplane interface
                                 #    result, port_id = self.connect_port_network(iface['iface_id'], net["net_id"])
                                 #    if result < 0:
                                 #        error_text = "Error attaching port %s to network %s: %s." % (iface['iface_id'], net["net_id"], port_id)
-                                #        print "new_vminstance: " + error_text
+                                #        print("new_vminstance: " + error_text)
                                 #        self.delete_vminstance(vminstance_id)
                                 #        return result, error_text
                                 break
-        
+
             return vminstance_id
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
-        
+
     def get_vminstance(self, vm_id):
         '''Returns the VM instance information from VIM'''
         try:
@@ -887,16 +890,16 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.get(url, headers = self.headers_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             js_v(response, new_vminstance_response_schema)
             #r = self._remove_extra_items(response, new_vminstance_response_schema)
-            #if r is not None: 
+            #if r is not None:
             #    self.logger.warn("Warning: remove extra items %s", str(r))
             return response['server']
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
-        
+
     def delete_vminstance(self, vm_id):
         '''Removes a VM instance from VIM, returns the deleted vm_id'''
         try:
@@ -906,7 +909,7 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.delete(url, headers=self.headers_req)
             self._check_http_request_response(vim_response)
             #self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             return vm_id
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
@@ -920,7 +923,7 @@ class vimconnector(vimconn.vimconnector):
         vm_dict={}
         for vm_id in vm_list:
             vm={}
-            #print "VIMConnector refresh_tenant_vms and nets: Getting tenant VM instance information from VIM"
+            #print("VIMConnector refresh_tenant_vms and nets: Getting tenant VM instance information from VIM")
             try:
                 url = self.url+'/'+self.tenant+'/servers/'+ vm_id
                 self.logger.info("Getting vm GET %s", url)
@@ -958,13 +961,13 @@ class vimconnector(vimconn.vimconnector):
                         if interface["ip_address"] == "0.0.0.0":
                             interface["ip_address"] = None
                         vm["interfaces"].append(interface)
-                        
+
                 except Exception as e:
                     self.logger.error("refresh_vms_and_nets. Port get %s: %s", type(e).__name__, str(e))
 
                 if vm['status'] == "ACTIVE" and not management_ip:
                     vm['status'] = "ACTIVE:NoMgmtIP"
-                    
+
             except vimconn.vimconnNotFoundException as e:
                 self.logger.error("Exception getting vm status: %s", str(e))
                 vm['status'] = "DELETED"
@@ -983,13 +986,13 @@ class vimconnector(vimconn.vimconnector):
                 net_id:         #VIM id of this network
                     status:     #Mandatory. Text with one of:
                                 #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...) 
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
                                 #  OTHER (Vim reported other status not understood)
                                 #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, INACTIVE, DOWN (admin down), 
+                                #  ACTIVE, INACTIVE, DOWN (admin down),
                                 #  BUILD (on building process)
                                 #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR 
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
 
         '''
@@ -997,11 +1000,11 @@ class vimconnector(vimconn.vimconnector):
             self._get_my_tenant()
         except requests.exceptions.RequestException as e:
             self._format_request_exception(e)
-        
+
         net_dict={}
         for net_id in net_list:
             net = {}
-            #print "VIMConnector refresh_tenant_vms_and_nets: Getting tenant network from VIM (tenant: " + str(self.tenant) + "): "
+            #print("VIMConnector refresh_tenant_vms_and_nets: Getting tenant network from VIM (tenant: " + str(self.tenant) + "): ")
             try:
                 net_vim = self.get_network(net_id)
                 if net_vim['status'] in netStatus2manoFormat:
@@ -1009,7 +1012,7 @@ class vimconnector(vimconn.vimconnector):
                 else:
                     net["status"] = "OTHER"
                     net["error_msg"] = "VIM status reported " + net_vim['status']
-                    
+
                 if net["status"] == "ACTIVE" and not net_vim['admin_state_up']:
                     net["status"] = "DOWN"
                 if net_vim.get('last_error'):
@@ -1025,7 +1028,7 @@ class vimconnector(vimconn.vimconnector):
                 net['error_msg'] = str(e)
             net_dict[net_id] = net
         return net_dict
-    
+
     def action_vminstance(self, vm_id, action_dict):
         '''Send and action over a VM instance from VIM'''
         '''Returns the status'''
@@ -1041,13 +1044,13 @@ class vimconnector(vimconn.vimconnector):
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
 
-#NOT USED METHODS in current version        
-  
+#NOT USED METHODS in current version
+
     def host_vim2gui(self, host, server_dict):
         '''Transform host dictionary from VIM format to GUI format,
         and append to the server_dict
         '''
-        if type(server_dict) is not dict: 
+        if type(server_dict) is not dict:
             print('vimconnector.host_vim2gui() ERROR, param server_dict must be a dictionary')
             return
         RAD={}
@@ -1075,7 +1078,7 @@ class vimconnector(vimconn.vimconnector):
             for iface in numa['interfaces']:
                 RAD_item['ports'][ iface['pci'] ] = 'speed:'+str(iface['Mbps'])+'M'
                 occupation_item['ports'][ iface['pci'] ] = { 'occupied': str(100*iface['Mbps_consumed'] / iface['Mbps']) + "%" }
-                
+
             RAD[ numa['numa_socket'] ] = RAD_item
             occupation[ numa['numa_socket'] ] = occupation_item
         server_dict[ host['host']['name'] ] = {'RAD':RAD, 'occupation':occupation}
@@ -1091,15 +1094,15 @@ class vimconnector(vimconn.vimconnector):
             print("get_hosts_info Exception: ", e.args)
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print("vim get", url, "response:",  vim_response.status_code, vim_response.json())
-        #print vim_response.status_code
-        #print json.dumps(vim_response.json(), indent=4)
+        #print(vim_response.status_code)
+        #print(json.dumps(vim_response.json(), indent=4))
         if vim_response.status_code != 200:
             #TODO: get error
             print('vimconnector.get_hosts_info error getting host list %d %s' %(vim_response.status_code, vim_response.json()))
             return -vim_response.status_code, "Error getting host list"
-        
+
         res,hosts = self._format_in(vim_response, get_hosts_response_schema)
-            
+
         if res==False:
             print("vimconnector.get_hosts_info error parsing GET HOSTS vim response", hosts)
             return vimconn.HTTP_Internal_Server_Error, hosts
@@ -1120,7 +1123,7 @@ class vimconnector(vimconn.vimconnector):
             if res==False:
                 print("vimconnector.get_hosts_info error parsing GET HOSTS/%s vim response" % host['id'], host_detail)
                 continue
-            #print 'host id '+host['id'], json.dumps(host_detail, indent=4)
+            #print('host id '+host['id'], json.dumps(host_detail, indent=4))
             self.host_vim2gui(host_detail, hosts_dict)
         return 200, hosts_dict
 
@@ -1135,15 +1138,15 @@ class vimconnector(vimconn.vimconnector):
             print("get_hosts Exception: ", e.args)
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print("vim get", url, "response:",  vim_response.status_code, vim_response.json())
-        #print vim_response.status_code
-        #print json.dumps(vim_response.json(), indent=4)
+        #print(vim_response.status_code)
+        #print(json.dumps(vim_response.json(), indent=4))
         if vim_response.status_code != 200:
             #TODO: get error
             print('vimconnector.get_hosts error getting host list %d %s' %(vim_response.status_code, vim_response.json()))
             return -vim_response.status_code, "Error getting host list"
-        
+
         res,hosts = self._format_in(vim_response, get_hosts_response_schema)
-            
+
         if res==False:
             print("vimconnector.get_host error parsing GET HOSTS vim response", hosts)
             return vimconn.HTTP_Internal_Server_Error, hosts
@@ -1163,7 +1166,7 @@ class vimconnector(vimconn.vimconnector):
             if res==False:
                 print("vimconnector.get_host error parsing GET SERVERS/%s vim response" % host['id'], servers)
                 continue
-            #print 'host id '+host['id'], json.dumps(host_detail, indent=4)
+            #print('host id '+host['id'], json.dumps(host_detail, indent=4))
             host['instances'] = servers['servers']
         return 200, hosts['hosts']
 
@@ -1176,16 +1179,16 @@ class vimconnector(vimconn.vimconnector):
             print("get_processor_rankings Exception: ", e.args)
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print("vim get", url, "response:", vim_response.status_code, vim_response.json())
-        #print vim_response.status_code
-        #print json.dumps(vim_response.json(), indent=4)
+        #print(vim_response.status_code)
+        #print(json.dumps(vim_response.json(), indent=4))
         if vim_response.status_code != 200:
             #TODO: get error
             print('vimconnector.get_processor_rankings error getting processor rankings %d %s' %(vim_response.status_code, vim_response.json()))
             return -vim_response.status_code, "Error getting processor rankings"
-        
+
         res,rankings = self._format_in(vim_response, get_processor_rankings_response_schema)
         return res, rankings['rankings']
-    
+
     def new_host(self, host_data):
         '''Adds a new host to VIM'''
         '''Returns status code of the VIM response'''
@@ -1196,17 +1199,17 @@ class vimconnector(vimconn.vimconnector):
             vim_response = requests.post(url, headers = self.headers_req, data=payload_req)
             self._check_http_request_response(vim_response)
             self.logger.debug(vim_response.text)
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(json.dumps(vim_response.json(), indent=4))
             response = vim_response.json()
             js_v(response, new_host_response_schema)
             r = self._remove_extra_items(response, new_host_response_schema)
-            if r is not None: 
+            if r is not None:
                 self.logger.warn("Warning: remove extra items %s", str(r))
             host_id = response['host']['id']
             return host_id
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
-    
+
     def new_external_port(self, port_data):
         '''Adds a external port to VIM'''
         '''Returns the port identifier'''
@@ -1219,33 +1222,33 @@ class vimconnector(vimconn.vimconnector):
             self.logger.error("new_external_port Exception: ", str(e))
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print(vim_response)
-        #print vim_response.status_code
+        #print(vim_response.status_code)
         if vim_response.status_code == 200:
-        #print vim_response.json()
-        #print json.dumps(vim_response.json(), indent=4)
+        #print(vim_response.json())
+        #print(json.dumps(vim_response.json(), indent=4))
             res, http_content = self._format_in(vim_response, new_port_response_schema)
-        #print http_content
+        #print(http_content)
             if res:
                 r = self._remove_extra_items(http_content, new_port_response_schema)
                 if r is not None: print("Warning: remove extra items ", r)
-                #print http_content
+                #print(http_content)
                 port_id = http_content['port']['id']
                 print("Port id: ",port_id)
                 return vim_response.status_code,port_id
             else: return -vimconn.HTTP_Bad_Request,http_content
         else:
-            #print vim_response.text
+            #print(vim_response.text)
             jsonerror = self._format_jsonerror(vim_response)
             text = 'Error in VIM "%s": not possible to add new external port. HTTP Response: %d. Error: %s' % (self.url_admin, vim_response.status_code, jsonerror)
-            #print text
+            #print(text)
             return -vim_response.status_code,text
-        
+
     def new_external_network(self,net_name,net_type):
         '''Adds a external network to VIM (shared)'''
         '''Returns the network identifier'''
         #TODO change to logging exception code policies
         print("VIMConnector: Adding external shared network to VIM (type " + net_type + "): "+ net_name)
-        
+
         payload_req = '{"network":{"name": "' + net_name + '","shared":true,"type": "' + net_type + '"}}'
         try:
             vim_response = requests.post(self.url+'/networks', headers = self.headers_req, data=payload_req)
@@ -1253,33 +1256,33 @@ class vimconnector(vimconn.vimconnector):
             self.logger.error( "new_external_network Exception: ", e.args)
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print(vim_response)
-        #print vim_response.status_code
+        #print(vim_response.status_code)
         if vim_response.status_code == 200:
-            #print vim_response.json()
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(vim_response.json())
+            #print(json.dumps(vim_response.json(), indent=4))
             res,http_content = self._format_in(vim_response, new_network_response_schema)
-            #print http_content
+            #print(http_content)
             if res:
                 r = self._remove_extra_items(http_content, new_network_response_schema)
                 if r is not None: print("Warning: remove extra items ", r)
-                #print http_content
+                #print(http_content)
                 network_id = http_content['network']['id']
                 print("Network id: ",network_id)
                 return vim_response.status_code,network_id
             else: return -vimconn.HTTP_Bad_Request,http_content
         else:
-            #print vim_response.text
+            #print(vim_response.text)
             jsonerror = self._format_jsonerror(vim_response)
             text = 'Error in VIM "%s": not possible to add new external network. HTTP Response: %d. Error: %s' % (self.url, vim_response.status_code, jsonerror)
-            #print text
+            #print(text)
             return -vim_response.status_code,text
-        
+
     def connect_port_network(self, port_id, network_id, admin=False):
         '''Connects a external port to a network'''
         '''Returns status code of the VIM response'''
         #TODO change to logging exception code policies
         print("VIMConnector: Connecting external port to network")
-        
+
         payload_req = '{"port":{"network_id":"' + network_id + '"}}'
         if admin:
             if self.url_admin==None:
@@ -1293,16 +1296,16 @@ class vimconnector(vimconn.vimconnector):
             print("connect_port_network Exception: ", e.args)
             return -vimconn.HTTP_Not_Found, str(e.args[0])
         print(vim_response)
-        #print vim_response.status_code
+        #print(vim_response.status_code)
         if vim_response.status_code == 200:
-            #print vim_response.json()
-            #print json.dumps(vim_response.json(), indent=4)
+            #print(vim_response.json())
+            #print(json.dumps(vim_response.json(), indent=4))
             res,http_content = self._format_in(vim_response, new_port_response_schema)
-            #print http_content
+            #print(http_content)
             if res:
                 r = self._remove_extra_items(http_content, new_port_response_schema)
                 if r is not None: print("Warning: remove extra items ", r)
-                #print http_content
+                #print(http_content)
                 port_id = http_content['port']['id']
                 print("Port id: ",port_id)
                 return vim_response.status_code,port_id
@@ -1313,5 +1316,3 @@ class vimconnector(vimconn.vimconnector):
             text = 'Error in VIM "%s": not possible to connect external port to network. HTTP Response: %d. Error: %s' % (self.url_admin, vim_response.status_code, jsonerror)
             print(text)
             return -vim_response.status_code,text
-        
-
