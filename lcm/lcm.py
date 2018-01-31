@@ -39,6 +39,7 @@ db = dbmemory.dbmemory()
 class RO_Exception(Exception):
     pass
 
+
 async def CreateNS(loop, nsr_id):
     logger.debug("CreateNS task nsr_id={} Enter".format(nsr_id))
     nsr_lcm = {
@@ -154,9 +155,14 @@ async def CreateNS(loop, nsr_id):
                 base_folder = vnfd["_admin"]["storage"]
                 path = base_folder + "/charms/" + proxy_charm
                 mgmt_ip = nsr_lcm['nsr_ip'][vnfd_index]
+<<<<<<< HEAD
                 # task = asyncio.ensure_future(DeployCharm(loop, path, mgmt_ip, config_primitive))
                 pass
                 # TODO launch VCA charm
+=======
+                # TODO launch VCA charm
+                # task = asyncio.ensure_future(DeployCharm(loop, path, mgmt_ip, config_primitive))
+>>>>>>> 6ce7cc879dda3b729b10d563bd26df613dc9f70f
         nsr_lcm["status"] = "DONE"
         db.replace("nsr_lcm", {"id": nsr_id}, nsr_lcm)
 
@@ -178,7 +184,11 @@ async def DestroyNS(loop, nsr_id):
     nsr_lcm["status"] = "DELETING"
     nsr_lcm["status_detailed"] = "Deleting charms"
     db.replace("nsr_lcm", {"id": nsr_id}, nsr_lcm)
+<<<<<<< HEAD
     # TODO destroy charms
+=======
+    # TODO destroy VCA charm
+>>>>>>> 6ce7cc879dda3b729b10d563bd26df613dc9f70f
 
     # remove from RO
     RO = ROclient.ROClient(loop, endpoint_url=ro_account["url"], tenant=ro_account["tenant"],
@@ -378,6 +388,3 @@ if __name__ == '__main__':
     db.create("ns_request", ns_request)
     # lcm2()
     lcm()
-
-
-
