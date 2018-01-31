@@ -1,6 +1,17 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+
+import argparse
+import glob
+from juju_api import JujuApi
+import mimetypes
+import os
+import os.path
+import re
+import shutil
+import tarfile
+
 import asyncio
 import aiohttp
 import yaml
@@ -18,13 +29,129 @@ logging.basicConfig(format=streamformat, level=logging.DEBUG)
 logger = logging.getLogger('lcm')
 
 ro_account = {
-    "url": "http://localhost:9090/openmano",
-    "tenant": "osm"
+    "url": "http://10.105.129.121:9090/openmano",
+    "tenant": "osm",
 }
 
 vca_account = {
-    # TODO
+    "ip": "10.105.129.40",
+    "port": 17070,
+    "user": "admin",
+    "secret": "NzdjM2M4ODA5NjlhNzRkZGJhMzc2NjNk",
 }
+
+# These functions are written to use the JujuApi class from juju_api.py, a
+# drop-in copy of the one used in OSM today. This will make it easier to extend
+# functionality in the LCM as it's added to the Juju API
+
+
+def GetJujuApi(loop):
+    # Quiet logging from the websocket library. If you want to see
+    # everything sent over the wire, set this to DEBUG.
+    logging.basicConfig(level=logging.DEBUG)
+
+    ws_logger = logging.getLogger('websockets.protocol')
+    ws_logger.setLevel(logging.INFO)
+
+    api = JujuApi(server=vca_account['ip'],
+                  port=vca_account['port'],
+                  user=vca_account['user'],
+                  secret=vca_account['secret'],
+                  loop=loop,
+                  log=ws_logger,
+                  model_name='default'
+                  )
+    return api
+
+
+def get_vnf_unique_name(nsr_name, vnfr_name, member_vnf_index):
+    """Get the unique VNF name.
+    Charm names accepts only a to z and non-consecutive - characters."""
+    name = "{}-{}-{}".format(nsr_name, vnfr_name, member_vnf_index)
+    new_name = ''
+    for c in name:
+        if c.isdigit():
+            c = chr(97 + int(c))
+        elif not c.isalpha():
+            c = "-"
+        new_name += c
+    return re.sub('\-+', '-', new_name.lower())
+
+
+async def DeployApplication(loop, application_name, charm_path, config):
+    """
+    Deploy a charm.
+
+    Deploy a VNF configuration charm from a local directory.
+    :param object loop: The event loop
+    :param str application_name: The unique name of this application.
+    :param str charm_path: The path to the charm.
+
+    :Example:
+
+    DeployApplication(loop, ".cache/ping_vnf/charm/pingpong", "ping_vnf")
+    """
+
+    api = GetJujuApi(loop)
+
+    await api.login()
+    if api.authenticated:
+        charm = os.path.basename(charm_path)
+
+        await api.deploy_application(charm,
+                                     name=application_name,
+                                     path=charm_path,
+                                     )
+        await api.apply_config(config, application_name)
+
+        # Wait for the application to fully deploy. This will block until the
+        # agent is in an idle state, and the charm's workload is either
+        # 'active' or 'unknown', meaning it's ready but the author did not
+        # explicitly set a workload state.
+        # print("Waiting for application '{}' to deploy...".format(charm))
+        while (True):
+            # Deploy the charm and wait, periodically checking its status
+            await api.wait_for_application(charm, 30)
+
+            error = await api.is_application_error(charm)
+            if error:
+                print("This application is in an error state.")
+                break
+
+            blocked = await api.is_application_blocked(charm)
+            if blocked:
+                print("This application is blocked.")
+                break
+
+            # An extra check to see if the charm is ready
+            up = await api.is_application_up(charm)
+            # print("Application is {}".format("up" if up else "down"))
+
+        print("Application {} is deployed".format(args.application))
+    await api.logout()
+
+
+async def RemoveApplication(loop, application_name):
+    """
+    Remove an application from the Juju Controller
+
+    Removed the named application and it's charm from the Juju controller.
+
+    :param object loop: The event loop.
+    :param str application_name: The unique name of the application.
+
+    :Example:
+
+    RemoveApplication(loop, "ping_vnf")
+    RemoveApplication(loop, "pong_vnf")
+    """
+    api = GetJujuApi(loop)
+
+    await api.login()
+    if api.authenticated:
+        print("Removing application {}".format(application_name))
+        await api.remove_application(application_name)
+    await api.logout()
 
 # conains created tasks/futures to be able to cancel
 lcm_tasks = {}
@@ -150,19 +277,35 @@ async def CreateNS(loop, nsr_id):
             vnfd = db.get_one("vnfd", {"id": vnfd_id})
             if vnfd.get("vnf-configuration") and vnfd["vnf-configuration"].get("juju"):
                 proxy_charm = vnfd["vnf-configuration"]["juju"]["charm"]
-                config_primitive = vnfd["vnf-configuration"].get("config-primitive")
+                # config_primitive = vnfd["vnf-configuration"].get("config-primitive")
+                initial_config_primitive = vnfd["vnf-configuration"].get("initial-config-primitive")
                 # get parameters for juju charm
                 base_folder = vnfd["_admin"]["storage"]
                 path = base_folder + "/charms/" + proxy_charm
                 mgmt_ip = nsr_lcm['nsr_ip'][vnfd_index]
-<<<<<<< HEAD
-                # task = asyncio.ensure_future(DeployCharm(loop, path, mgmt_ip, config_primitive))
-                pass
-                # TODO launch VCA charm
-=======
+
                 # TODO launch VCA charm
                 # task = asyncio.ensure_future(DeployCharm(loop, path, mgmt_ip, config_primitive))
->>>>>>> 6ce7cc879dda3b729b10d563bd26df613dc9f70f
+                config = {}
+                for primitive in initial_config_primitive:
+                    if primitive['name'] == 'config':
+                        for parameter in primitive['parameter']:
+                            param = parameter['name']
+                            if parameter['value'] == "<rw_mgmt_ip>":
+                                config[param] = mgmt_ip
+                            else:
+                                config[param] = parameter['value']
+
+                task = asyncio.ensure_future(
+                    DeployApplication(
+                        loop,
+                        get_vnf_unique_name(nsd_id, vnfd_id, vnfd_index),
+                        path,
+                        config,
+                    )
+                )
+
+
         nsr_lcm["status"] = "DONE"
         db.replace("nsr_lcm", {"id": nsr_id}, nsr_lcm)
 
@@ -180,15 +323,23 @@ async def DestroyNS(loop, nsr_id):
     logger.debug("DestroyNS task nsr_id={} Enter".format(nsr_id))
     nsr_lcm = db.get_one("nsr_lcm", {"id": nsr_id})
     ns_request = db.get_one("ns_request", {"id": nsr_id})
+    nsd_id = ns_request["nsd_id"]
 
     nsr_lcm["status"] = "DELETING"
     nsr_lcm["status_detailed"] = "Deleting charms"
     db.replace("nsr_lcm", {"id": nsr_id}, nsr_lcm)
-<<<<<<< HEAD
+
     # TODO destroy charms
-=======
-    # TODO destroy VCA charm
->>>>>>> 6ce7cc879dda3b729b10d563bd26df613dc9f70f
+    for c_vnf in nsd["constituent-vnfd"]:
+        vnfd_id = c_vnf["vnfd-id-ref"]
+        vnfd_index = int(c_vnf["member-vnf-index"])
+        vnfd = db.get_one("vnfd", {"id": vnfd_id})
+        if vnfd.get("vnf-configuration") and vnfd["vnf-configuration"].get("juju"):
+            RemoveApplication(
+                get_vnf_unique_name(
+                    nsd_id, vnfd_id, vnfd_index
+                )
+            )
 
     # remove from RO
     RO = ROclient.ROClient(loop, endpoint_url=ro_account["url"], tenant=ro_account["tenant"],
@@ -267,7 +418,6 @@ def cancel_tasks(loop, nsr_id):
     lcm_tasks[nsr_id] = {}
 
 
-
 async def read_kafka(loop, bus_info):
     global lcm_tasks
     logger.debug("kafka task Enter")
@@ -325,9 +475,9 @@ async def read_kafka(loop, bus_info):
     logger.debug("kafka task Exit")
 
 
-def lcm():
+def lcm(kafka):
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(read_kafka(loop, {"file": "/home/atierno/OSM/osm/NBI/kafka"}))
+    loop.run_until_complete(read_kafka(loop, {"file": kafka}))
     return
 
 
@@ -348,27 +498,101 @@ def lcm2():
     loop.close()
 
 
+def get_argparser():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        '--vnfd',
+        nargs="+",
+        type=str,
+        action='append',
+        required=True,
+    )
+    parser.add_argument(
+        '--nsd',
+        type=str,
+        required=True,
+    )
+
+    parser.add_argument(
+        '--kafka',
+        type=str,
+        required=True,
+    )
+
+    parser.add_argument(
+        '--datacenter',
+        type=str,
+        required=True,
+        default="OST2_MRT"
+    )
+    args = parser.parse_args()
+
+    # Quick hack to make this one list
+    vnfds = []
+    for vnfd in args.vnfd:
+        vnfds += vnfd
+    args.vnfd = vnfds
+
+    return args
+
+
+# def find_yaml(path):
+#     """Find the first yaml file, rescursively, in the path."""
+#     for filename in glob.iglob('path/**/.yaml'):
+#         print(filename)
+#
+#
 if __name__ == '__main__':
 
-    # FOR TEST
-    RO_VIM = "OST2_MRT"
+    args = get_argparser()
+    print(args)
 
-    #FILL DATABASE
-    with open("/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/ping_vnf/src/ping_vnfd.yaml") as f:
-        vnfd = yaml.load(f)
-        vnfd_clean, _ = ROclient.remove_envelop("vnfd", vnfd)
-        vnfd_clean["_admin"] = {"storage": "/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/ping_vnf"}
-        db.create("vnfd", vnfd_clean)
-    with open("/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/pong_vnf/src/pong_vnfd.yaml") as f:
-        vnfd = yaml.load(f)
-        vnfd_clean, _ = ROclient.remove_envelop("vnfd", vnfd)
-        vnfd_clean["_admin"] = {"storage": "/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/pong_vnf"}
-        db.create("vnfd", vnfd_clean)
-    with open("/home/atierno/OSM/osm/devops/descriptor-packages/nsd/ping_pong_ns/src/ping_pong_nsd.yaml") as f:
-        nsd = yaml.load(f)
-        nsd_clean, _ = ROclient.remove_envelop("nsd", nsd)
-        nsd_clean["_admin"] = {"storage": "/home/atierno/OSM/osm/devops/descriptor-packages/nsd/ping_pong_ns"}
-        db.create("nsd", nsd_clean)
+    # FOR TEST
+    RO_VIM = args.datacenter
+
+    # Unpack the NSD/VNFD packages to a persistent on-disk cache
+    if os.path.exists('.cache'):
+        shutil.rmtree('.cache')
+    os.mkdir('.cache')
+
+    for vnfd in args.vnfd:
+        if mimetypes.guess_type(vnfd)[0] == "application/x-tar":
+            with tarfile.open(vnfd) as tar:
+                tar.extractall('.cache/')
+                # The path is the root of our charm
+                vnfd_dir = "{}/.cache/{}".format(
+                    os.path.dirname(
+                        os.path.realpath(__file__)
+                    ),
+                    tar.getnames()[0]
+                )
+                for entity in tar:
+                    if entity.name.endswith('_vnfd.yaml'):
+                        print("VNFD: {}/{}".format(".cache", entity.name))
+                        with open("{}/{}".format(".cache", entity.name)) as f:
+                            vnfd = yaml.load(f)
+                            vnfd_clean, _ = ROclient.remove_envelop("vnfd", vnfd)
+                            vnfd_clean["_admin"] = {"storage": vnfd_dir}
+                            db.create("vnfd", vnfd_clean)
+
+    if mimetypes.guess_type(args.nsd)[0] == "application/x-tar":
+        with tarfile.open(args.nsd) as tar:
+            tar.extractall('.cache/')
+
+            nsd_dir = "{}/.cache/{}".format(
+                os.path.dirname(
+                    os.path.realpath(__file__)
+                ),
+                tar.getnames()[0]
+            )
+            for entity in tar:
+                if entity.name.endswith('_nsd.yaml'):
+                    with open("{}/{}".format(".cache", entity.name)) as f:
+                        nsd = yaml.load(f)
+                        nsd_clean, _ = ROclient.remove_envelop("nsd", nsd)
+                        nsd_clean["_admin"] = {"storage": nsd_dir}
+                        db.create("nsd", nsd_clean)
 
     ns_request = {
         "id": "ns1",
@@ -387,4 +611,42 @@ if __name__ == '__main__':
     }
     db.create("ns_request", ns_request)
     # lcm2()
-    lcm()
+    lcm(args.kafka)
+
+    pass
+
+    #FILL DATABASE
+    # with open("/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/ping_vnf/src/ping_vnfd.yaml") as f:
+    #     vnfd = yaml.load(f)
+    #     vnfd_clean, _ = ROclient.remove_envelop("vnfd", vnfd)
+    #     vnfd_clean["_admin"] = {"storage": "/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/ping_vnf"}
+    #     db.create("vnfd", vnfd_clean)
+    # with open("/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/pong_vnf/src/pong_vnfd.yaml") as f:
+    #     vnfd = yaml.load(f)
+    #     vnfd_clean, _ = ROclient.remove_envelop("vnfd", vnfd)
+    #     vnfd_clean["_admin"] = {"storage": "/home/atierno/OSM/osm/devops/descriptor-packages/vnfd/pong_vnf"}
+    #     db.create("vnfd", vnfd_clean)
+    # with open("/home/atierno/OSM/osm/devops/descriptor-packages/nsd/ping_pong_ns/src/ping_pong_nsd.yaml") as f:
+    #     nsd = yaml.load(f)
+    #     nsd_clean, _ = ROclient.remove_envelop("nsd", nsd)
+    #     nsd_clean["_admin"] = {"storage": "/home/atierno/OSM/osm/devops/descriptor-packages/nsd/ping_pong_ns"}
+    #     db.create("nsd", nsd_clean)
+    #
+    # ns_request = {
+    #     "id": "ns1",
+    #     "nsr_id": "ns1",
+    #     "name": "pingpongOne",
+    #     "vim": RO_VIM,
+    #     "nsd_id": nsd_clean["id"],  # nsd_ping_pong
+    # }
+    # db.create("ns_request", ns_request)
+    # ns_request = {
+    #     "id": "ns2",
+    #     "nsr_id": "ns2",
+    #     "name": "pingpongTwo",
+    #     "vim": RO_VIM,
+    #     "nsd_id": nsd_clean["id"],  # nsd_ping_pong
+    # }
+    # db.create("ns_request", ns_request)
+    # # lcm2()
+    # lcm()
