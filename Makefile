@@ -61,6 +61,7 @@ lib-openvim:
 
 osm-im:
 	$(shell git clone https://osm.etsi.org/gerrit/osm/IM)
+	git -C IM checkout $(BRANCH)
 	make -C IM clean all
 
 package: prepare
