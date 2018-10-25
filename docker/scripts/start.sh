@@ -125,4 +125,10 @@ fi
 
 
 echo "4/4 Try to start"
-/usr/bin/openmanod -c /etc/osm/openmanod.cfg --log-file=/var/log/osm/openmano.log --create-tenant=osm
+# look for openmanod.cfg
+RO_CONFIG_FILE="/etc/osm/openmanod.cfg"
+[ -f "$RO_CONFIG_FILE" ] || RO_CONFIG_FILE=$(python -c 'import osm_ro; print(osm_ro.__path__[0])')/openmanod.cfg
+[ -f "$RO_CONFIG_FILE" ] || ! echo "configuration file 'openmanod.cfg' not found" || exit 1
+
+openmanod -c "$RO_CONFIG_FILE"  --create-tenant=osm  # --log-file=/var/log/osm/openmano.log
+
