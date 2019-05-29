@@ -14,8 +14,16 @@ from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.compute import ComputeManagementClient
 
+from msrestazure.azure_exceptions import CloudError
 
 class vimconnector(vimconn.vimconnector):
+
+    provision_state2osm = {
+        "Deleting": "INACTIVE",
+        "Failed": "ERROR",
+        "Succeeded": "ACTIVE",
+        "Updating": "BUILD",
+    }
 
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
                  config={}, persistent_info={}):
@@ -23,6 +31,7 @@ class vimconnector(vimconn.vimconnector):
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config, persistent_info)
 
+        self.vnet_address_space = None
         # LOGGER
         self.logger = logging.getLogger('openmano.vim.azure')
         if log_level:
@@ -109,12 +118,23 @@ class vimconnector(vimconn.vimconnector):
 
     def _check_or_create_vnet(self):
         try:
+            vnet = self.conn_vnet.virtual_networks.get(self.resource_group, self.vnet_name)
+            self.vnet_address_space = vnet.address_space.address_prefixes[0]
+            return
+        except CloudError as e:
+            if e.error.error == "ResourceNotFound":
+                pass
+            else:
+                raise
+        # if not exist, creates it
+        try:
             vnet_params = {
                 'location': self.region,
                 'address_space': {
-                    'address_prefixes': "10.0.0.0/8"
+                    'address_prefixes': ["10.0.0.0/8"]
                 },
             }
+            self.vnet_address_space = "10.0.0.0/8"
             self.conn_vnet.virtual_networks.create_or_update(self.resource_group, self.vnet_name, vnet_params)
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -155,15 +175,13 @@ class vimconnector(vimconn.vimconnector):
         self._reload_connection()
 
         if ip_profile is None:
-            # TODO get a non used vnet ip range /24 and allocate automatically
+            # TODO get a non used vnet ip range /24 and allocate automatically inside the range self.vnet_address_space
+            # use netaddr library
             raise vimconn.vimconnException('Azure cannot create VNET with no CIDR')
 
         try:
             vnet_params= {
                 'location': self.region,
-                'address_space': {
-                    'address_prefixes': [ip_profile['subnet_address']]
-                },
                 'subnets': [
                     {
                         'name': "{}-{}".format(net_name[:24], uuid4()),
@@ -425,24 +443,66 @@ class vimconnector(vimconn.vimconnector):
         for vm_size in self.conn_compute.virtual_machine_sizes.list(self.region):
             if vm_size.name == flavor_id :
                 return vm_size
-				
-    def refresh_nets_status(self, net_id):
-		resGroup = self._get_resource_group_name_from_resource_id(net_id)
-		resName = self._get_resource_name_from_resource_id(net_id)
-		
-		self._reload_connection()
-		vnet = self.conn_vnet.virtual_networks.get(resGroup, resName)
 
-		return vnet
-			
-    def refresh_vms_status(self, vm_id):
-		resGroup = self._get_resource_group_name_from_resource_id(net_id)
-		resName = self._get_resource_name_from_resource_id(net_id)
-        
-		self._reload_connection()
-		vm=self.conn_compute.virtual_machines.get(resGroup, resName)
+    def refresh_nets_status(self, net_list):
+        out_nets = {}
+        self._reload_connection()
+        for net_id in net_list:
+            try:
+                resGroup = self._get_resource_group_name_from_resource_id(net_id)
+                resName = self._get_resource_name_from_resource_id(net_id)
 
-		return vm
+                vnet = self.conn_vnet.virtual_networks.get(resGroup, resName)
+                out_nets[net_id] ={
+                    "status": self.provision_state2osm[vnet.provisioning_state],
+                    "vim_info": str(vnet)
+                }
+            except CloudError as e:
+                if e.error.error == "ResourceNotFound":
+                    out_nets[net_id] = {
+                        "status": "DELETED",
+                    }
+                else:
+                    raise
+            except Exception as e:
+                # TODO distinguish when it is deleted
+                out_nets[net_id] = {
+                    "status": "VIM_ERROR",
+                    "vim_info": str(vnet),
+                    "error_msg": str(e)
+                }
+
+        return out_nets
+
+    def refresh_vms_status(self, vm_list):
+        out_vms = {}
+        self._reload_connection()
+        for vm_id in vm_list:
+            try:
+                resGroup = self._get_resource_group_name_from_resource_id(vm_id)
+                resName = self._get_resource_name_from_resource_id(vm_id)
+
+                vm = self.conn_compute.virtual_machines.get(resGroup, resName)
+                out_vms[vm_id] ={
+                    "status": self.provision_state2osm[vm.provisioning_state],
+                    "vim_info": str(vm)
+                }
+            except CloudError as e:
+                if e.error.error == "ResourceNotFound":
+                    out_vms[vm_id] = {
+                        "status": "DELETED",
+                    }
+                else:
+                    raise
+            except Exception as e:
+                # TODO distinguish when it is deleted
+                out_vms[vm_id] = {
+                    "status": "VIM_ERROR",
+                    "vim_info": str(vm),
+                    "error_msg": str(e)
+                }
+
+        return out_vms
 
 # TODO get_vminstance_console  for getting console
 
@@ -507,4 +567,8 @@ if __name__ == "__main__":
     # azure.new_vminstance(virtualMachine['name'], virtualMachine['description'], virtualMachine['status'],
     #                      virtualMachine['image'], virtualMachine['hardware_profile']['vm_size'], subnets)
 
-    azure.refresh_nets_status("/subscriptions/82f80cc1-876b-4591-9911-1fb5788384fd/resourceGroups/osmRG/providers/Microsoft.Network/virtualNetworks/test")
+    net_id = "/subscriptions/82f80cc1-876b-4591-9911-1fb5788384fd/resourceGroups/osmRG/providers/Microsoft."\
+             "Network/virtualNetworks/test"
+    net_id_not_found = "/subscriptions/82f80cc1-876b-4591-9911-1fb5788384fd/resourceGroups/osmRG/providers/"\
+                       "Microsoft.Network/virtualNetworks/testALF"
+    azure.refresh_nets_status([net_id, net_id_not_found])
