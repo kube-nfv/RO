@@ -425,10 +425,25 @@ class vimconnector(vimconn.vimconnector):
         for vm_size in self.conn_compute.virtual_machine_sizes.list(self.region):
             if vm_size.name == flavor_id :
                 return vm_size
+				
+    def refresh_nets_status(self, net_id):
+		resGroup = self._get_resource_group_name_from_resource_id(net_id)
+		resName = self._get_resource_name_from_resource_id(net_id)
+		
+		self._reload_connection()
+		vnet = self.conn_vnet.virtual_networks.get(resGroup, resName)
 
+		return vnet
+			
+    def refresh_vms_status(self, vm_id):
+		resGroup = self._get_resource_group_name_from_resource_id(net_id)
+		resName = self._get_resource_name_from_resource_id(net_id)
+        
+		self._reload_connection()
+		vm=self.conn_compute.virtual_machines.get(resGroup, resName)
 
-# TODO refresh_nets_status ver estado activo
-# TODO refresh_vms_status  ver estado activo
+		return vm
+
 # TODO get_vminstance_console  for getting console
 
 if __name__ == "__main__":
@@ -492,4 +507,4 @@ if __name__ == "__main__":
     # azure.new_vminstance(virtualMachine['name'], virtualMachine['description'], virtualMachine['status'],
     #                      virtualMachine['image'], virtualMachine['hardware_profile']['vm_size'], subnets)
 
-    azure.get_flavor("Standard_A11")
+    azure.refresh_nets_status("/subscriptions/82f80cc1-876b-4591-9911-1fb5788384fd/resourceGroups/osmRG/providers/Microsoft.Network/virtualNetworks/test")
