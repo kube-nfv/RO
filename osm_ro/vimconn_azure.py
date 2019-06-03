@@ -5,6 +5,7 @@ __date__ ='$18-apr-2019 23:59:59$'
 
 import vimconn
 import logging
+import netaddr
 
 from os import getenv
 from uuid import uuid4
@@ -120,6 +121,7 @@ class vimconnector(vimconn.vimconnector):
         try:
             vnet = self.conn_vnet.virtual_networks.get(self.resource_group, self.vnet_name)
             self.vnet_address_space = vnet.address_space.address_prefixes[0]
+            self.vnet_id = vnet.id
             return
         except CloudError as e:
             if e.error.error == "ResourceNotFound":
@@ -136,6 +138,8 @@ class vimconnector(vimconn.vimconnector):
             }
             self.vnet_address_space = "10.0.0.0/8"
             self.conn_vnet.virtual_networks.create_or_update(self.resource_group, self.vnet_name, vnet_params)
+            vnet = self.conn_vnet.virtual_networks.get(self.resource_group, self.vnet_name)
+            self.vnet_id = vnet.id
         except Exception as e:
             self.format_vimconn_exception(e)
 
@@ -175,22 +179,26 @@ class vimconnector(vimconn.vimconnector):
         self._reload_connection()
 
         if ip_profile is None:
-            # TODO get a non used vnet ip range /24 and allocate automatically inside the range self.vnet_address_space
-            # use netaddr library
-            raise vimconn.vimconnException('Azure cannot create VNET with no CIDR')
-
+            # get a non used vnet ip range /24 and allocate automatically inside the range self.vnet_address_space
+            used_subnets = self.get_network_list()
+            for ip_range in netaddr.IPNetwork(self.vnet_address_space).subnet(24):
+                for used_subnet in used_subnets:
+                    subnet_range = netaddr.IPNetwork(used_subnet["cidr_block"])
+                    if subnet_range in ip_range or ip_range in subnet_range:
+                        # this range overlaps with an existing subnet ip range. Breaks and look for another
+                        break
+                else:
+                    ip_profile = {"subnet_address": str(ip_range)}
+                    break
+            else:
+                vimconn.vimconnException("Cannot find a non-used subnet range in {}".format(self.vnet_address_space))
         try:
-            vnet_params= {
-                'location': self.region,
-                'subnets': [
-                    {
-                        'name': "{}-{}".format(net_name[:24], uuid4()),
-                        'address_prefix': ip_profile['subnet_address']
-                    }
-                ]
+            subnet_name = "{}-{}".format(net_name[:24], uuid4())
+            subnet_params= {
+                'address_prefix': ip_profile['subnet_address']
             }
-            self.conn_vnet.virtual_networks.create_or_update(self.resource_group, self.vnet_name, vnet_params)
-            # TODO return a tuple (subnet-ID, None)
+            self.conn_vnet.subnets.create_or_update(self.resource_group, self.vnet_name, subnet_name, subnet_params)
+            return "{}/subnet/{}".format(self.vnet_id, subnet_name), None
         except Exception as e:
             self.format_vimconn_exception(e)
 
@@ -412,7 +420,6 @@ class vimconnector(vimconn.vimconnector):
         
         self._reload_connection()
         vnet = self.conn_vnet.virtual_networks.get(resGroup, resName)
-
         return vnet
 
     def delete_network(self, net_id):
@@ -567,6 +574,7 @@ if __name__ == "__main__":
     # azure.new_vminstance(virtualMachine['name'], virtualMachine['description'], virtualMachine['status'],
     #                      virtualMachine['image'], virtualMachine['hardware_profile']['vm_size'], subnets)
 
+    azure.new_network("mynet", None)
     net_id = "/subscriptions/82f80cc1-876b-4591-9911-1fb5788384fd/resourceGroups/osmRG/providers/Microsoft."\
              "Network/virtualNetworks/test"
     net_id_not_found = "/subscriptions/82f80cc1-876b-4591-9911-1fb5788384fd/resourceGroups/osmRG/providers/"\
