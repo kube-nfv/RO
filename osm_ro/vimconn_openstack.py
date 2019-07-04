@@ -448,6 +448,10 @@ class vimconnector(vimconn.vimconnector):
                     self.security_groups_id = None
                     raise vimconn.vimconnConnectionException("Not found security group {} for this tenant".format(sg))
 
+    def check_vim_connectivity(self):
+        # just get network list to check connectivity and credentials
+        self.get_network_list(filter_dict={})
+
     def get_tenant_list(self, filter_dict={}):
         '''Obtain tenants of VIM
         filter_dict can contain the following keys:

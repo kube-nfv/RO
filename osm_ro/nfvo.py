@@ -5189,7 +5189,13 @@ def datacenter_action(mydb, tenant_id, datacenter, action_dict):
     #get datacenter info
     datacenter_id, myvim  = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
 
-    if 'net-update' in action_dict:
+    if 'check-connectivity' in action_dict:
+        try:
+            myvim.check_vim_connectivity()
+        except vimconn.vimconnException as e:
+            #logger.error("nfvo.datacenter_action() Not possible to get_network_list from VIM: %s ", str(e))
+            raise NfvoException(str(e), e.http_code)
+    elif 'net-update' in action_dict:
         try:
             nets = myvim.get_network_list(filter_dict={'shared': True, 'admin_state_up': True, 'status': 'ACTIVE'})
             #print content

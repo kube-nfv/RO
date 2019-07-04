@@ -257,8 +257,9 @@ datacenter_action_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type":"object",
     "properties":{
-        "net-update":{"type":"null",},
-        "net-edit":{
+        "check-connectivity": {"type": "null"},
+        "net-update": {"type": "null"},
+        "net-edit": {
             "type":"object",
             "properties":{
                 "net": name_schema,  #name or uuid of net to change
