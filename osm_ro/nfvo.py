@@ -1282,13 +1282,21 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                 numa["threads"] = max(db_flavor["vcpus"], 1)
                             epa_vcpu_set = True
                     if vdu["guest-epa"].get("cpu-quota") and not epa_vcpu_set:
-                        extended["cpu-quota"] = get_resource_allocation_params(vdu["guest-epa"].get("cpu-quota"))
+                        cpuquota = get_resource_allocation_params(vdu["guest-epa"].get("cpu-quota"))
+                        if cpuquota:
+                            extended["cpu-quota"] = cpuquota
                     if vdu["guest-epa"].get("mem-quota"):
-                        extended["mem-quota"] = get_resource_allocation_params(vdu["guest-epa"].get("mem-quota"))
+                        vduquota = get_resource_allocation_params(vdu["guest-epa"].get("mem-quota"))
+                        if vduquota:
+                            extended["mem-quota"] = vduquota
                     if vdu["guest-epa"].get("disk-io-quota"):
-                        extended["disk-io-quota"] = get_resource_allocation_params(vdu["guest-epa"].get("disk-io-quota"))
+                        diskioquota = get_resource_allocation_params(vdu["guest-epa"].get("disk-io-quota"))
+                        if diskioquota:
+                            extended["disk-io-quota"] = diskioquota
                     if vdu["guest-epa"].get("vif-quota"):
-                        extended["vif-quota"] = get_resource_allocation_params(vdu["guest-epa"].get("vif-quota"))
+                        vifquota = get_resource_allocation_params(vdu["guest-epa"].get("vif-quota"))
+                        if vifquota:
+                            extended["vif-quota"] = vifquota
                 if numa:
                     extended["numas"] = [numa]
                 if extended:
