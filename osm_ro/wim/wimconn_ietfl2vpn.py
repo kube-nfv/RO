@@ -163,7 +163,7 @@ class WimconnectorIETFL2VPN(WimConnector):
             vpn_service["customer-name"] = "osm"
             vpn_service_list = []
             vpn_service_list.append(vpn_service)
-            vpn_service_l = {"vpn-service": vpn_service_list}
+            vpn_service_l = {"ietf-l2vpn-svc:vpn-service": vpn_service_list}
             response_service_creation = None
             conn_info = []
             self.logger.info("Sending vpn-service :{}".format(vpn_service_l))
@@ -211,7 +211,7 @@ class WimconnectorIETFL2VPN(WimConnector):
                 site_network_accesses = {}
                 site_network_access_list = []
                 site_network_access_list.append(site_network_access)
-                site_network_accesses["site-network-access"] = site_network_access_list
+                site_network_accesses["ietf-l2vpn-svc:site-network-access"] = site_network_access_list
                 conn_info_d = {}
                 conn_info_d["site"] = connection_point_wan_info["wan_service_mapping_info"]["site-id"]
                 conn_info_d["site-network-access-id"] = site_network_access["network-access-id"]
@@ -315,7 +315,7 @@ class WimconnectorIETFL2VPN(WimConnector):
             site_network_accesses = {}
             site_network_access_list = []
             site_network_access_list.append(site_network_access)
-            site_network_accesses["site-network-access"] = site_network_access_list
+            site_network_accesses["ietf-l2vpn-svc:site-network-access"] = site_network_access_list
             try:
                 endpoint_site_network_access_edit = \
                     "{}/restconf/data/ietf-l2vpn-svc:l2vpn-svc/sites/site={}/site-network-accesses/".format(
