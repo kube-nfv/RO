@@ -1006,6 +1006,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
             # connection points vaiable declaration
             cp_name2iface_uuid = {}
+            cp_name2vdu_id = {}
             cp_name2vm_uuid = {}
             cp_name2db_interface = {}
             vdu_id2cp_name = {}  # stored only when one external connection point is presented at this VDU
@@ -1013,6 +1014,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
             # table vms (vdus)
             vdu_id2uuid = {}
             vdu_id2db_table_index = {}
+            mgmt_access = {}
             for vdu in vnfd.get("vdu").itervalues():
 
                 for vdu_descriptor in vnfd_descriptor["vdu"]:
@@ -1166,6 +1168,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             cp = vnfd.get("connection-point")[iface.get("external-connection-point-ref")]
                             db_interface["external_name"] = get_str(cp, "name", 255)
                             cp_name2iface_uuid[db_interface["external_name"]] = iface_uuid
+                            cp_name2vdu_id[db_interface["external_name"]] = vdu_id
                             cp_name2vm_uuid[db_interface["external_name"]] = vm_uuid
                             cp_name2db_interface[db_interface["external_name"]] = db_interface
                             for cp_descriptor in vnfd_descriptor["connection-point"]:
@@ -1333,7 +1336,6 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     # if pg.get("strategy") == "ISOLATION":
 
             # VNF mgmt configuration
-            mgmt_access = {}
             if vnfd["mgmt-interface"].get("vdu-id"):
                 mgmt_vdu_id = get_str(vnfd["mgmt-interface"], "vdu-id", 255)
                 if mgmt_vdu_id not in vdu_id2uuid:
@@ -1342,6 +1344,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                             vnf=vnfd_id, vdu=mgmt_vdu_id),
                                         httperrors.Bad_Request)
                 mgmt_access["vm_id"] = vdu_id2uuid[vnfd["mgmt-interface"]["vdu-id"]]
+                mgmt_access["vdu-id"] = vnfd["mgmt-interface"]["vdu-id"]
                 # if only one cp is defined by this VDU, mark this interface as of type "mgmt"
                 if vdu_id2cp_name.get(mgmt_vdu_id):
                     if cp_name2db_interface[vdu_id2cp_name[mgmt_vdu_id]]:
@@ -1357,19 +1360,25 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                         httperrors.Bad_Request)
                 mgmt_access["vm_id"] = cp_name2vm_uuid[vnfd["mgmt-interface"]["cp"]]
                 mgmt_access["interface_id"] = cp_name2iface_uuid[vnfd["mgmt-interface"]["cp"]]
+                mgmt_access["vdu-id"] = cp_name2vdu_id[vnfd["mgmt-interface"]["cp"]]
                 # mark this interface as of type mgmt
                 if cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]:
                     cp_name2db_interface[vnfd["mgmt-interface"]["cp"]]["type"] = "mgmt"
 
             default_user = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}).get("ssh-access", {}),
                                     "default-user", 64)
-
             if default_user:
                 mgmt_access["default_user"] = default_user
+
             required = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}).get("ssh-access", {}),
                                    "required", 6)
             if required:
                 mgmt_access["required"] = required
+
+            password_ = get_str(vnfd.get("vnf-configuration", {}).get("config-access", {}),
+                                   "password", 64)
+            if password_:
+                mgmt_access["password"] = password_
 
             if mgmt_access:
                 db_vnf["mgmt_access"] = yaml.safe_dump(mgmt_access, default_flow_style=True, width=256)
@@ -3972,12 +3981,12 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             cloud_config_vm = unify_cloud_config({"key-pairs": params["instance_parameters"]["mgmt_keys"]},
                                                   cloud_config_vm)
 
-        if vm.get("instance_parameters") and vm["instance_parameters"].get("mgmt_keys"):
-            cloud_config_vm = unify_cloud_config({"key-pairs": vm["instance_parameters"]["mgmt_keys"]},
-                                                 cloud_config_vm)
-        # if ssh_access and ssh_access['required'] and ssh_access['default-user'] and tenant[0].get('RO_pub_key'):
-        #     RO_key = {"key-pairs": [tenant[0]['RO_pub_key']]}
-        #     cloud_config_vm = unify_cloud_config(cloud_config_vm, RO_key)
+        if vm.get("instance_parameters") and "mgmt_keys" in vm["instance_parameters"]:
+            if vm["instance_parameters"]["mgmt_keys"]:
+                cloud_config_vm = unify_cloud_config({"key-pairs": vm["instance_parameters"]["mgmt_keys"]},
+                                                     cloud_config_vm)
+            if RO_pub_key:
+                cloud_config_vm = unify_cloud_config(cloud_config_vm, {"key-pairs": RO_pub_key})
         if vm.get("boot_data"):
             cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config_vm)
 
@@ -4767,27 +4776,29 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
         for vm in sce_vnf['vms']:
             if not action_over_all and sce_vnf['uuid'] not in input_vnfs and sce_vnf['vnf_name'] not in input_vnfs and \
                     sce_vnf['member_vnf_index'] not in input_vnfs and \
-                    vm['uuid'] not in input_vms and vm['name'] not in input_vms:
+                    vm['uuid'] not in input_vms and vm['name'] not in input_vms and \
+                    sce_vnf['member_vnf_index'] + "-" + vm['vdu_osm_id'] not in input_vms:  # TODO conside vm_count_index
                 continue
             try:
                 if "add_public_key" in action_dict:
-                    mgmt_access = {}
                     if sce_vnf.get('mgmt_access'):
                         mgmt_access = yaml.load(sce_vnf['mgmt_access'])
-                        ssh_access = mgmt_access['config-access']['ssh-access']
+                        if not input_vms and mgmt_access.get("vdu-id") != vm['vdu_osm_id']:
+                            continue
+                        default_user = mgmt_access.get("default-user")
+                        password = mgmt_access.get("password")
+                        if mgmt_access.get(vm['vdu_osm_id']):
+                            default_user = mgmt_access[vm['vdu_osm_id']].get("default-user", default_user)
+                            password = mgmt_access[vm['vdu_osm_id']].get("password", password)
+
                         tenant = mydb.get_rows_by_id('nfvo_tenants', nfvo_tenant)
                         try:
-                            if ssh_access['required'] and ssh_access['default-user']:
-                                if 'ip_address' in vm:
+                            if 'ip_address' in vm:
                                     mgmt_ip = vm['ip_address'].split(';')
-                                    password = mgmt_access['config-access'].get('password')
                                     priv_RO_key = decrypt_key(tenant[0]['encrypted_RO_priv_key'], tenant[0]['uuid'])
-                                    myvim.inject_user_key(mgmt_ip[0], ssh_access['default-user'],
+                                    myvim.inject_user_key(mgmt_ip[0], action_dict.get('user', default_user),
                                                           action_dict['add_public_key'],
                                                           password=password, ro_key=priv_RO_key)
-                            else:
-                                raise NfvoException("Unable to inject ssh key in vm: {} - Aborting".format(vm['uuid']),
-                                                    httperrors.Internal_Server_Error)
                         except KeyError:
                             raise NfvoException("Unable to inject ssh key in vm: {} - Aborting".format(vm['uuid']),
                                                 httperrors.Internal_Server_Error)

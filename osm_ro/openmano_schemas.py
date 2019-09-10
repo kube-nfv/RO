@@ -1157,6 +1157,7 @@ instance_scenario_action_schema = {
             "type": ["object", "null"],
         },
         "add_public_key": description_schema,
+        "user": nameshort_schema,
         "console": {"type": ["string", "null"], "enum": ["novnc", "xvpvnc", "rdp-html5", "spice-html5", None]},
         "vdu-scaling": {
             "type": "array",
