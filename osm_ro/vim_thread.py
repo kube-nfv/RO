@@ -576,7 +576,7 @@ class vim_thread(threading.Thread):
                 task["error_msg"] = related_tasks[0]["error_msg"]
                 task["vim_id"] = related_tasks[0]["vim_id"]
                 extra = yaml.load(related_tasks[0]["extra"])
-                task["extra"]["vim_status"] = extra["vim_status"]
+                task["extra"]["vim_status"] = extra.get("vim_status")
                 next_refresh = related_tasks[0]["modified_at"] + 0.001
                 database_update = {"status": task["extra"].get("vim_status", "VIM_ERROR"),
                                    "error_msg": task["error_msg"]}
