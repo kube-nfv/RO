@@ -1,0 +1,9 @@
+PyYAML
+bottle
+MySQL-python
+jsonschema
+paramiko
+requests==2.18.*
+netaddr
+logutils
+git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm-im
