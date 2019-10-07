@@ -257,8 +257,9 @@ datacenter_action_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type":"object",
     "properties":{
-        "net-update":{"type":"null",},
-        "net-edit":{
+        "check-connectivity": {"type": "null"},
+        "net-update": {"type": "null"},
+        "net-edit": {
             "type":"object",
             "properties":{
                 "net": name_schema,  #name or uuid of net to change
@@ -1156,6 +1157,7 @@ instance_scenario_action_schema = {
             "type": ["object", "null"],
         },
         "add_public_key": description_schema,
+        "user": nameshort_schema,
         "console": {"type": ["string", "null"], "enum": ["novnc", "xvpvnc", "rdp-html5", "spice-html5", None]},
         "vdu-scaling": {
             "type": "array",

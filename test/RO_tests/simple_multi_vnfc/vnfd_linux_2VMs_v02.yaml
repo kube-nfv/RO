@@ -19,86 +19,106 @@
 # contact with: nfvlabs@tid.es
 ##
 ---
-schema_version: "0.2"
-vnf:
-    name:        linux_2VMs_v02
-    description: "Example of a linux VNF consisting of two VMs with one internal network"
-    # class: parent      # Optional. Used to organize VNFs
-    internal-connections:
-    -   name:        internalnet
-        description: internalnet
-        type:        e-lan
-        implementation: overlay
-        ip-profile:
-            ip-version:       IPv4
-            subnet-address:   192.168.1.0/24
+vnfd-catalog:
+    vnfd:
+     -  id: linux_2VMs_v02
+        name: linux_2VMs_v02
+        description: "Example of a linux VNF consisting of two VMs with one internal network"
+        connection-point:
+        -   id: eth0
+            name: eth0
+            short-name: eth0
+            type: VPORT
+        -   id: xe1
+            name: xe1
+            short-name: xe1
+            type: VPORT
+        internal-vld:
+        -   id: internalnet
+            name: internalnet
+            short-name: internalnet
+            ip-profile-ref: ip-prof1
+            type: ELAN
+            internal-connection-point:
+            -   id-ref: VM1-xe0
+            -   id-ref: VM2-xe0
+        ip-profiles:
+        -   name: ip-prof1
+            description: IP profile
             gateway-address:  192.168.1.1
-            dns-address:      8.8.8.8
-            dhcp:
+            dns-address: 8.8.8.8
+            #-   address: 8.8.8.8
+            ip-profile-params:
+            ip-version: ipv4
+            subnet-address: 192.168.1.0/24
+            dhcp-params:
                 enabled: true
                 start-address: 192.168.1.100
                 count: 100
-        elements:
-        -   VNFC:             linux_2VMs-VM1
-            local_iface_name: xe0
-            ip_address:       192.168.1.2
-        -   VNFC:             linux_2VMs-VM2
-            local_iface_name: xe0
-            ip_address:       192.168.1.3
-    external-connections:
-    -   name:              control0
-        type:              mgmt
-        VNFC:              linux_2VMs-VM1
-        local_iface_name:  eth0
-        description:       control interface VM1
-    -   name:              control1
-        type:              mgmt
-        VNFC:              linux_2VMs-VM2
-        local_iface_name:  eth0
-        description:       control interface VM2
-    -   name:              in
-        type:              bridge
-        VNFC:              linux_2VMs-VM1
-        local_iface_name:  xe1
-        description:       data interface input
-    -   name:              out
-        type:              bridge
-        VNFC:              linux_2VMs-VM2
-        local_iface_name:  xe1
-        description:       data interface output
-    VNFC:
-    -   name:        linux_2VMs-VM1
-        description: "Linux VM1 with 4 CPUs, 2 GB RAM and 3 bridge interfaces"
-        #Copy the image to a compute path and edit this path
-        image name:  TestVM
-        disk: 10
-        vcpus: 4
-        ram: 2048
-        bridge-ifaces:
-        -   name:      eth0
-            vpci:      "0000:00:09.0"
-            bandwidth: 1 Mbps          # Optional, informative only
-        -   name: xe0
-            vpci:      "0000:00:11.0"
-            bandwidth: 1 Mbps
-        -   name: xe1
-            vpci:      "0000:00:12.0"
-            bandwidth: 1 Mbps
-    -   name:        linux_2VMs-VM2
-        description: "Linux VM2 with 2 CPUs, 2 GB RAM and 3 bridge interfaces"
-        #Copy the image to a compute path and edit this path
-        image name:  TestVM
-        disk: 10
-        vcpus: 2
-        ram: 2048
-        bridge-ifaces:
-        -   name:      eth0
-            vpci:      "0000:00:09.0"
-            bandwidth: 1 Mbps          # Optional, informative only
-        -   name: xe0
-            vpci:      "0000:00:11.0"
-            bandwidth: 1 Mbps
-        -   name: xe1
-            vpci:      "0000:00:12.0"
-            bandwidth: 1 Mbps
-
+        vdu:
+        -   id: linux_2VMs-VM1
+            name: linux_2VMs-VM1
+            description: Generic Linux Virtual Machine
+            #Copy the image to a compute path and edit this path
+            image:  TestVM
+            vm-flavor:
+                  memory-mb: '2048'
+                  storage-gb: '10'
+                  vcpu-count: '4'
+            interface:
+            -   name: eth0
+                type: EXTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                    vpci:      "0000:00:09.0"
+                external-connection-point-ref: eth0
+            -   name: xe0
+                type: INTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                    vpci:      "0000:00:11.0"
+                internal-connection-point-ref: VM1-xe0
+            -   name: xe1
+                type: EXTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                    vpci:      "0000:00:12.0"
+                external-connection-point-ref: xe1
+            internal-connection-point:
+            - id: VM1-xe0
+              name: VM1-xe0
+              short-name: VM1-xe0
+              type: VPORT
+        -   id: linux_2VMs-VM2
+            name: linux_2VMs-VM2
+            description: Generic Linux Virtual Machine
+            #Copy the image to a compute path and edit this path
+            image:  TestVM
+            vm-flavor:
+                memory-mb: '2048'
+                storage-gb: '10'
+                vcpu-count: '4'
+            interface:
+            -   name: eth0
+                type: EXTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                    vpci:      "0000:00:09.0"
+                external-connection-point-ref: eth0
+            -   name: xe0
+                type: INTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                    vpci:      "0000:00:11.0"
+                internal-connection-point-ref: VM2-xe0
+            -   name: xe1
+                type: EXTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                    vpci:      "0000:00:12.0"
+                external-connection-point-ref: xe1
+            internal-connection-point:
+            -   id: VM2-xe0
+                name: VM2-xe0
+                short-name: VM2-xe0
+                type: VPORT

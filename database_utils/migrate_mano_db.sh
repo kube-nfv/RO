@@ -796,14 +796,14 @@ function downgrade_from_22(){
 function upgrade_to_23(){
     # echo "    upgrade database from version 0.22 to version 0.23"
     echo "      add column 'availability_zone' at table 'vms'"
-    sql "ALTER TABLE mano_db.vms ADD COLUMN availability_zone VARCHAR(255) NULL AFTER modified_at;"
+    sql "ALTER TABLE vms ADD COLUMN availability_zone VARCHAR(255) NULL AFTER modified_at;"
     sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) VALUES (23, '0.23', '0.5.20',"\
         "'Changed type of ram in flavors from SMALLINT to MEDIUMINT', '2017-08-29');"
 }
 function downgrade_from_23(){
     # echo "    downgrade database from version 0.23 to version 0.22"
     echo "      remove column 'availability_zone' from table 'vms'"
-    sql "ALTER TABLE mano_db.vms DROP COLUMN availability_zone;"
+    sql "ALTER TABLE vms DROP COLUMN availability_zone;"
     sql "DELETE FROM schema_version WHERE version_int='23';"
 }
 
@@ -1398,7 +1398,7 @@ function downgrade_from_38(){
 	    "CHANGE COLUMN status status ENUM('SCHEDULED','BUILD','DONE','FAILED','SUPERSEDED') " \
 	    "NOT NULL DEFAULT 'SCHEDULED' AFTER item_id;"
     echo "      Remove related from instance_xxxx"
-    for table in instance_classifications instance_nets instance_wim_netsinstance_sfis instance_sfps instance_sfs \
+    for table in instance_classifications instance_nets instance_wim_nets instance_sfis instance_sfps instance_sfs \
         instance_vms
     do
         sql "ALTER TABLE $table DROP COLUMN related;"
@@ -1545,8 +1545,8 @@ DATABASE_PROCESS=`echo "select comments from schema_version where version_int=0;
 if [[ -z "$DATABASE_PROCESS" ]] ; then  # migration a non empty database
     check_migration_needed || exit 0
     # Create a backup database content
-    [[ -n "$BACKUP_DIR" ]] && BACKUP_FILE="$(mktemp -q  "${BACKUP_DIR}/backupdb.XXXXXX.sql")"
-    [[ -z "$BACKUP_DIR" ]] && BACKUP_FILE="$(mktemp -q --tmpdir "backupdb.XXXXXX.sql")"
+    [[ -n "$BACKUP_DIR" ]] && BACKUP_FILE=$(mktemp -q  "${BACKUP_DIR}/backupdb.XXXXXX.sql")
+    [[ -z "$BACKUP_DIR" ]] && BACKUP_FILE=$(mktemp -q --tmpdir "backupdb.XXXXXX.sql")
     mysqldump $DEF_EXTRA_FILE_PARAM --add-drop-table --add-drop-database --routines --databases $DBNAME > $BACKUP_FILE ||
         ! echo "Cannot create Backup file '$BACKUP_FILE'" >&2 || exit 1
     echo "    Backup file '$BACKUP_FILE' created"

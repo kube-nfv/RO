@@ -448,6 +448,10 @@ class vimconnector(vimconn.vimconnector):
                     self.security_groups_id = None
                     raise vimconn.vimconnConnectionException("Not found security group {} for this tenant".format(sg))
 
+    def check_vim_connectivity(self):
+        # just get network list to check connectivity and credentials
+        self.get_network_list(filter_dict={})
+
     def get_tenant_list(self, filter_dict={}):
         '''Obtain tenants of VIM
         filter_dict can contain the following keys:
@@ -799,7 +803,7 @@ class vimconnector(vimconn.vimconnector):
             extended = flavor_dict.get("extended", {})
             if extended:
                 #TODO
-                raise vimconn.vimconnNotFoundException("Flavor with EPA still not implemted")
+                raise vimconn.vimconnNotFoundException("Flavor with EPA still not implemented")
                 # if len(numas) > 1:
                 #     raise vimconn.vimconnNotFoundException("Cannot find any flavor with more than one numa")
                 # numa=numas[0]
@@ -884,6 +888,7 @@ class vimconnector(vimconn.vimconnector):
                                 if 'memory' in numa:
                                     ram = numa['memory']*1024
                                 #See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/implemented/virt-driver-cpu-thread-pinning.html
+                                extra_specs["hw:cpu_sockets"] = 1
                                 if 'paired-threads' in numa:
                                     vcpus = numa['paired-threads']*2
                                     #cpu_thread_policy "require" implies that the compute node must have an STM architecture

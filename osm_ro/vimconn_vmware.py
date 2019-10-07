@@ -79,7 +79,7 @@ DEFAULT_IP_PROFILE = {'dhcp_count':50,
 INTERVAL_TIME = 5
 MAX_WAIT_TIME = 1800
 
-API_VERSION = '31.0'
+API_VERSION = '27.0'
 
 __author__ = "Mustafa Bayramov, Arpita Kate, Sachin Bhangare, Prakash Kasar"
 __date__ = "$09-Mar-2018 11:09:29$"
@@ -2200,7 +2200,7 @@ class vimconnector(vimconn.vimconnector):
             media_upload_href = match.group(1)
         else:
             raise Exception('Could not parse the upload URL for the media file from the last response')
-
+        upload_iso_task = self.get_task_from_response(response.content)
         headers['Content-Type'] = 'application/octet-stream'
         response = self.perform_request(req_type='PUT',
                                         url=media_upload_href,
@@ -2209,6 +2209,9 @@ class vimconnector(vimconn.vimconnector):
 
         if response.status_code != 200:
             raise Exception('PUT request to "{}" failed'.format(media_upload_href))
+        result = self.client.get_task_monitor().wait_for_success(task=upload_iso_task)
+        if result.get('status') != 'success':
+            raise Exception('The upload iso task failed with status {}'.format(result.get('status')))
 
     def get_vcd_availibility_zones(self,respool_href, headers):
         """ Method to find presence of av zone is VIM resource pool
@@ -4920,6 +4923,15 @@ class vimconnector(vimconn.vimconnector):
         namespaces["xmlns"] = "http://www.vmware.com/vcloud/v1.5"
         nwcfglist = newelem.findall(".//xmlns:NetworkConfig", namespaces)
 
+        # VCD 9.7 returns an incorrect parentnetwork element. Fix it before PUT operation
+        parentnetworklist = newelem.findall(".//xmlns:ParentNetwork", namespaces)
+        if parentnetworklist:
+            for pn in parentnetworklist:
+                if "href" not in pn.keys():
+                    id_val = pn.get("id")
+                    href_val = "{}/api/network/{}".format(self.url, id_val)
+                    pn.set("href", href_val)
+
         newstr = """<NetworkConfig networkName="{}">
                   <Configuration>
                        <ParentNetwork href="{}/api/network/{}"/>
@@ -6473,6 +6485,7 @@ class vimconnector(vimconn.vimconnector):
                                                                                       self.org_name))
             host = self.url
             client = Client(host, verify_ssl_certs=False)
+            client.set_highest_supported_version()
             client.set_credentials(BasicLoginCredentials(self.user, self.org_name, self.passwd))
             # connection object
             self.client = client

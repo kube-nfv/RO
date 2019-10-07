@@ -258,6 +258,7 @@ class vim_thread(threading.Thread):
                     # task of creation must be the first in the list of related_task
                     assert(related_tasks[0]["action"] in ("CREATE", "FIND"))
 
+                    task["params"] = None
                     if task["extra"]:
                         extra = yaml.load(task["extra"])
                     else:
@@ -575,7 +576,7 @@ class vim_thread(threading.Thread):
                 task["error_msg"] = related_tasks[0]["error_msg"]
                 task["vim_id"] = related_tasks[0]["vim_id"]
                 extra = yaml.load(related_tasks[0]["extra"])
-                task["extra"]["vim_status"] = extra["vim_status"]
+                task["extra"]["vim_status"] = extra.get("vim_status")
                 next_refresh = related_tasks[0]["modified_at"] + 0.001
                 database_update = {"status": task["extra"].get("vim_status", "VIM_ERROR"),
                                    "error_msg": task["error_msg"]}
@@ -707,9 +708,12 @@ class vim_thread(threading.Thread):
                     UPDATE={("number_failed" if task["status"] == "FAILED" else "number_done"): {"INCREMENT": 1}},
                     WHERE={"uuid": task["instance_action_id"]})
             if database_update:
+                where_filter = {"related": task["related"]}
+                if task["item"] == "instance_nets" and task["datacenter_vim_id"]:
+                    where_filter["datacenter_tenant_id"] = task["datacenter_vim_id"] 
                 self.db.update_rows(table=task["item"],
                                     UPDATE=database_update,
-                                    WHERE={"related": task["related"]})
+                                    WHERE=where_filter)
         except db_base_Exception as e:
             self.logger.error("task={} Error updating database {}".format(task_id, e), exc_info=True)
 
@@ -979,8 +983,7 @@ class vim_thread(threading.Thread):
                 if wim_account_name and self.vim.config["wim_external_ports"]:
                     # add external port to connect WIM. Try with compute node __WIM:wim_name and __WIM
                     action_text = "attaching external port to ovim network"
-                    sdn_port_name = sdn_net_id + "." + task["vim_id"]
-                    sdn_port_name = sdn_port_name[:63]
+                    sdn_port_name = "external_port"
                     sdn_port_data = {
                         "compute_node": "__WIM:" + wim_account_name[0:58],
                         "pci": None,
@@ -1023,6 +1026,8 @@ class vim_thread(threading.Thread):
         net_vim_id = task["vim_id"]
         sdn_net_id = task["extra"].get("sdn_net_id")
         try:
+            if net_vim_id:
+                self.vim.delete_network(net_vim_id, task["extra"].get("created_items"))
             if sdn_net_id:
                 # Delete any attached port to this sdn network. There can be ports associated to this network in case
                 # it was manually done using 'openmano vim-net-sdn-attach'
@@ -1032,8 +1037,6 @@ class vim_thread(threading.Thread):
                     for port in port_list:
                         self.ovim.delete_port(port['uuid'], idempotent=True)
                     self.ovim.delete_network(sdn_net_id, idempotent=True)
-            if net_vim_id:
-                self.vim.delete_network(net_vim_id, task["extra"].get("created_items"))
             task["status"] = "FINISHED"  # with FINISHED instead of DONE it will not be refreshing
             task["error_msg"] = None
             return None

@@ -19,16 +19,28 @@
 # contact with: nfvlabs@tid.es
 ##
 ---
-schema_version:  2
-scenario:
-  name:          simple
-  description:   Simple network scenario consisting of a single VNF connected to an external network
-  vnfs: 
-    linux1:                   # vnf/net name in the scenario
-      vnf_name:  linux        # VNF name as introduced in OPENMANO DB
-  networks: 
-    mgmt:                   # provide a name for this net or connection
-      external:  true
-      interfaces: 
-      - linux1:  eth0       # Node and its interface
+nsd:nsd-catalog:
+    nsd:
+    -   id: simple
+        name: simple
+        vendor:      OSM
+        version:     '1.0'
+        description:   Simple network scenario consisting of a single VNF connected to an external network
+        constituent-vnfd:
+        # The member-vnf-index needs to be unique, starting from 1
+        # vnfd-id-ref is the id of the VNFD
+        # Multiple constituent VNFDs can be specified
+        -   member-vnf-index: 1
+            vnfd-id-ref: linux
+        vld:
+        # Networks for the VNFs
+        -   id: vld1
+            name: mgmt
+            short-name: vld1-sname
+            type: ELAN
+            mgmt-network: 'true'
+            vnfd-connection-point-ref:
+            -   member-vnf-index-ref: 1
+                vnfd-id-ref: linux
+                vnfd-connection-point-ref: eth0
 

@@ -21,8 +21,8 @@
 ##
 
 # DEBUG WITH PDB
-import os
-if os.getenv('OSMRO_PDB_DEBUG'):
+from os import getenv
+if getenv('OSMRO_PDB_DEBUG'):
     import sys
     print(sys.path)
     import pdb
@@ -770,23 +770,16 @@ class test_vimconn_get_flavor(test_base):
         flavor_id = test_config["vim_conn"].new_flavor(flavor_data)
         # get flavor by id
         result = test_config["vim_conn"].get_flavor(flavor_id)
-
-        if test_config['vimtype'] != 'azure':
-            self.assertEqual(ram, result['ram'])
-            self.assertEqual(vcpus, result['vcpus'])
-            self.assertEqual(disk, result['disk'])
-        else:
-            self.assertTrue(ram <= result['ram'])
-            self.assertTrue(vcpus <= result['vcpus'])
-            self.assertTrue(disk <= result['disk'])
+        self.assertEqual(ram, result['ram'])
+        self.assertEqual(vcpus, result['vcpus'])
+        self.assertEqual(disk, result['disk'])
 
         # delete flavor
-        if test_config['vimtype'] != 'azure':
-            result = test_config["vim_conn"].delete_flavor(flavor_id)
-            if result:
-                logger.info("Flavor id {} sucessfully deleted".format(result))
-            else:
-                logger.info("Failed to delete flavor id {}".format(result))
+        result = test_config["vim_conn"].delete_flavor(flavor_id)
+        if result:
+            logger.info("Flavor id {} sucessfully deleted".format(result))
+        else:
+            logger.info("Failed to delete flavor id {}".format(result))
 
     def test_010_get_flavor_negative(self):
         Non_exist_flavor_id = str(uuid.uuid4())
@@ -848,10 +841,7 @@ class test_vimconn_new_flavor(test_base):
         with self.assertRaises(Exception) as context:
             test_config["vim_conn"].new_flavor(Invalid_flavor_data)
 
-        if test_config['vimtype'] == 'azure':
-            self.assertEqual((context.exception).http_code, 404)
-        else:
-            self.assertEqual((context.exception).http_code, 400)
+        self.assertEqual((context.exception).http_code, 400)
 
     def test_030_delete_flavor_negative(self):
         Non_exist_flavor_id = str(uuid.uuid4())
@@ -864,93 +854,89 @@ class test_vimconn_new_flavor(test_base):
         with self.assertRaises(Exception) as context:
             test_config["vim_conn"].delete_flavor(Non_exist_flavor_id)
 
-        if test_config['vimtype'] == 'azure':
-            self.assertEqual((context.exception).http_code, 401)
-        else:
-            self.assertEqual((context.exception).http_code, 404)
-
-class test_vimconn_new_image(test_base):
-
-    def test_000_new_image(self):
-        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
-                                                            self.__class__.test_index,
-                                                inspect.currentframe().f_code.co_name)
-        self.__class__.test_index += 1
-
-        image_path = test_config['image_path']
-        if image_path:
-            self.__class__.image_id = test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : image_path,
-                                                                          'metadata': {'upload_location':None} })
-            time.sleep(20)
-
-            self.assertIsInstance(self.__class__.image_id, (str, unicode))
-            self.assertIsInstance(uuid.UUID(self.__class__.image_id), uuid.UUID)
-        else:
-            self.skipTest("Skipping test as image file not present at RO container")
-
-    def test_010_new_image_negative(self):
-        Non_exist_image_path = '/temp1/cirros.ovf'
-
-        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
-                                                            self.__class__.test_index,
-                                                inspect.currentframe().f_code.co_name)
-        self.__class__.test_index += 1
-
-        with self.assertRaises(Exception) as context:
-            test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : Non_exist_image_path})
-
-        self.assertEqual((context.exception).http_code, 400)
-
-    def test_020_delete_image(self):
-        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
-                                                            self.__class__.test_index,
-                                                inspect.currentframe().f_code.co_name)
-        self.__class__.test_index += 1
-
-        image_id = test_config["vim_conn"].delete_image(self.__class__.image_id)
-
-        self.assertIsInstance(image_id, (str, unicode))
-
-    def test_030_delete_image_negative(self):
-        Non_exist_image_id = str(uuid.uuid4())
-
-        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
-                                                            self.__class__.test_index,
-                                                inspect.currentframe().f_code.co_name)
-        self.__class__.test_index += 1
-
-        with self.assertRaises(Exception) as context:
-            test_config["vim_conn"].delete_image(Non_exist_image_id)
-
         self.assertEqual((context.exception).http_code, 404)
 
-class test_vimconn_get_image_id_from_path(test_base):
+# class test_vimconn_new_image(test_base):
+#
+#     def test_000_new_image(self):
+#         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+#                                                             self.__class__.test_index,
+#                                                 inspect.currentframe().f_code.co_name)
+#         self.__class__.test_index += 1
+#
+#         image_path = test_config['image_path']
+#         if image_path:
+#             self.__class__.image_id = test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : image_path, 'metadata': {'upload_location':None} })
+#             time.sleep(20)
+#
+#             self.assertIsInstance(self.__class__.image_id, (str, unicode))
+#             self.assertIsInstance(uuid.UUID(self.__class__.image_id), uuid.UUID)
+#         else:
+#             self.skipTest("Skipping test as image file not present at RO container")
+#
+#     def test_010_new_image_negative(self):
+#         Non_exist_image_path = '/temp1/cirros.ovf'
+#
+#         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+#                                                             self.__class__.test_index,
+#                                                 inspect.currentframe().f_code.co_name)
+#         self.__class__.test_index += 1
+#
+#         with self.assertRaises(Exception) as context:
+#             test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : Non_exist_image_path})
+#
+#         self.assertEqual((context.exception).http_code, 400)
+#
+#     def test_020_delete_image(self):
+#         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+#                                                             self.__class__.test_index,
+#                                                 inspect.currentframe().f_code.co_name)
+#         self.__class__.test_index += 1
+#
+#         image_id = test_config["vim_conn"].delete_image(self.__class__.image_id)
+#
+#         self.assertIsInstance(image_id, (str, unicode))
+#
+#     def test_030_delete_image_negative(self):
+#         Non_exist_image_id = str(uuid.uuid4())
+#
+#         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+#                                                             self.__class__.test_index,
+#                                                 inspect.currentframe().f_code.co_name)
+#         self.__class__.test_index += 1
+#
+#         with self.assertRaises(Exception) as context:
+#             test_config["vim_conn"].delete_image(Non_exist_image_id)
+#
+#         self.assertEqual((context.exception).http_code, 404)
 
-    def test_000_get_image_id_from_path(self):
-        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
-                                                            self.__class__.test_index,
-                                                inspect.currentframe().f_code.co_name)
-        self.__class__.test_index += 1
-
-        image_path = test_config['image_path']
-        if image_path:
-            image_id = test_config["vim_conn"].get_image_id_from_path( image_path )
-            self.assertEqual(type(image_id),str)
-        else:
-            self.skipTest("Skipping test as image file not present at RO container")
-
-    def test_010_get_image_id_from_path_negative(self):
-        Non_exist_image_path = '/temp1/cirros.ovf'
-
-        self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
-                                                            self.__class__.test_index,
-                                                inspect.currentframe().f_code.co_name)
-        self.__class__.test_index += 1
-
-        with self.assertRaises(Exception) as context:
-            test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : Non_exist_image_path })
-
-        self.assertEqual((context.exception).http_code, 400)
+# class test_vimconn_get_image_id_from_path(test_base):
+#
+#     def test_000_get_image_id_from_path(self):
+#         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+#                                                             self.__class__.test_index,
+#                                                 inspect.currentframe().f_code.co_name)
+#         self.__class__.test_index += 1
+#
+#         image_path = test_config['image_path']
+#         if image_path:
+#             image_id = test_config["vim_conn"].get_image_id_from_path( image_path )
+#             self.assertEqual(type(image_id),str)
+#         else:
+#             self.skipTest("Skipping test as image file not present at RO container")
+#
+#     def test_010_get_image_id_from_path_negative(self):
+#         Non_exist_image_path = '/temp1/cirros.ovf'
+#
+#         self.__class__.test_text = "{}.{}. TEST {}".format(test_config["test_number"],
+#                                                             self.__class__.test_index,
+#                                                 inspect.currentframe().f_code.co_name)
+#         self.__class__.test_index += 1
+#
+#         with self.assertRaises(Exception) as context:
+#             test_config["vim_conn"].new_image({ 'name': 'TestImage', 'location' : Non_exist_image_path })
+#
+#         self.assertEqual((context.exception).http_code, 400)
 
 class test_vimconn_get_image_list(test_base):
     image_name = None
@@ -962,10 +948,10 @@ class test_vimconn_get_image_list(test_base):
                                                 inspect.currentframe().f_code.co_name)
         self.__class__.test_index += 1
 
-        if test_config['image_name']:
-            image_list = test_config['vim_conn'].get_image_list({'name': test_config['image_name']})
-        else:
-            image_list = test_config["vim_conn"].get_image_list()
+        # if test_config['image_name']:
+        #     image_list = test_config['vim_conn'].get_image_list({'name': test_config['image_name']})
+        # else:
+        image_list = test_config["vim_conn"].get_image_list()
 
         for item in image_list:
             if 'name' in item:
@@ -1406,11 +1392,12 @@ class test_vimconn_new_vminstance(test_base):
             for action in action_list:
                 # sleep for sometime till status is changed
                 time.sleep(25)
-                instance_id = test_config["vim_conn"].action_vminstance(new_instance_id, {action: None})
+                instance_id = test_config["vim_conn"].action_vminstance(new_instance_id,
+                                                                                   { action: None})
 
             self.assertTrue(instance_id is None)
 
-            #Deleting created vm instance
+            # Deleting created vm instance
             logger.info("Deleting created vm intance")
             test_config["vim_conn"].delete_vminstance(new_instance_id)
             time.sleep(10)
@@ -1610,10 +1597,7 @@ class test_vimconn_new_tenant(test_base):
         with self.assertRaises(Exception) as context:
             test_config["vim_conn"].delete_tenant(Non_exist_tenant_name)
 
-        if test_config['vimtype'] != 'azure':
-            self.assertEqual((context.exception).http_code, 404)
-        else:
-            self.assertEqual((context.exception).http_code, 401)
+        self.assertEqual((context.exception).http_code, 404)
 
 
 def get_image_id():
@@ -1811,8 +1795,8 @@ class test_vimconn_vminstance_by_adding_10_nics(test_base):
                                     'port_security': True, 'type': 'virtual', 'net_id': net_id})
             c = c+1
 
-        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', description='', start=False, 
-                                                    image_id=image_id, flavor_id=flavor_id, net_list=net_list)
+        instance_id, _ = test_config["vim_conn"].new_vminstance(name='Test1_vm', image_id=image_id,
+                                                            flavor_id=flavor_id, net_list=net_list)
 
         self.assertEqual(type(instance_id),str)
         logger.info("Deleting created vm instance")
