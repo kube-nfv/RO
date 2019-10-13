@@ -3986,7 +3986,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 cloud_config_vm = unify_cloud_config({"key-pairs": vm["instance_parameters"]["mgmt_keys"]},
                                                      cloud_config_vm)
             if RO_pub_key:
-                cloud_config_vm = unify_cloud_config(cloud_config_vm, {"key-pairs": RO_pub_key})
+                cloud_config_vm = unify_cloud_config(cloud_config_vm, {"key-pairs": [RO_pub_key]})
         if vm.get("boot_data"):
             cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config_vm)
 
@@ -4796,9 +4796,14 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                             if 'ip_address' in vm:
                                     mgmt_ip = vm['ip_address'].split(';')
                                     priv_RO_key = decrypt_key(tenant[0]['encrypted_RO_priv_key'], tenant[0]['uuid'])
-                                    myvim.inject_user_key(mgmt_ip[0], action_dict.get('user', default_user),
+                                    data  = myvim.inject_user_key(mgmt_ip[0], action_dict.get('user', default_user),
                                                           action_dict['add_public_key'],
                                                           password=password, ro_key=priv_RO_key)
+                                    vm_result[ vm['uuid'] ] = {"vim_result": 200,
+                                                       "description": "Public key injected",
+                                                       "name":vm['name']
+                                                    }
+
                         except KeyError:
                             raise NfvoException("Unable to inject ssh key in vm: {} - Aborting".format(vm['uuid']),
                                                 httperrors.Internal_Server_Error)

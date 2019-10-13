@@ -1156,7 +1156,7 @@ instance_scenario_action_schema = {
         "reboot": {
             "type": ["object", "null"],
         },
-        "add_public_key": description_schema,
+        "add_public_key": {"type" : "string"},
         "user": nameshort_schema,
         "console": {"type": ["string", "null"], "enum": ["novnc", "xvpvnc", "rdp-html5", "spice-html5", None]},
         "vdu-scaling": {
