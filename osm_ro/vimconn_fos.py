@@ -110,7 +110,7 @@ class vimconnector(vimconn.vimconnector):
         except Exception as e:
             raise vimconn.vimconnConnectionException("VIM not reachable. Error {}".format(e))
 
-    def new_network(self, net_name, net_type, ip_profile=None, shared=False, vlan=None):
+    def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
         """Adds a tenant network to VIM
         Params:
             'net_name': name of the network
@@ -127,7 +127,6 @@ class vimconnector(vimconn.vimconnector):
                 'dhcp_start_address': ip_schema, first IP to grant
                 'dhcp_count': number of IPs to grant.
             'shared': if this network can be seen/use by other tenants/organization
-            'vlan': in case of a data or ptp net_type, the intended vlan tag to be used for the network
         Returns the network identifier on success or raises and exception on failure
         """
         self.logger.debug('new_network: {}'.format(locals()))

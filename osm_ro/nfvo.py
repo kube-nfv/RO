@@ -2675,11 +2675,12 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
             myNetDict["type"] = myNetType
             myNetDict["tenant_id"] = myvim_tenant
             myNetIPProfile = sce_net.get('ip_profile', None)
+            myProviderNetwork = sce_net.get('provider_network', None)
             #TODO:
             #We should use the dictionary as input parameter for new_network
             #print myNetDict
             if not sce_net["external"]:
-                network_id, _ = myvim.new_network(myNetName, myNetType, myNetIPProfile)
+                network_id, _ = myvim.new_network(myNetName, myNetType, myNetIPProfile, provider_network_profile=myProviderNetwork)
                 #print "New VIM network created for scenario %s. Network id:  %s" % (scenarioDict['name'],network_id)
                 sce_net['vim_id'] = network_id
                 auxNetDict['scenario'][sce_net['uuid']] = network_id
@@ -2709,10 +2710,11 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
                 myNetDict["type"] = myNetType
                 myNetDict["tenant_id"] = myvim_tenant
                 myNetIPProfile = net.get('ip_profile', None)
+                myProviderNetwork = sce_net.get('provider_network', None)
                 #print myNetDict
                 #TODO:
                 #We should use the dictionary as input parameter for new_network
-                network_id, _  = myvim.new_network(myNetName, myNetType, myNetIPProfile)
+                network_id, _  = myvim.new_network(myNetName, myNetType, myNetIPProfile, provider_network_profile=myProviderNetwork)
                 #print "VIM network id for scenario %s: %s" % (scenarioDict['name'],network_id)
                 net['vim_id'] = network_id
                 if sce_vnf['uuid'] not in auxNetDict:
@@ -3037,6 +3039,7 @@ def update(d, u):
 def create_instance(mydb, tenant_id, instance_dict):
     # print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
     # logger.debug("Creating instance...")
+
     scenario = instance_dict["scenario"]
 
     # find main datacenter
@@ -3186,6 +3189,13 @@ def create_instance(mydb, tenant_id, instance_dict):
                     else:
                         update(scenario_net['ip_profile'], ipprofile_db)
 
+                if 'provider-network' in net_instance_desc:
+                        provider_network_db = net_instance_desc['provider-network']
+                        if 'provider-network' not in scenario_net:
+                            scenario_net['provider-network'] = provider_network_db
+                        else:
+                            update(scenario_net['provider-network'], provider_network_db)
+
             for vdu_id, vdu_instance_desc in vnf_instance_desc.get("vdus", {}).iteritems():
                 for scenario_vm in scenario_vnf['vms']:
                     if vdu_id == scenario_vm['osm_id'] or vdu_id == scenario_vm["name"]:
@@ -3208,6 +3218,7 @@ def create_instance(mydb, tenant_id, instance_dict):
         # Ideally, the operation should be as simple as: update(scenarioDict,instance_dict)
         # However, this is not possible yet.
         for net_name, net_instance_desc in instance_dict.get("networks", {}).iteritems():
+
             for scenario_net in scenarioDict['nets']:
                 if net_name == scenario_net.get("name") or net_name == scenario_net.get("osm_id") or net_name == scenario_net.get("uuid"):
                     if "wim_account" in net_instance_desc and net_instance_desc["wim_account"] is not None:
@@ -3218,6 +3229,14 @@ def create_instance(mydb, tenant_id, instance_dict):
                             scenario_net['ip_profile'] = ipprofile_db
                         else:
                             update(scenario_net['ip_profile'], ipprofile_db)
+                    if 'provider-network' in net_instance_desc:
+                        provider_network_db = net_instance_desc['provider-network']
+
+                        if 'provider-network' not in scenario_net:
+                            scenario_net['provider_network'] = provider_network_db
+                        else:
+                            update(scenario_net['provider-network'], provider_network_db)
+
             for interface in net_instance_desc.get('interfaces', ()):
                 if 'ip_address' in interface:
                     for vnf in scenarioDict['vnfs']:
@@ -3230,10 +3249,12 @@ def create_instance(mydb, tenant_id, instance_dict):
         # logger.debug("Creating instance scenario-dict MERGED:\n%s",
         #              yaml.safe_dump(scenarioDict, indent=4, default_flow_style=False))
 
+
         # 1. Creating new nets (sce_nets) in the VIM"
         number_mgmt_networks = 0
         db_instance_nets = []
         for sce_net in scenarioDict['nets']:
+
             sce_net_uuid = sce_net.get('uuid', sce_net["name"])
             # get involved datacenters where this network need to be created
             involved_datacenters = []
@@ -3384,7 +3405,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                 task_extra = {}
                 if create_network:
                     task_action = "CREATE"
-                    task_extra["params"] = (net_vim_name, net_type, sce_net.get('ip_profile', None), wim_account_name)
+                    task_extra["params"] = (net_vim_name, net_type, sce_net.get('ip_profile', None), None, sce_net.get('provider_network', None), wim_account_name)
+
                     if lookfor_network:
                         task_extra["find"] = (lookfor_filter,)
                 elif lookfor_network:
@@ -4804,10 +4826,9 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                                                           action_dict['add_public_key'],
                                                           password=password, ro_key=priv_RO_key)
                                     vm_result[ vm['uuid'] ] = {"vim_result": 200,
-                                                       "description": "Public key injected",
-                                                       "name":vm['name']
+                                                    "description": "Public key injected",
+                                                    "name":vm['name']
                                                     }
-
                         except KeyError:
                             raise NfvoException("Unable to inject ssh key in vm: {} - Aborting".format(vm['uuid']),
                                                 httperrors.Internal_Server_Error)
@@ -5573,7 +5594,10 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
             net_public = net.pop("shared", False)
             net_ipprofile = net.pop("ip_profile", None)
             net_vlan = net.pop("vlan", None)
-            content, _ = myvim.new_network(net_name, net_type, net_ipprofile, shared=net_public, vlan=net_vlan) #, **net)
+            net_provider_network_profile = None
+            if net_vlan:
+                net_provider_network_profile = {"segmentation-id": net_vlan}
+            content, _ = myvim.new_network(net_name, net_type, net_ipprofile, shared=net_public, provider_network_profile=net_provider_network_profile) #, **net)
 
             #If the datacenter has a SDN controller defined and the network is of dataplane type, then create the sdn network
             if get_sdn_controller_id(mydb, datacenter) != None and (net_type == 'data' or net_type == 'ptp'):

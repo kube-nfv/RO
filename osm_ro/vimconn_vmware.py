@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2016-2017 VMware Inc.
+# Copyright 2016-2019 VMware Inc.
 # This file is part of ETSI OSM
 # All Rights Reserved.
 #
@@ -503,7 +503,7 @@ class vimconnector(vimconn.vimconnector):
 
         return vdclist
 
-    def new_network(self, net_name, net_type, ip_profile=None, shared=False, vlan=None):
+    def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
         """Adds a tenant network to VIM
         Params:
             'net_name': name of the network
@@ -520,7 +520,7 @@ class vimconnector(vimconn.vimconnector):
                 'dhcp_start_address': ip_schema, first IP to grant
                 'dhcp_count': number of IPs to grant.
             'shared': if this network can be seen/use by other tenants/organization
-            'vlan': in case of a data or ptp net_type, the intended vlan tag to be used for the network
+            'provider_network_profile': (optional) contains {segmentation-id: vlan, provider-network: vim_netowrk}
         Returns a tuple with the network identifier and created_items, or raises an exception on error
             created_items can be None or a dictionary where this method can include key-values that will be passed to
             the method delete_network. Can be used to store created segments, created l2gw connections, etc.
@@ -528,8 +528,11 @@ class vimconnector(vimconn.vimconnector):
             as not present.
         """
 
-        self.logger.debug("new_network tenant {} net_type {} ip_profile {} shared {}"
-                          .format(net_name, net_type, ip_profile, shared))
+        self.logger.debug("new_network tenant {} net_type {} ip_profile {} shared {} provider_network_profile {}"
+                          .format(net_name, net_type, ip_profile, shared, provider_network_profile))
+        vlan = None
+        if provider_network_profile:
+            vlan = provider_network_profile.get("segmentation-id")
 
         created_items = {}
         isshared = 'false'
@@ -541,9 +544,19 @@ class vimconnector(vimconn.vimconnector):
 #             if self.config.get('dv_switch_name') == None:
 #                  raise vimconn.vimconnConflictException("You must provide 'dv_switch_name' at config value")
 #             network_uuid = self.create_dvPort_group(net_name)
+        parent_network_uuid = None
+
+        import traceback
+        traceback.print_stack()
+
+        if provider_network_profile is not None:
+            for k, v in provider_network_profile.items():
+                if k == 'physical_network':
+                    parent_network_uuid = self.get_physical_network_by_name(v)
 
         network_uuid = self.create_network(network_name=net_name, net_type=net_type,
-                                           ip_profile=ip_profile, isshared=isshared)
+                                           ip_profile=ip_profile, isshared=isshared,
+                                           parent_network_uuid=parent_network_uuid)
         if network_uuid is not None:
             return network_uuid, created_items
         else:
@@ -3285,7 +3298,6 @@ class vimconnector(vimconn.vimconnector):
             The return network uuid.
             network_uuid: network_id
         """
-
         if not network_name:
             self.logger.debug("get_network_id_by_name() : Network name is empty")
             return None
@@ -3295,8 +3307,6 @@ class vimconnector(vimconn.vimconnector):
             if org_dict and 'networks' in org_dict:
                 org_network_dict = org_dict['networks']
                 for net_uuid,net_name in org_network_dict.iteritems():
-                #For python3
-                #for net_uuid,net_name in org_network_dict.items():
                     if net_name == network_name:
                         return net_uuid
 
@@ -3304,6 +3314,81 @@ class vimconnector(vimconn.vimconnector):
             self.logger.debug("get_network_id_by_name() : KeyError- {} ".format(exp))
 
         return None
+
+    def get_physical_network_by_name(self, physical_network_name):
+        '''
+        Methos returns uuid of physical network which passed
+        Args:
+            physical_network_name: physical network name
+        Returns:
+            UUID of physical_network_name
+        '''
+        try:
+            client_as_admin = self.connect_as_admin()
+            if not client_as_admin:
+                raise vimconn.vimconnConnectionException("Failed to connect vCD.")
+            url_list = [self.url, '/api/admin/vdc/', self.tenant_id]
+            vm_list_rest_call = ''.join(url_list)
+
+            if client_as_admin._session:
+                headers = {'Accept':'application/*+xml;version=' + API_VERSION,
+                         'x-vcloud-authorization': client_as_admin._session.headers['x-vcloud-authorization']}
+
+                response = self.perform_request(req_type='GET',
+                                                url=vm_list_rest_call,
+                                                headers=headers)
+
+                provider_network = None
+                available_network = None
+                add_vdc_rest_url = None
+
+                if response.status_code != requests.codes.ok:
+                    self.logger.debug("REST API call {} failed. Return status code {}".format(vm_list_rest_call,
+                                                                                              response.status_code))
+                    return None
+                else:
+                    try:
+                        vm_list_xmlroot = XmlElementTree.fromstring(response.content)
+                        for child in vm_list_xmlroot:
+
+                            if child.tag.split("}")[1] == 'ProviderVdcReference':
+                                provider_network = child.attrib.get('href')
+                                # application/vnd.vmware.admin.providervdc+xml
+                            if child.tag.split("}")[1] == 'Link':
+                                if child.attrib.get('type') == 'application/vnd.vmware.vcloud.orgVdcNetwork+xml' \
+                                        and child.attrib.get('rel') == 'add':
+                                    add_vdc_rest_url = child.attrib.get('href')
+                    except:
+                        self.logger.debug("Failed parse respond for rest api call {}".format(vm_list_rest_call))
+                        self.logger.debug("Respond body {}".format(response.content))
+                        return None
+
+                # find  pvdc provided available network
+                response = self.perform_request(req_type='GET',
+                                                url=provider_network,
+                                                headers=headers)
+
+                if response.status_code != requests.codes.ok:
+                    self.logger.debug("REST API call {} failed. Return status code {}".format(vm_list_rest_call,
+                                                                                              response.status_code))
+                    return None
+
+                try:
+                    vm_list_xmlroot = XmlElementTree.fromstring(response.content)
+                    for child in vm_list_xmlroot.iter():
+                        if child.tag.split("}")[1] == 'AvailableNetworks':
+                            for networks in child.iter():
+                                if networks.attrib.get('href') is not None and networks.attrib.get('name') is not None:
+                                    if networks.attrib.get('name') == physical_network_name:
+                                        network_url = networks.attrib.get('href')
+                                        available_network = network_url[network_url.rindex('/')+1:]
+                                        break
+                except Exception as e:
+                    return None
+
+            return available_network
+        except Exception as e:
+            self.logger.error("Error while getting physical network: {}".format(e))
 
     def list_org_action(self):
         """
@@ -3789,6 +3874,7 @@ class vimconnector(vimconn.vimconnector):
                 try:
                     vm_list_xmlroot = XmlElementTree.fromstring(response.content)
                     for child in vm_list_xmlroot:
+
                         if child.tag.split("}")[1] == 'ProviderVdcReference':
                             provider_network = child.attrib.get('href')
                             # application/vnd.vmware.admin.providervdc+xml
@@ -3805,6 +3891,7 @@ class vimconnector(vimconn.vimconnector):
             response = self.perform_request(req_type='GET',
                                             url=provider_network,
                                             headers=headers)
+
             if response.status_code != requests.codes.ok:
                 self.logger.debug("REST API call {} failed. Return status code {}".format(vm_list_rest_call,
                                                                                           response.status_code))
@@ -3890,31 +3977,61 @@ class vimconnector(vimconn.vimconnector):
             dns2_text = ""
             if len(dns_list) >= 2:
                 dns2_text = "\n                                                <Dns2>{}</Dns2>\n".format(dns_list[1])
-            data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
-                            <Description>Openmano created</Description>
-                                    <Configuration>
-                                        <IpScopes>
-                                            <IpScope>
-                                                <IsInherited>{1:s}</IsInherited>
-                                                <Gateway>{2:s}</Gateway>
-                                                <Netmask>{3:s}</Netmask>
-                                                <Dns1>{4:s}</Dns1>{5:s}
-                                                <IsEnabled>{6:s}</IsEnabled>
-                                                <IpRanges>
-                                                    <IpRange>
-                                                        <StartAddress>{7:s}</StartAddress>
-                                                        <EndAddress>{8:s}</EndAddress>
-                                                    </IpRange>
-                                                </IpRanges>
-                                            </IpScope>
-                                        </IpScopes>
-                                        <FenceMode>{9:s}</FenceMode>
-                                    </Configuration>
-                                    <IsShared>{10:s}</IsShared>
-                        </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
-                                                    subnet_address, dns1, dns2_text, dhcp_enabled,
-                                                    dhcp_start_address, dhcp_end_address,
-                                                    fence_mode, isshared)
+            if net_type == "isolated":
+                fence_mode="isolated"
+                data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
+                                <Description>Openmano created</Description>
+                                        <Configuration>
+                                            <IpScopes>
+                                                <IpScope>
+                                                    <IsInherited>{1:s}</IsInherited>
+                                                    <Gateway>{2:s}</Gateway>
+                                                    <Netmask>{3:s}</Netmask>
+                                                    <Dns1>{4:s}</Dns1>{5:s}
+                                                    <IsEnabled>{6:s}</IsEnabled>
+                                                    <IpRanges>
+                                                        <IpRange>
+                                                            <StartAddress>{7:s}</StartAddress>
+                                                            <EndAddress>{8:s}</EndAddress>
+                                                        </IpRange>
+                                                    </IpRanges>
+                                                </IpScope>
+                                            </IpScopes>
+                                            <FenceMode>{9:s}</FenceMode>
+                                        </Configuration>
+                                        <IsShared>{10:s}</IsShared>
+                            </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
+                                                        subnet_address, dns1, dns2_text, dhcp_enabled,
+                                                        dhcp_start_address, dhcp_end_address,
+                                                        fence_mode, isshared)
+            else:
+                fence_mode = "bridged"
+                data = """ <OrgVdcNetwork name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">
+                        <Description>Openmano created</Description>
+                                <Configuration>
+                                    <IpScopes>
+                                        <IpScope>
+                                            <IsInherited>{1:s}</IsInherited>
+                                            <Gateway>{2:s}</Gateway>
+                                            <Netmask>{3:s}</Netmask>
+                                            <Dns1>{4:s}</Dns1>{5:s}
+                                            <IsEnabled>{6:s}</IsEnabled>
+                                            <IpRanges>
+                                                <IpRange>
+                                                    <StartAddress>{7:s}</StartAddress>
+                                                    <EndAddress>{8:s}</EndAddress>
+                                                </IpRange>
+                                            </IpRanges>
+                                        </IpScope>
+                                    </IpScopes>
+                                    <ParentNetwork href="{9:s}"/>
+                                    <FenceMode>{10:s}</FenceMode>
+                                </Configuration>
+                                <IsShared>{11:s}</IsShared>
+                    </OrgVdcNetwork> """.format(escape(network_name), is_inherited, gateway_address,
+                                                subnet_address, dns1, dns2_text, dhcp_enabled,
+                                                dhcp_start_address, dhcp_end_address, available_networks,
+                                                fence_mode, isshared)
 
             headers['Content-Type'] = 'application/vnd.vmware.vcloud.orgVdcNetwork+xml'
             try:

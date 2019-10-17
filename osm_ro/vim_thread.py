@@ -958,13 +958,14 @@ class vim_thread(threading.Thread):
             # CREATE
             params = task["params"]
             action_text = "creating VIM"
-            vim_net_id, created_items = self.vim.new_network(*params[0:3])
+
+            vim_net_id, created_items = self.vim.new_network(*params[0:5])
 
             net_name = params[0]
             net_type = params[1]
             wim_account_name = None
-            if len(params) >= 4:
-                wim_account_name = params[3]
+            if len(params) >= 5:
+                wim_account_name = params[5]
 
             sdn_controller = self.vim.config.get('sdn-controller')
             if sdn_controller and (net_type == "data" or net_type == "ptp"):

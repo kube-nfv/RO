@@ -503,7 +503,7 @@ class vimconnector(vimconn.vimconnector):
         except (ksExceptions.ConnectionError, ksExceptions.ClientException, ksExceptions.NotFound, ConnectionError)  as e:
             self._format_exception(e)
 
-    def new_network(self,net_name, net_type, ip_profile=None, shared=False, vlan=None):
+    def new_network(self,net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
         """Adds a tenant network to VIM
         Params:
             'net_name': name of the network
@@ -520,7 +520,7 @@ class vimconnector(vimconn.vimconnector):
                 'dhcp_start_address': ip_schema, first IP to grant
                 'dhcp_count': number of IPs to grant.
             'shared': if this network can be seen/use by other tenants/organization
-            'vlan': in case of a data or ptp net_type, the intended vlan tag to be used for the network
+            'provider_network_profile': (optional) contains {segmentation-id: vlan, provider-network: vim_netowrk}
         Returns a tuple with the network identifier and created_items, or raises an exception on error
             created_items can be None or a dictionary where this method can include key-values that will be passed to
             the method delete_network. Can be used to store created segments, created l2gw connections, etc.
@@ -529,7 +529,11 @@ class vimconnector(vimconn.vimconnector):
         """
         self.logger.debug("Adding a new network to VIM name '%s', type '%s'", net_name, net_type)
         # self.logger.debug(">>>>>>>>>>>>>>>>>> IP profile %s", str(ip_profile))
+
         try:
+            vlan = None
+            if provider_network_profile:
+                vlan = provider_network_profile.get("segmentation-id")
             new_net = None
             created_items = {}
             self._reload_connection()

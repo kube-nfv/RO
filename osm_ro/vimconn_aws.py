@@ -280,7 +280,7 @@ class vimconnector(vimconn.vimconnector):
 
         return map(str, subnets)
 
-    def new_network(self, net_name, net_type, ip_profile=None, shared=False, vlan=None):
+    def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
         """Adds a tenant network to VIM
         Params:
             'net_name': name of the network
@@ -298,7 +298,6 @@ class vimconnector(vimconn.vimconnector):
                     'start-address': ip_schema, first IP to grant
                     'count': number of IPs to grant.
             'shared': if this network can be seen/use by other tenants/organization
-            'vlan': in case of a data or ptp net_type, the intended vlan tag to be used for the network
         Returns a tuple with the network identifier and created_items, or raises an exception on error
             created_items can be None or a dictionary where this method can include key-values that will be passed to
             the method delete_network. Can be used to store created segments, created l2gw connections, etc.
