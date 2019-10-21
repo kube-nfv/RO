@@ -20,7 +20,7 @@
 FROM ubuntu:16.04
 RUN  apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install git tox make python-all python3 python3-pip debhelper wget && \
-  DEBIAN_FRONTEND=noninteractive apt-get --yes install python3-all libssl-dev && \
+  DEBIAN_FRONTEND=noninteractive apt-get --yes install python3-all libssl-dev flake8 && \
   DEBIAN_FRONTEND=noninteractive pip3 install -U setuptools setuptools-version-command stdeb
 
 # FROM ubuntu:16.04

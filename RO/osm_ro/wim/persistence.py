@@ -44,7 +44,7 @@ from contextlib import contextmanager
 from hashlib import sha1
 from itertools import groupby
 from operator import itemgetter
-from sys import exc_info
+# from sys import exc_info
 # from time import time
 from uuid import uuid1 as generate_uuid
 
@@ -362,6 +362,7 @@ class WimPersistence(object):
     def get_wim_accounts(self, **kwargs):
         """Retrieve all the accounts from the database"""
         kwargs.setdefault('postprocess', _postprocess_wim_account)
+        kwargs.setdefault('WHERE', {"sdn": "false"})
         return self.query(FROM=_WIM_ACCOUNT_JOIN, **kwargs)
 
     def get_wim_account(self, uuid_or_name, **kwargs):
@@ -523,7 +524,7 @@ class WimPersistence(object):
             self.logger.exception(old_exception)
             ex = InvalidParameters(
                 "The mapping must contain the "
-                "'pop_switch_dpid', 'pop_switch_port',  and "
+                "'device_id', 'device_interface_id',  and "
                 "wan_service_mapping_info: "
                 "('wan_switch_dpid' and 'wan_switch_port') or "
                 "'wan_service_endpoint_id}'")
@@ -727,7 +728,7 @@ class WimPersistence(object):
         kwargs.setdefault('error_if_none', False)
 
         criteria_fields = ('uuid', 'instance_scenario_id', 'sce_net_id',
-                           'wim_id', 'wim_account_id')
+                           'wim_id', 'wim_account_id', 'sdn')
         criteria = remove_none_items(filter_dict_keys(kwargs, criteria_fields))
         kwargs = filter_out_dict_keys(kwargs, criteria_fields)
 

@@ -21,10 +21,10 @@
 # funded by the European Commission under Grant number 761727 through the
 # Horizon 2020 program.
 ##
-"""The WIM connector is responsible for establishing wide area network
+"""The SDN/WIM connector is responsible for establishing wide area network
 connectivity.
 
-This WIM connector implements the standard IETF RFC 8466 "A YANG Data
+This SDN/WIM connector implements the standard IETF RFC 8466 "A YANG Data
  Model for Layer 2 Virtual Private Network (L2VPN) Service Delivery"
 
 It receives the endpoints and the necessary details to request
@@ -33,11 +33,11 @@ the Layer 2 service.
 import requests
 import uuid
 import logging
-from .wimconn import WimConnector, WimConnectorError
+from osm_ro.wim.sdnconn import SdnConnectorBase, SdnConnectorError
 """CHeck layer where we move it"""
 
 
-class WimconnectorIETFL2VPN(WimConnector):
+class WimconnectorIETFL2VPN(SdnConnectorBase):
 
     def __init__(self, wim, wim_account, config=None, logger=None):
         """IETF L2VPM WIM connector
@@ -46,13 +46,13 @@ class WimconnectorIETFL2VPN(WimConnector):
             wim (dict): WIM record, as stored in the database
             wim_account (dict): WIM account record, as stored in the database
         """
-        self.logger = logging.getLogger('openmano.wimconn.ietfl2vpn')
-        super(WimconnectorIETFL2VPN, self).__init__(wim, wim_account, config, logger)
+        self.logger = logging.getLogger('openmano.sdnconn.ietfl2vpn')
+        super().__init__(wim, wim_account, config, logger)
         self.headers = {'Content-Type': 'application/json'}
-        self.mappings = {m['wan_service_endpoint_id']: m
+        self.mappings = {m['service_endpoint_id']: m
                          for m in self.service_endpoint_mapping}
         self.user = wim_account.get("user")
-        self.passwd = wim_account.get("passwd")
+        self.passwd = wim_account.get("passwordd")
         if self.user and self.passwd is not None:
             self.auth = (self.user, self.passwd)
         else:
@@ -65,10 +65,10 @@ class WimconnectorIETFL2VPN(WimConnector):
             response = requests.get(endpoint, auth=self.auth)    
             http_code = response.status_code
         except requests.exceptions.RequestException as e:
-            raise WimConnectorError(e.message, http_code=503)
+            raise SdnConnectorError(e.message, http_code=503)
 
         if http_code != 200:
-            raise WimConnectorError("Failed while authenticating", http_code=http_code)
+            raise SdnConnectorError("Failed while authenticating", http_code=http_code)
         self.logger.info("Credentials checked")
 
     def get_connectivity_service_status(self, service_uuid, conn_info=None):
@@ -79,10 +79,10 @@ class WimconnectorIETFL2VPN(WimConnector):
 
         Returns:
             Examples::
-                {'wim_status': 'ACTIVE'}
-                {'wim_status': 'INACTIVE'}
-                {'wim_status': 'DOWN'}
-                {'wim_status': 'ERROR'}
+                {'sdn_status': 'ACTIVE'}
+                {'sdn_status': 'INACTIVE'}
+                {'sdn_status': 'DOWN'}
+                {'sdn_status': 'ERROR'}
         """
         try:
             self.logger.info("Sending get connectivity service stuatus")
@@ -90,16 +90,16 @@ class WimconnectorIETFL2VPN(WimConnector):
                 self.wim["wim_url"], service_uuid)
             response = requests.get(servicepoint, auth=self.auth)
             if response.status_code != requests.codes.ok:
-                raise WimConnectorError("Unable to obtain connectivity servcice status", http_code=response.status_code)
-            service_status = {'wim_status': 'ACTIVE'}
+                raise SdnConnectorError("Unable to obtain connectivity servcice status", http_code=response.status_code)
+            service_status = {'sdn_status': 'ACTIVE'}
             return service_status
         except requests.exceptions.ConnectionError:
-            raise WimConnectorError("Request Timeout", http_code=408)
+            raise SdnConnectorError("Request Timeout", http_code=408)
                
     def search_mapp(self, connection_point):
         id = connection_point['service_endpoint_id']
         if id not in self.mappings:         
-            raise WimConnectorError("Endpoint {} not located".format(str(id)))
+            raise SdnConnectorError("Endpoint {} not located".format(str(id)))
         else:
             return self.mappings[id]
 
@@ -147,13 +147,13 @@ class WimconnectorIETFL2VPN(WimConnector):
                  **MUST** be JSON/YAML-serializable (plain data structures).
 
         Raises:
-            WimConnectorException: In case of error.
+            SdnConnectorException: In case of error.
         """
         if service_type == "ELINE":
             if len(connection_points) > 2:
-                raise WimConnectorError('Connections between more than 2 endpoints are not supported')
+                raise SdnConnectorError('Connections between more than 2 endpoints are not supported')
             if len(connection_points) < 2:
-                raise WimConnectorError('Connections must be of at least 2 endpoints')
+                raise SdnConnectorError('Connections must be of at least 2 endpoints')
             """ First step, create the vpn service """    
             uuid_l2vpn = str(uuid.uuid4())
             vpn_service = {}
@@ -173,11 +173,11 @@ class WimconnectorIETFL2VPN(WimConnector):
                 response_service_creation = requests.post(endpoint_service_creation, headers=self.headers,
                                                           json=vpn_service_l, auth=self.auth)
             except requests.exceptions.ConnectionError:
-                raise WimConnectorError("Request to create service Timeout", http_code=408)
+                raise SdnConnectorError("Request to create service Timeout", http_code=408)
             if response_service_creation.status_code == 409:
-                raise WimConnectorError("Service already exists", http_code=response_service_creation.status_code)
+                raise SdnConnectorError("Service already exists", http_code=response_service_creation.status_code)
             elif response_service_creation.status_code != requests.codes.created:
-                raise WimConnectorError("Request to create service not accepted",
+                raise SdnConnectorError("Request to create service not accepted",
                                         http_code=response_service_creation.status_code)
             """ Second step, create the connections and vpn attachments """   
             for connection_point in connection_points:
@@ -192,7 +192,7 @@ class WimconnectorIETFL2VPN(WimConnector):
                         tagged_interf = {}
                         service_endpoint_encapsulation_info = connection_point["service_endpoint_encapsulation_info"]
                         if service_endpoint_encapsulation_info["vlan"] is None:
-                            raise WimConnectorError("VLAN must be provided")
+                            raise SdnConnectorError("VLAN must be provided")
                         tagged_interf["cvlan-id"] = service_endpoint_encapsulation_info["vlan"]
                         tagged["dot1q-vlan-tagged"] = tagged_interf
                         connection["tagged-interface"] = tagged
@@ -207,20 +207,20 @@ class WimconnectorIETFL2VPN(WimConnector):
                 self.logger.info("Sending vpn-attachement :{}".format(vpn_attach))
                 uuid_sna = str(uuid.uuid4())
                 site_network_access["network-access-id"] = uuid_sna
-                site_network_access["bearer"] = connection_point_wan_info["wan_service_mapping_info"]["bearer"]
+                site_network_access["bearer"] = connection_point_wan_info["service_mapping_info"]["bearer"]
                 site_network_accesses = {}
                 site_network_access_list = []
                 site_network_access_list.append(site_network_access)
                 site_network_accesses["ietf-l2vpn-svc:site-network-access"] = site_network_access_list
                 conn_info_d = {}
-                conn_info_d["site"] = connection_point_wan_info["wan_service_mapping_info"]["site-id"]
+                conn_info_d["site"] = connection_point_wan_info["service_mapping_info"]["site-id"]
                 conn_info_d["site-network-access-id"] = site_network_access["network-access-id"]
                 conn_info_d["mapping"] = None
                 conn_info.append(conn_info_d)
                 try:
                     endpoint_site_network_access_creation = \
                         "{}/restconf/data/ietf-l2vpn-svc:l2vpn-svc/sites/site={}/site-network-accesses/".format(
-                            self.wim["wim_url"], connection_point_wan_info["wan_service_mapping_info"]["site-id"])
+                            self.wim["wim_url"], connection_point_wan_info["service_mapping_info"]["site-id"])
                     response_endpoint_site_network_access_creation = requests.post(
                         endpoint_site_network_access_creation,
                         headers=self.headers,
@@ -229,25 +229,25 @@ class WimconnectorIETFL2VPN(WimConnector):
                     
                     if response_endpoint_site_network_access_creation.status_code == 409:
                         self.delete_connectivity_service(vpn_service["vpn-id"])
-                        raise WimConnectorError("Site_Network_Access with ID '{}' already exists".format(
+                        raise SdnConnectorError("Site_Network_Access with ID '{}' already exists".format(
                             site_network_access["network-access-id"]),
                             http_code=response_endpoint_site_network_access_creation.status_code)
                     
                     elif response_endpoint_site_network_access_creation.status_code == 400:
                         self.delete_connectivity_service(vpn_service["vpn-id"])
-                        raise WimConnectorError("Site {} does not exist".format(
-                            connection_point_wan_info["wan_service_mapping_info"]["site-id"]),
+                        raise SdnConnectorError("Site {} does not exist".format(
+                            connection_point_wan_info["service_mapping_info"]["site-id"]),
                             http_code=response_endpoint_site_network_access_creation.status_code)
                     
                     elif response_endpoint_site_network_access_creation.status_code != requests.codes.created and \
                             response_endpoint_site_network_access_creation.status_code != requests.codes.no_content:
                         self.delete_connectivity_service(vpn_service["vpn-id"])
-                        raise WimConnectorError("Request no accepted",
+                        raise SdnConnectorError("Request no accepted",
                                                 http_code=response_endpoint_site_network_access_creation.status_code)
                 
                 except requests.exceptions.ConnectionError:
                     self.delete_connectivity_service(vpn_service["vpn-id"])
-                    raise WimConnectorError("Request Timeout", http_code=408)
+                    raise SdnConnectorError("Request Timeout", http_code=408)
             return uuid_l2vpn, conn_info
         
         else:
@@ -265,9 +265,9 @@ class WimconnectorIETFL2VPN(WimConnector):
                 self.wim["wim_url"], service_uuid)
             response = requests.delete(servicepoint, auth=self.auth)
             if response.status_code != requests.codes.no_content:
-                raise WimConnectorError("Error in the request", http_code=response.status_code)
+                raise SdnConnectorError("Error in the request", http_code=response.status_code)
         except requests.exceptions.ConnectionError:
-            raise WimConnectorError("Request Timeout", http_code=408)
+            raise SdnConnectorError("Request Timeout", http_code=408)
 
     def edit_connectivity_service(self, service_uuid, conn_info=None,
                                   connection_points=None, **kwargs):
@@ -283,7 +283,7 @@ class WimconnectorIETFL2VPN(WimConnector):
             site_network_access = {}
             connection_point_wan_info = self.search_mapp(connection_point)
             params_site = {}
-            params_site["site-id"] = connection_point_wan_info["wan_service_mapping_info"]["site-id"]
+            params_site["site-id"] = connection_point_wan_info["service_mapping_info"]["site-id"]
             params_site["site-vpn-flavor"] = "site-vpn-flavor-single"
             device_site = {}
             device_site["device-id"] = connection_point_wan_info["device-id"]
@@ -298,7 +298,7 @@ class WimconnectorIETFL2VPN(WimConnector):
                     tagged_interf = {}
                     service_endpoint_encapsulation_info = connection_point["service_endpoint_encapsulation_info"]
                     if service_endpoint_encapsulation_info["vlan"] is None:
-                        raise WimConnectorError("VLAN must be provided")
+                        raise SdnConnectorError("VLAN must be provided")
                     tagged_interf["cvlan-id"] = service_endpoint_encapsulation_info["vlan"]
                     tagged["dot1q-vlan-tagged"] = tagged_interf
                     connection["tagged-interface"] = tagged
@@ -311,7 +311,7 @@ class WimconnectorIETFL2VPN(WimConnector):
             site_network_access["vpn-attachment"] = vpn_attach
             uuid_sna = conn_info[counter]["site-network-access-id"]
             site_network_access["network-access-id"] = uuid_sna
-            site_network_access["bearer"] = connection_point_wan_info["wan_service_mapping_info"]["bearer"]
+            site_network_access["bearer"] = connection_point_wan_info["service_mapping_info"]["bearer"]
             site_network_accesses = {}
             site_network_access_list = []
             site_network_access_list.append(site_network_access)
@@ -319,20 +319,20 @@ class WimconnectorIETFL2VPN(WimConnector):
             try:
                 endpoint_site_network_access_edit = \
                     "{}/restconf/data/ietf-l2vpn-svc:l2vpn-svc/sites/site={}/site-network-accesses/".format(
-                        self.wim["wim_url"], connection_point_wan_info["wan_service_mapping_info"]["site-id"])
+                        self.wim["wim_url"], connection_point_wan_info["service_mapping_info"]["site-id"])
                 response_endpoint_site_network_access_creation = requests.put(endpoint_site_network_access_edit,
                                                                               headers=self.headers,
                                                                               json=site_network_accesses,
                                                                               auth=self.auth)
                 if response_endpoint_site_network_access_creation.status_code == 400:
-                    raise WimConnectorError("Service does not exist",
+                    raise SdnConnectorError("Service does not exist",
                                             http_code=response_endpoint_site_network_access_creation.status_code)
                 elif response_endpoint_site_network_access_creation.status_code != 201 and \
                         response_endpoint_site_network_access_creation.status_code != 204:
-                    raise WimConnectorError("Request no accepted",
+                    raise SdnConnectorError("Request no accepted",
                                             http_code=response_endpoint_site_network_access_creation.status_code)
             except requests.exceptions.ConnectionError:
-                raise WimConnectorError("Request Timeout", http_code=408)
+                raise SdnConnectorError("Request Timeout", http_code=408)
             counter += 1
         return None
 
@@ -343,9 +343,9 @@ class WimconnectorIETFL2VPN(WimConnector):
             servicepoint = "{}/restconf/data/ietf-l2vpn-svc:l2vpn-svc/vpn-services".format(self.wim["wim_url"])
             response = requests.delete(servicepoint, auth=self.auth)
             if response.status_code != requests.codes.no_content:
-                raise WimConnectorError("Unable to clear all connectivity services", http_code=response.status_code)
+                raise SdnConnectorError("Unable to clear all connectivity services", http_code=response.status_code)
         except requests.exceptions.ConnectionError:
-            raise WimConnectorError("Request Timeout", http_code=408)
+            raise SdnConnectorError("Request Timeout", http_code=408)
 
     def get_all_active_connectivity_services(self):
         """Provide information about all active connections provisioned by a
@@ -356,7 +356,7 @@ class WimconnectorIETFL2VPN(WimConnector):
             servicepoint = "{}/restconf/data/ietf-l2vpn-svc:l2vpn-svc/vpn-services".format(self.wim["wim_url"])
             response = requests.get(servicepoint, auth=self.auth)
             if response.status_code != requests.codes.ok:
-                raise WimConnectorError("Unable to get all connectivity services", http_code=response.status_code)
+                raise SdnConnectorError("Unable to get all connectivity services", http_code=response.status_code)
             return response
         except requests.exceptions.ConnectionError:
-            raise WimConnectorError("Request Timeout", http_code=408)
+            raise SdnConnectorError("Request Timeout", http_code=408)

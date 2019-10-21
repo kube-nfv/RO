@@ -69,36 +69,21 @@ wim_port_mapping_desc = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "pop_switch_dpid": dpid_type,
-                        "pop_switch_port": port_type,
-                        "wan_service_endpoint_id": name_schema,
-                        "wan_service_mapping_info": {
+                        "device_id": nameshort_schema,
+                        "device_interface_id": nameshort_schema,
+                        "service_endpoint_id": name_schema,
+                        "switch_dpid": dpid_type,
+                        "switch_port": port_type,
+                        "service_mapping_info": {
                             "type": "object",
                             "properties": {
                                 "mapping_type": name_schema,
-                                "wan_switch_dpid": dpid_type,
-                                "wan_switch_port": port_type
                             },
                             "additionalProperties": True,
                             "required": ["mapping_type"]
                         }
                     },
-                    "anyOf": [
-                        {
-                            "required": [
-                                "pop_switch_dpid",
-                                "pop_switch_port",
-                                "wan_service_endpoint_id"
-                            ]
-                        },
-                        {
-                            "required": [
-                                "pop_switch_dpid",
-                                "pop_switch_port",
-                                "wan_service_mapping_info"
-                            ]
-                        }
-                    ]
+                    "required": ["service_endpoint_id"]
                 }
             }
         },
@@ -111,7 +96,7 @@ wim_schema_properties = {
     "description": description_schema,
     "type": {
         "type": "string",
-        "enum": ["tapi", "onos", "odl", "dynpac", "fake"]
+        # "enum": ["tapi", "onos", "odl", "dynpac", "fake"]
     },
     "wim_url": description_schema,
     "config": {

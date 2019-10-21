@@ -31,12 +31,12 @@
 # funded by the European Commission under Grant number 761727 through the
 # Horizon 2020 and 5G-PPP programmes.
 ##
-from .wimconn import WimConnector
+from .sdnconn import SdnConnectorBase
 
 
 # TODO: Basically create this file
 
-class OdlConnector(WimConnector):
+class OdlConnector(SdnConnectorBase):
     def get_connectivity_service_status(self, link_uuid):
         raise NotImplementedError
 

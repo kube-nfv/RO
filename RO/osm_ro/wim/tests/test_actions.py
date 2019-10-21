@@ -33,7 +33,7 @@
 ##
 # pylint: disable=E1101
 
-#from __future__ import unicode_literals, print_function
+# from __future__ import unicode_literals, print_function
 
 import json
 import unittest
@@ -49,7 +49,7 @@ from ...tests.db_helpers import (
 )
 from ..persistence import WimPersistence, preprocess_record
 from ..wan_link_actions import WanLinkCreate, WanLinkDelete
-from ..wimconn import WimConnectorError
+from ..sdnconn import SdnConnectorError
 
 
 class TestActionsWithDb(TestCaseWithDatabasePerTest):
@@ -192,7 +192,7 @@ class TestCreate(TestActionsWithDb):
 
         # If the connector raises an error
         with patch.object(self.connector, 'create_connectivity_service',
-                          MagicMock(side_effect=WimConnectorError('foobar'))):
+                          MagicMock(side_effect=SdnConnectorError('foobar'))):
             # When we try to process a CREATE action that refers to the same
             # instance_scenario_id and sce_net_id
             action.process(self.connector, self.persist, self.ovim)
@@ -219,8 +219,8 @@ class TestCreate(TestActionsWithDb):
         port_mappings = next(r['wim_port_mappings']
                              for r in db_state if 'wim_port_mappings' in r)
         for mapping in port_mappings:
-            mapping['pop_switch_dpid'] = switch
-            mapping['pop_switch_port'] = port
+            mapping['device_id'] = switch
+            mapping['device_interface_id'] = port
 
         instance_action = eg.instance_action(action_id='ACTION-000')
         instance_nets = eg.instance_nets(num_datacenters=2, num_links=1,
@@ -294,7 +294,7 @@ class TestCreate(TestActionsWithDb):
 
         connector_patch = patch.object(
             self.connector, 'create_connectivity_service',
-            MagicMock(side_effect=WimConnectorError('foobar')))
+            MagicMock(side_effect=SdnConnectorError('foobar')))
 
         # If the connector throws an error
         with connector_patch, ovim_patch:

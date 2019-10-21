@@ -99,7 +99,7 @@ def datacenter(identifier, external_ports_config=False):
                 'encapsulation_type': 'vlan'},
                 'vim_external_port':
                 dict(zip(('switch', 'port'),
-                          _datacenter_to_switch_port(identifier)))}
+                         _datacenter_to_switch_port(identifier)))}
         ]})
 
     return {'uuid': uuid('dc%d' % identifier),
@@ -144,13 +144,13 @@ def wim_port_mapping(wim, datacenter,
 
     return {'wim_id': uuid('wim%d' % wim),
             'datacenter_id': uuid('dc%d' % datacenter),
-            'pop_switch_dpid': pop_dpid,
-            'pop_switch_port': (str(pop_port) if pop_port else
-                                str(int(datacenter) + int(wim) + 1)),
+            'device_id': pop_dpid,
+            'device_interface_id': (str(pop_port) if pop_port else
+                                    str(int(datacenter) + int(wim) + 1)),
             # ^  Datacenter router have one port managed by each WIM
-            'wan_service_endpoint_id': id_,
+            'service_endpoint_id': id_,
             # ^  WIM managed router have one port connected to each DC
-            'wan_service_mapping_info': json.dumps(mapping_info)}
+            'service_mapping_info': json.dumps(mapping_info)}
 
 
 def processed_port_mapping(wim, datacenter,
@@ -164,11 +164,11 @@ def processed_port_mapping(wim, datacenter,
         'wim_id': uuid('wim%d' % wim),
         'datacenter_id': uuid('dc%d' % datacenter),
         'pop_wan_mappings': [
-            {'pop_switch_dpid': pop_dpid,
-             'pop_switch_port': wim + 1 + i,
-             'wan_service_endpoint_id':
+            {'device_id': pop_dpid,
+             'device_interface_id': wim + 1 + i,
+             'service_endpoint_id':
                  sha1('dpid-port|%s|%d' % (wan_dpid, datacenter + 1 + i)),
-             'wan_service_mapping_info': {
+             'service_mapping_info': {
                  'mapping_type': 'dpid-port',
                  'wan_switch_dpid': wan_dpid,
                  'wan_switch_port': datacenter + 1 + i}}

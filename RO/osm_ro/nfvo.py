@@ -45,13 +45,11 @@ from osm_ro import nfvo_db
 from threading import Lock
 import time as t
 # TODO py3 BEGIN
-# from lib_osm_openvim import ovim as ovim_module
+from osm_ro.sdn import Sdn, SdnException as ovimException
 # from lib_osm_openvim.ovim import ovimException
-from unittest.mock  import MagicMock
-ovim_module = MagicMock()
-class ovimException(Exception):
-   pass
-ovim_module.ovimException = ovimException
+# from unittest.mock  import MagicMock
+# class ovimException(Exception):
+#    pass
 # TODO py3 END
 
 from Crypto.PublicKey import RSA
@@ -64,11 +62,12 @@ from pkg_resources import iter_entry_points
 
 
 # WIM
-import osm_ro.wim.wimconn as wimconn
-import osm_ro.wim.wim_thread as wim_thread
-from osm_ro.http_tools import errors as httperrors
-from osm_ro.wim.engine import WimEngine
-from osm_ro.wim.persistence import WimPersistence
+from .wim import sdnconn
+from .wim.wimconn_fake import FakeConnector
+from .wim.failing_connector import FailingConnector
+from .http_tools import errors as httperrors
+from .wim.engine import WimEngine
+from .wim.persistence import WimPersistence
 from copy import deepcopy
 from pprint import pformat
 #
@@ -77,7 +76,7 @@ global global_config
 # WIM
 global wim_engine
 wim_engine  = None
-global wimconn_imported
+global sdnconn_imported
 #
 global logger
 global default_volume_size
@@ -90,7 +89,7 @@ plugins = {}   # dictionary with VIM type as key, loaded module as value
 vim_threads = {"running":{}, "deleting": {}, "names": []}      # threads running for attached-VIMs
 vim_persistent_info = {}
 # WIM
-wimconn_imported = {}   # dictionary with WIM type as key, loaded module as value
+sdnconn_imported = {}   # dictionary with WIM type as key, loaded module as value
 wim_threads = {"running":{}, "deleting": {}, "names": []}      # threads running for attached-WIMs
 wim_persistent_info = {}
 #
@@ -105,13 +104,23 @@ db_lock = Lock()
 class NfvoException(httperrors.HttpMappedError):
     """Common Class for NFVO errors"""
 
-def _load_vim_plugin(name):
+def _load_plugin(name, type="vim"):
+    # type can be vim or sdn
     global plugins
-    for v in iter_entry_points('osm_rovim.plugins', name):
-        plugins[name] = v.load()
+    try:
+        for v in iter_entry_points('osm_ro{}.plugins'.format(type), name):
+            plugins[name] = v.load()
+    except Exception as e:
+        logger.critical("Cannot load osm_{}: {}".format(name, e))
+        if name:
+            plugins[name] = FailingConnector("Cannot load osm_{}: {}".format(name, e))
     if name and name not in plugins:
-        raise NfvoException("Unknown vim type '{}'. This plugin has not been registered".format(name),
-                            httperrors.Bad_Request)
+        error_text = "Cannot load a module for {t} type '{n}'. The plugin 'osm_{n}' has not been" \
+                     " registered".format(t=type, n=name)
+        logger.critical(error_text)
+        plugins[name] = FailingConnector(error_text)
+        # raise NfvoException("Cannot load a module for {t} type '{n}'. The plugin 'osm_{n}' has not been registered".
+        #                     format(t=type, n=name), httperrors.Bad_Request)
 
 def get_task_id():
     global last_task_id
@@ -166,37 +175,21 @@ def get_non_used_wim_name(wim_name, wim_id, tenant_name, tenant_id):
 
 
 def start_service(mydb, persistence=None, wim=None):
-    global db, global_config, plugins
+    global db, global_config, plugins, ovim
     db = nfvo_db.nfvo_db(lock=db_lock)
     mydb.lock = db_lock
     db.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name'])
-    global ovim
 
     persistence = persistence or  WimPersistence(db)
 
-    # Initialize openvim for SDN control
-    # TODO: Avoid static configuration by adding new parameters to openmanod.cfg
-    # TODO: review ovim.py to delete not needed configuration
-    ovim_configuration = {
-        'logger_name': 'openmano.ovim',
-        'network_vlan_range_start': 1000,
-        'network_vlan_range_end': 4096,
-        'db_name': global_config["db_ovim_name"],
-        'db_host': global_config["db_ovim_host"],
-        'db_user': global_config["db_ovim_user"],
-        'db_passwd': global_config["db_ovim_passwd"],
-        'bridge_ifaces': {},
-        'mode': 'normal',
-        'network_type': 'bridge',
-        #TODO: log_level_of should not be needed. To be modified in ovim
-        'log_level_of': 'DEBUG'
-    }
     try:
+        if "rosdn_fake" not in plugins:
+            plugins["rosdn_fake"] = FakeConnector
         # starts ovim library
-        ovim = ovim_module.ovim(ovim_configuration)
+        ovim = Sdn(db, plugins)
 
         global wim_engine
-        wim_engine = wim or WimEngine(persistence)
+        wim_engine = wim or WimEngine(persistence, plugins)
         wim_engine.ovim = ovim
 
         ovim.start_service()
@@ -221,7 +214,7 @@ def start_service(mydb, persistence=None, wim=None):
                 extra.update(yaml.load(vim["dt_config"], Loader=yaml.Loader))
             plugin_name = "rovim_" + vim["type"]
             if plugin_name not in plugins:
-                _load_vim_plugin(plugin_name)
+                _load_plugin(plugin_name, type="vim")
 
             thread_id = vim['datacenter_tenant_id']
             vim_persistent_info[thread_id] = {}
@@ -240,19 +233,33 @@ def start_service(mydb, persistence=None, wim=None):
                 logger.error("Cannot launch thread for VIM {} '{}': {}".format(vim['datacenter_name'],
                                                                                vim['datacenter_id'], e))
             except Exception as e:
-                raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, e),
-                                    httperrors.Internal_Server_Error)
+                logger.critical("Cannot launch thread for VIM {} '{}': {}".format(vim['datacenter_name'],
+                                                                                  vim['datacenter_id'], e))
+                # raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, e),
+                #                     httperrors.Internal_Server_Error)
             thread_name = get_non_used_vim_name(vim['datacenter_name'], vim['datacenter_id'], vim['vim_tenant_name'],
                                                 vim['vim_tenant_id'])
-            new_thread = vim_thread(task_lock, plugins, thread_name, vim['datacenter_name'],
-                                    vim['datacenter_tenant_id'], db=db, db_lock=db_lock, ovim=ovim)
+            new_thread = vim_thread(task_lock, plugins, thread_name, None,
+                                    vim['datacenter_tenant_id'], db=db)
             new_thread.start()
             vim_threads["running"][thread_id] = new_thread
+        wims = mydb.get_rows(FROM="wim_accounts join wims on wim_accounts.wim_id=wims.uuid",
+                             WHERE={"sdn": "true"},
+                             SELECT=("wim_accounts.uuid as uuid", "type", "wim_accounts.name as name"))
+        for wim in wims:
+            plugin_name = "rosdn_" + wim["type"]
+            if plugin_name not in plugins:
+                _load_plugin(plugin_name, type="sdn")
 
+            thread_id = wim['uuid']
+            thread_name = get_non_used_vim_name(wim['name'], wim['uuid'], wim['uuid'], None)
+            new_thread = vim_thread(task_lock, plugins, thread_name, wim['uuid'], None, db=db)
+            new_thread.start()
+            vim_threads["running"][thread_id] = new_thread
         wim_engine.start_threads()
     except db_base_Exception as e:
         raise NfvoException(str(e) + " at nfvo.get_vim", e.http_code)
-    except ovim_module.ovimException as e:
+    except ovimException as e:
         message = str(e)
         if message[:22] == "DATABASE wrong version":
             message = "DATABASE wrong version of lib_osm_openvim {msg} -d{dbname} -u{dbuser} -p{dbpass} {ver}' "\
@@ -397,7 +404,7 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
             plugin_name = "rovim_" + vim["type"]
             if plugin_name not in plugins:
                 try:
-                    _load_vim_plugin(plugin_name)
+                    _load_plugin(plugin_name, type="vim")
                 except NfvoException as e:
                     if ignore_errors:
                         logger.error("{}".format(e))
@@ -3030,6 +3037,14 @@ def update(d, u):
     return d
 
 
+def _get_wim(db, wim_account_id):
+    # get wim from wim_account
+    wim_accounts = db.get_rows(FROM='wim_accounts', WHERE={"uuid": wim_account_id})
+    if not wim_accounts:
+        raise NfvoException("Not found sdn id={}".format(wim_account_id), http_code=httperrors.Not_Found)
+    return wim_accounts[0]["wim_id"]
+
+
 def create_instance(mydb, tenant_id, instance_dict):
     # print "Checking that nfvo_tenant_id exists and getting the VIM URI and the VIM tenant_id"
     # logger.debug("Creating instance...")
@@ -3094,6 +3109,7 @@ def create_instance(mydb, tenant_id, instance_dict):
     }
 
     # Auxiliary dictionaries from x to y
+    sce_net2wim_instance = {}
     sce_net2instance = {}
     net2task_id = {'scenario': {}}
     # Mapping between local networks and WIMs
@@ -3229,6 +3245,7 @@ def create_instance(mydb, tenant_id, instance_dict):
         # 1. Creating new nets (sce_nets) in the VIM"
         number_mgmt_networks = 0
         db_instance_nets = []
+        db_instance_wim_nets = []
         for sce_net in scenarioDict['nets']:
             sce_net_uuid = sce_net.get('uuid', sce_net["name"])
             # get involved datacenters where this network need to be created
@@ -3286,6 +3303,7 @@ def create_instance(mydb, tenant_id, instance_dict):
                     if site.get("datacenter") and site["datacenter"] not in involved_datacenters:
                         involved_datacenters.append(site["datacenter"])
             sce_net2instance[sce_net_uuid] = {}
+            sce_net2wim_instance[sce_net_uuid] = {}
             net2task_id['scenario'][sce_net_uuid] = {}
 
             use_network = None
@@ -3393,6 +3411,41 @@ def create_instance(mydb, tenant_id, instance_dict):
                 sce_net2instance[sce_net_uuid][datacenter_id] = net_uuid
                 if not related_network:   # all db_instance_nets will have same related
                     related_network = use_network or net_uuid
+                sdn_net_id = None
+                sdn_controller = vim.config.get('sdn-controller')
+                sce_net2wim_instance[sce_net_uuid][datacenter_id] = None
+                if sdn_controller and net_type in ("data", "ptp"):
+                    wim_id = _get_wim(mydb, sdn_controller)
+                    sdn_net_id = str(uuid4())
+                    sce_net2wim_instance[sce_net_uuid][datacenter_id] = sdn_net_id
+                    task_extra["sdn_net_id"] = sdn_net_id
+                    db_instance_wim_nets.append({
+                        "uuid": sdn_net_id,
+                        "instance_scenario_id": instance_uuid,
+                        "sce_net_id": sce_net.get("uuid"),
+                        "wim_id": wim_id,
+                        "wim_account_id": sdn_controller,
+                        'status': 'BUILD',  # if create_network else "ACTIVE"
+                        "related": related_network,
+                        'multipoint': True if net_type=="data" else False,
+                        "created": create_network, # TODO py3
+                        "sdn": True,
+                    })
+                    task_wim_extra = {"params": [net_type, wim_account_name]}
+                    db_vim_action = {
+                        "instance_action_id": instance_action_id,
+                        "status": "SCHEDULED",
+                        "task_index": task_index,
+                        # "datacenter_vim_id": myvim_thread_id,
+                        "wim_account_id": sdn_controller,
+                        "action": task_action,
+                        "item": "instance_wim_nets",
+                        "item_id": sdn_net_id,
+                        "related": related_network,
+                        "extra": yaml.safe_dump(task_wim_extra, default_flow_style=True, width=256)
+                    }
+                    task_index += 1
+                    db_vim_actions.append(db_vim_action)
                 db_net = {
                     "uuid": net_uuid,
                     "osm_id": sce_net.get("osm_id") or sce_net["name"],
@@ -3404,7 +3457,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                     "created": create_network,
                     'datacenter_id': datacenter_id,
                     'datacenter_tenant_id': myvim_thread_id,
-                    'status': 'BUILD' #  if create_network else "ACTIVE"
+                    'status': 'BUILD', #  if create_network else "ACTIVE"
+                    'sdn_net_id': sdn_net_id,
                 }
                 db_instance_nets.append(db_net)
                 db_vim_action = {
@@ -3451,6 +3505,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             "task_index": task_index,
             "uuid_list": uuid_list,
             "db_instance_nets": db_instance_nets,
+            "db_instance_wim_nets": db_instance_wim_nets,
             "db_vim_actions": db_vim_actions,
             "db_ip_profiles": db_ip_profiles,
             "db_instance_vnfs": db_instance_vnfs,
@@ -3458,6 +3513,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             "db_instance_interfaces": db_instance_interfaces,
             "net2task_id": net2task_id,
             "sce_net2instance": sce_net2instance,
+            "sce_net2wim_instance": sce_net2wim_instance,
         }
         # sce_vnf_list = sorted(scenarioDict['vnfs'], key=lambda k: k['name'])
         for sce_vnf in scenarioDict.get('vnfs', ()):  # sce_vnf_list:
@@ -3655,7 +3711,7 @@ def create_instance(mydb, tenant_id, instance_dict):
             {"instance_sfs": db_instance_sfs},
             {"instance_classifications": db_instance_classifications},
             {"instance_sfps": db_instance_sfps},
-            {"instance_wim_nets": wan_links},
+            {"instance_wim_nets": db_instance_wim_nets + wan_links},
             {"vim_wim_actions": db_vim_actions + wim_actions}
         ]
 
@@ -3670,13 +3726,13 @@ def create_instance(mydb, tenant_id, instance_dict):
         returned_instance = mydb.get_instance_scenario(instance_uuid)
         returned_instance["action_id"] = instance_action_id
         return returned_instance
-    except (NfvoException, vimconn.vimconnException, wimconn.WimConnectorError, db_base_Exception) as e:
+    except (NfvoException, vimconn.vimconnException, sdnconn.SdnConnectorError, db_base_Exception) as e:
         message = rollback(mydb, myvims, rollbackList)
         if isinstance(e, db_base_Exception):
             error_text = "database Exception"
         elif isinstance(e, vimconn.vimconnException):
             error_text = "VIM Exception"
-        elif isinstance(e, wimconn.WimConnectorError):
+        elif isinstance(e, sdnconn.SdnConnectorError):
             error_text = "WIM Exception"
         else:
             error_text = "Exception"
@@ -3699,6 +3755,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     task_index = params_out["task_index"]
     uuid_list = params_out["uuid_list"]
     db_instance_nets = params_out["db_instance_nets"]
+    db_instance_wim_nets = params_out["db_instance_wim_nets"]
     db_vim_actions = params_out["db_vim_actions"]
     db_ip_profiles = params_out["db_ip_profiles"]
     db_instance_vnfs = params_out["db_instance_vnfs"]
@@ -3706,15 +3763,18 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     db_instance_interfaces = params_out["db_instance_interfaces"]
     net2task_id = params_out["net2task_id"]
     sce_net2instance = params_out["sce_net2instance"]
+    sce_net2wim_instance = params_out["sce_net2wim_instance"]
 
     vnf_net2instance = {}
 
     # 2. Creating new nets (vnf internal nets) in the VIM"
     # For each vnf net, we create it and we add it to instanceNetlist.
     if sce_vnf.get("datacenter"):
+        vim = myvims[sce_vnf["datacenter"]]
         datacenter_id = sce_vnf["datacenter"]
         myvim_thread_id = myvim_threads_id[sce_vnf["datacenter"]]
     else:
+        vim = myvims[default_datacenter_id]
         datacenter_id = default_datacenter_id
         myvim_thread_id = myvim_threads_id[default_datacenter_id]
     for net in sce_vnf['nets']:
@@ -3731,12 +3791,29 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             vnf_net2instance[sce_vnf['uuid']] = {}
         if sce_vnf['uuid'] not in net2task_id:
             net2task_id[sce_vnf['uuid']] = {}
-        net2task_id[sce_vnf['uuid']][net['uuid']] = task_index
 
         # fill database content
         net_uuid = str(uuid4())
         uuid_list.append(net_uuid)
         vnf_net2instance[sce_vnf['uuid']][net['uuid']] = net_uuid
+
+        sdn_controller = vim.config.get('sdn-controller')
+        sdn_net_id = None
+        if sdn_controller and net_type in ("data", "ptp"):
+            wim_id = _get_wim(mydb, sdn_controller)
+            sdn_net_id = str(uuid4())
+            db_instance_wim_nets.append({
+                "uuid": sdn_net_id,
+                "instance_scenario_id": instance_uuid,
+                "wim_id": wim_id,
+                "wim_account_id": sdn_controller,
+                'status': 'BUILD',  # if create_network else "ACTIVE"
+                "related": net_uuid,
+                'multipoint': True if net_type == "data" else False,
+                "created": True,  # TODO py3
+                "sdn": True,
+            })
+
         db_net = {
             "uuid": net_uuid,
             "related": net_uuid,
@@ -3747,6 +3824,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             "created": True,
             'datacenter_id': datacenter_id,
             'datacenter_tenant_id': myvim_thread_id,
+            'sdn_net_id': sdn_net_id,
         }
         db_instance_nets.append(db_net)
 
@@ -3761,7 +3839,25 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         else:
             task_action = "CREATE"
             task_extra = {"params": (net_name, net_type, net.get('ip_profile', None))}
+        if sdn_net_id:
+            task_extra["sdn_net_id"] = sdn_net_id
 
+        if sdn_net_id:
+            task_wim_extra = {"params": [net_type, None]}
+            db_vim_action = {
+                "instance_action_id": instance_action_id,
+                "status": "SCHEDULED",
+                "task_index": task_index,
+                # "datacenter_vim_id": myvim_thread_id,
+                "wim_account_id": sdn_controller,
+                "action": task_action,
+                "item": "instance_wim_nets",
+                "item_id": sdn_net_id,
+                "related": net_uuid,
+                "extra": yaml.safe_dump(task_wim_extra, default_flow_style=True, width=256)
+            }
+            task_index += 1
+            db_vim_actions.append(db_vim_action)
         db_vim_action = {
             "instance_action_id": instance_action_id,
             "task_index": task_index,
@@ -3773,6 +3869,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             "related": net_uuid,
             "extra": yaml.safe_dump(task_extra, default_flow_style=True, width=256)
         }
+        net2task_id[sce_vnf['uuid']][net['uuid']] = task_index
         task_index += 1
         db_vim_actions.append(db_vim_action)
 
@@ -3946,6 +4043,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                         netDict['net_id'] = "TASK-{}".format(
                             net2task_id['scenario'][vnf_iface['sce_net_id']][datacenter_id])
                         instance_net_id = sce_net2instance[vnf_iface['sce_net_id']][datacenter_id]
+                        instance_wim_net_id = sce_net2wim_instance[vnf_iface['sce_net_id']][datacenter_id]
                         task_depends_on.append(net2task_id['scenario'][vnf_iface['sce_net_id']][datacenter_id])
                         break
             else:
@@ -3960,9 +4058,11 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 # "uuid"
                 # 'instance_vm_id': instance_vm_uuid,
                 "instance_net_id": instance_net_id,
+                "instance_wim_net_id": instance_wim_net_id,
                 'interface_id': iface['uuid'],
                 # 'vim_interface_id': ,
                 'type': 'external' if iface['external_name'] is not None else 'internal',
+                'model': iface['model'],
                 'ip_address': iface.get('ip_address'),
                 'mac_address': iface.get('mac'),
                 'floating_ip': int(iface.get('floating-ip', False)),
@@ -4349,6 +4449,23 @@ def delete_instance(mydb, tenant_id, instance_id):
         }
         task_index += 1
         db_vim_actions.append(db_vim_action)
+    for sdn_net in instanceDict['sdn_nets']:
+        if not sdn_net["sdn"]:
+            continue
+        extra = {}
+        db_vim_action = {
+            "instance_action_id": instance_action_id,
+            "task_index": task_index,
+            "wim_account_id": sdn_net["wim_account_id"],
+            "action": "DELETE",
+            "status": "SCHEDULED",
+            "item": "instance_wim_nets",
+            "item_id": sdn_net["uuid"],
+            "related": sdn_net["related"],
+            "extra": yaml.safe_dump(extra, default_flow_style=True, width=256)
+        }
+        task_index += 1
+        db_vim_actions.append(db_vim_action)
 
     db_instance_action["number_tasks"] = task_index
 
@@ -4383,18 +4500,19 @@ def get_instance_id(mydb, tenant_id, instance_id):
     #obtain data
 
     instance_dict = mydb.get_instance_scenario(instance_id, tenant_id, verbose=True)
-    for net in instance_dict["nets"]:
-        if net.get("sdn_net_id"):
-            net_sdn = ovim.show_network(net["sdn_net_id"])
-            net["sdn_info"] = {
-                "admin_state_up": net_sdn.get("admin_state_up"),
-                "flows": net_sdn.get("flows"),
-                "last_error": net_sdn.get("last_error"),
-                "ports": net_sdn.get("ports"),
-                "type": net_sdn.get("type"),
-                "status": net_sdn.get("status"),
-                "vlan": net_sdn.get("vlan"),
-            }
+    # TODO py3
+    # for net in instance_dict["nets"]:
+    #     if net.get("sdn_net_id"):
+    #         net_sdn = ovim.show_network(net["sdn_net_id"])
+    #         net["sdn_info"] = {
+    #             "admin_state_up": net_sdn.get("admin_state_up"),
+    #             "flows": net_sdn.get("flows"),
+    #             "last_error": net_sdn.get("last_error"),
+    #             "ports": net_sdn.get("ports"),
+    #             "type": net_sdn.get("type"),
+    #             "status": net_sdn.get("status"),
+    #             "vlan": net_sdn.get("vlan"),
+    #         }
     return instance_dict
 
 @deprecated("Instance is automatically refreshed by vim_threads")
@@ -4943,7 +5061,7 @@ def new_datacenter(mydb, datacenter_descriptor):
     # load plugin
     plugin_name = "rovim_" + datacenter_type
     if plugin_name not in plugins:
-        _load_vim_plugin(plugin_name)
+        _load_plugin(plugin_name, type="vim")
 
     datacenter_id = mydb.new_row("datacenters", datacenter_descriptor, add_uuid=True, confidential_data=True)
     if sdn_port_mapping:
@@ -5095,8 +5213,7 @@ def create_vim_account(mydb, nfvo_tenant, datacenter_id, name=None, vim_id=None,
 
         # create thread
         thread_name = get_non_used_vim_name(datacenter_name, datacenter_id, tenant_dict['name'], tenant_dict['uuid'])
-        new_thread = vim_thread(task_lock, plugins, thread_name, datacenter_name, datacenter_tenant_id,
-                                db=db, db_lock=db_lock, ovim=ovim)
+        new_thread = vim_thread(task_lock, plugins, thread_name, None, datacenter_tenant_id, db=db)
         new_thread.start()
         thread_id = datacenter_tenants_dict["uuid"]
         vim_threads["running"][thread_id] = new_thread
@@ -5609,13 +5726,20 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
     return vim_action_get(mydb, tenant_id, datacenter, item, content)
 
 def sdn_controller_create(mydb, tenant_id, sdn_controller):
-    data = ovim.new_of_controller(sdn_controller)
-    logger.debug('New SDN controller created with uuid {}'.format(data))
-    return data
+    wim_id = ovim.new_of_controller(sdn_controller)
+
+    thread_name = get_non_used_vim_name(sdn_controller['name'], wim_id, wim_id, None)
+    new_thread = vim_thread(task_lock, plugins, thread_name, wim_id, None, db=db)
+    new_thread.start()
+    thread_id = wim_id
+    vim_threads["running"][thread_id] = new_thread
+    logger.debug('New SDN controller created with uuid {}'.format(wim_id))
+    return wim_id
 
 def sdn_controller_update(mydb, tenant_id, controller_id, sdn_controller):
     data = ovim.edit_of_controller(controller_id, sdn_controller)
     msg = 'SDN controller {} updated'.format(data)
+    vim_threads["running"][controller_id].insert_task("reload")
     logger.debug(msg)
     return msg
 
@@ -5661,20 +5785,23 @@ def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_map
         #element = {"ofc_id": sdn_controller_id, "region": datacenter_id, "switch_dpid": switch_dpid}
         element = dict()
         element["compute_node"] = compute_node["compute_node"]
-        for port in compute_node["ports"]:
-            pci = port.get("pci")
-            element["switch_port"] = port.get("switch_port")
-            element["switch_mac"] = port.get("switch_mac")
-            if not element["switch_port"] and not element["switch_mac"]:
-                raise NfvoException ("The mapping must contain 'switch_port' or 'switch_mac'", httperrors.Bad_Request)
-            for pci_expanded in utils.expand_brackets(pci):
-                element["pci"] = pci_expanded
-                maps.append(dict(element))
+        if compute_node["ports"]:
+            for port in compute_node["ports"]:
+                pci = port.get("pci")
+                element["switch_port"] = port.get("switch_port")
+                element["switch_mac"] = port.get("switch_mac")
+                if not element["switch_port"] and not element["switch_mac"]:
+                    raise NfvoException ("The mapping must contain 'switch_port' or 'switch_mac'", httperrors.Bad_Request)
+                for pci_expanded in utils.expand_brackets(pci):
+                    element["pci"] = pci_expanded
+                    maps.append(dict(element))
 
-    return ovim.set_of_port_mapping(maps, ofc_id=sdn_controller_id, switch_dpid=switch_dpid, region=datacenter_id)
+    out = ovim.set_of_port_mapping(maps, sdn_id=sdn_controller_id, switch_dpid=switch_dpid, vim_id=datacenter_id)
+    vim_threads["running"][sdn_controller_id].insert_task("reload")
+    return out
 
 def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
-    maps = ovim.get_of_port_mappings(db_filter={"region": datacenter_id})
+    maps = ovim.get_of_port_mappings(db_filter={"datacenter_id": datacenter_id})
 
     result = {
         "sdn-controller": None,
@@ -5703,24 +5830,25 @@ def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
 
     ports_correspondence_dict = dict()
     for link in maps:
-        if result["sdn-controller"] != link["ofc_id"]:
+        if result["sdn-controller"] != link["wim_id"]:
             raise NfvoException("The sdn-controller specified for different port mappings differ", httperrors.Internal_Server_Error)
         if result["dpid"] != link["switch_dpid"]:
             raise NfvoException("The dpid specified for different port mappings differ", httperrors.Internal_Server_Error)
+        link_config = link["service_mapping_info"]
         element = dict()
-        element["pci"] = link["pci"]
+        element["pci"] = link.get("device_interface_id")
         if link["switch_port"]:
             element["switch_port"] = link["switch_port"]
-        if link["switch_mac"]:
-            element["switch_mac"] = link["switch_mac"]
+        if link_config["switch_mac"]:
+            element["switch_mac"] = link_config.get("switch_mac")
 
-        if not link["compute_node"] in ports_correspondence_dict:
+        if not link.get("interface_id") in ports_correspondence_dict:
             content = dict()
-            content["compute_node"] = link["compute_node"]
+            content["compute_node"] = link.get("interface_id")
             content["ports"] = list()
-            ports_correspondence_dict[link["compute_node"]] = content
+            ports_correspondence_dict[link.get("interface_id")] = content
 
-        ports_correspondence_dict[link["compute_node"]]["ports"].append(element)
+        ports_correspondence_dict[link["interface_id"]]["ports"].append(element)
 
     for key in sorted(ports_correspondence_dict):
         result["ports_mapping"].append(ports_correspondence_dict[key])
@@ -5728,7 +5856,7 @@ def datacenter_sdn_port_mapping_list(mydb, tenant_id, datacenter_id):
     return result
 
 def datacenter_sdn_port_mapping_delete(mydb, tenant_id, datacenter_id):
-    return ovim.clear_of_port_mapping(db_filter={"region":datacenter_id})
+    return ovim.clear_of_port_mapping(db_filter={"datacenter_id":datacenter_id})
 
 def create_RO_keypair(tenant_id):
     """

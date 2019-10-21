@@ -37,7 +37,7 @@ we need a replacement for it, that will throw an error every time we try to
 execute any action
 """
 import json
-from .wimconn import WimConnectorError
+from .sdnconn import SdnConnectorError
 
 
 class FailingConnector(object):
@@ -51,32 +51,38 @@ class FailingConnector(object):
     def __init__(self, error_msg):
         self.error_msg = error_msg
 
+    def __call__(self, wim, wim_account, config=None, logger=None):
+        return self
+
+    def vimconnector(self, *args, **kwargs):
+        raise Exception(self.error_msg)
+
     def check_credentials(self):
-        raise WimConnectorError('Impossible to use WIM:\n' + self.error_msg)
+        raise SdnConnectorError('Impossible to use WIM:\n' + self.error_msg)
 
     def get_connectivity_service_status(self, service_uuid, _conn_info=None):
-        raise WimConnectorError('Impossible to retrieve status for {}\n\n{}'
+        raise SdnConnectorError('Impossible to retrieve status for {}\n\n{}'
                                 .format(service_uuid, self.error_msg))
 
     def create_connectivity_service(self, service_uuid, *args, **kwargs):
-        raise WimConnectorError('Impossible to connect {}.\n{}\n{}\n{}'
+        raise SdnConnectorError('Impossible to connect {}.\n{}\n{}\n{}'
                                 .format(service_uuid, self.error_msg,
                                         json.dumps(args, indent=4),
                                         json.dumps(kwargs, indent=4)))
 
     def delete_connectivity_service(self, service_uuid, _conn_info=None):
-        raise WimConnectorError('Impossible to disconnect {}\n\n{}'
+        raise SdnConnectorError('Impossible to disconnect {}\n\n{}'
                                 .format(service_uuid, self.error_msg))
 
     def edit_connectivity_service(self, service_uuid, *args, **kwargs):
-        raise WimConnectorError('Impossible to change connection {}.\n{}\n'
+        raise SdnConnectorError('Impossible to change connection {}.\n{}\n'
                                 '{}\n{}'
                                 .format(service_uuid, self.error_msg,
                                         json.dumps(args, indent=4),
                                         json.dumps(kwargs, indent=4)))
 
     def clear_all_connectivity_services(self):
-        raise WimConnectorError('Impossible to use WIM:\n' + self.error_msg)
+        raise SdnConnectorError('Impossible to use WIM:\n' + self.error_msg)
 
     def get_all_active_connectivity_services(self):
-        raise WimConnectorError('Impossible to use WIM:\n' + self.error_msg)
+        raise SdnConnectorError('Impossible to use WIM:\n' + self.error_msg)

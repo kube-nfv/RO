@@ -48,7 +48,7 @@ tables_with_createdat_field=["datacenters","instance_nets","instance_scenarios",
                            "instance_actions", "sce_vnffgs", "sce_rsps", "sce_rsp_hops",
                            "sce_classifiers", "sce_classifier_matches", "instance_sfis", "instance_sfs",
                            "instance_classifications", "instance_sfps", "wims", "wim_accounts", "wim_nfvo_tenants",
-                           "wim_port_mappings", "vim_wim_actions",
+                           "wim_port_mappings", "vim_wim_actions", "instance_interfaces",
                            "instance_wim_nets"]
 
 
@@ -976,7 +976,7 @@ class nfvo_db(db_base.db_base):
                 cmd = "SELECT vim_interface_id, instance_net_id, internal_name,external_name, mac_address,"\
                         " ii.ip_address as ip_address, vim_info, i.type as type, sdn_port_id, i.uuid"\
                         " FROM instance_interfaces as ii join interfaces as i on ii.interface_id=i.uuid"\
-                        " WHERE instance_vm_id='{}' ORDER BY created_at".format(vm['uuid'])
+                        " WHERE instance_vm_id='{}' ORDER BY i.created_at".format(vm['uuid'])
                 self.logger.debug(cmd)
                 self.cur.execute(cmd )
                 vm['interfaces'] = self.cur.fetchall()
@@ -1009,6 +1009,13 @@ class nfvo_db(db_base.db_base):
         self.logger.debug(cmd)
         self.cur.execute(cmd)
         instance_dict['nets'] = self.cur.fetchall()
+
+        # instance sdn_nets:
+        cmd = "SELECT * FROM instance_wim_nets WHERE instance_scenario_id='{}' ORDER BY created_at;".format(
+            instance_dict['uuid'])
+        self.logger.debug(cmd)
+        self.cur.execute(cmd)
+        instance_dict['sdn_nets'] = self.cur.fetchall()
 
         #instance_sfps
         cmd = "SELECT uuid,vim_sfp_id,sce_rsp_id,datacenter_id,"\

@@ -22,12 +22,12 @@ This WIM does nothing and allows using it for testing and when no WIM is needed
 
 import logging
 from uuid import uuid4
-from .wimconn import WimConnector
-
+from .sdnconn import SdnConnectorBase, SdnConnectorError
+from http import HTTPStatus
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 
 
-class FakeConnector(WimConnector):
+class FakeConnector(SdnConnectorBase):
     """Abstract base class for all the WIM connectors
 
     Arguments:
@@ -44,8 +44,8 @@ class FakeConnector(WimConnector):
     An extra property, ``service_endpoint_mapping`` is created from ``config``.
     """
     def __init__(self, wim, wim_account, config=None, logger=None):
-        self.logger = logging.getLogger('openmano.wimconn.fake')
-        super(FakeConnector, self).__init__(wim, wim_account, config, logger)
+        self.logger = logger or logging.getLogger('openmano.sdnconn.fake')
+        super(FakeConnector, self).__init__(wim, wim_account, config, self.logger)
         self.logger.debug("__init: wim='{}' wim_account='{}'".format(wim, wim_account))
         self.connections = {}
         self.counter = 0
@@ -54,7 +54,7 @@ class FakeConnector(WimConnector):
         """Check if the connector itself can access the WIM.
 
         Raises:
-            WimConnectorError: Issues regarding authorization, access to
+            SdnConnectorError: Issues regarding authorization, access to
                 external URLs, etc are detected.
         """
         self.logger.debug("check_credentials")
@@ -71,15 +71,15 @@ class FakeConnector(WimConnector):
 
         Returns:
             dict: JSON/YAML-serializable dict that contains a mandatory key
-                ``wim_status`` associated with one of the following values::
+                ``sdn_status`` associated with one of the following values::
 
-                Additionally ``error_msg``(**str**) and ``wim_info``(**dict**)
+                Additionally ``error_msg``(**str**) and ``sdn_info``(**dict**)
                 keys can be used to provide additional status explanation or
                 new information available for the connectivity service.
         """
         self.logger.debug("get_connectivity_service_status: service_uuid='{}' conn_info='{}'".format(service_uuid,
                                                                                                      conn_info))
-        return {'wim_status': 'ACTIVE', 'wim_info': self.connectivity.get(service_uuid)}
+        return {'sdn_status': 'ACTIVE', 'sdn_info': self.connectivity.get(service_uuid)}
 
     def create_connectivity_service(self, service_type, connection_points,
                                     **kwargs):
@@ -90,9 +90,9 @@ class FakeConnector(WimConnector):
         self.logger.debug("create_connectivity_service: service_type='{}' connection_points='{}', kwargs='{}'".
                           format(service_type, connection_points, kwargs))
         _id = str(uuid4())
-        self.connectivity[_id] = {"nb": self.counter}
+        self.connections[_id] = connection_points.copy()
         self.counter += 1
-        return _id, self.connectivity[_id]
+        return _id, None
 
     def delete_connectivity_service(self, service_uuid, conn_info=None):
         """Disconnect multi-site endpoints previously connected
@@ -100,7 +100,10 @@ class FakeConnector(WimConnector):
         """
         self.logger.debug("delete_connectivity_service: service_uuid='{}' conn_info='{}'".format(service_uuid,
                                                                                                  conn_info))
-        self.connectivity.pop(service_uuid, None)
+        if service_uuid not in self.connections:
+            raise SdnConnectorError("connectivity {} not found".format(service_uuid),
+                                    http_code=HTTPStatus.NOT_FOUND.value)
+        self.connections.pop(service_uuid, None)
         return None
 
     def edit_connectivity_service(self, service_uuid, conn_info=None,
@@ -112,6 +115,10 @@ class FakeConnector(WimConnector):
         """
         self.logger.debug("edit_connectivity_service: service_uuid='{}' conn_info='{}', connection_points='{}'"
                           "kwargs='{}'".format(service_uuid, conn_info, connection_points, kwargs))
+        if service_uuid not in self.connections:
+            raise SdnConnectorError("connectivity {} not found".format(service_uuid),
+                                    http_code=HTTPStatus.NOT_FOUND.value)
+        self.connections[service_uuid] = connection_points.copy()
         return None
 
     def clear_all_connectivity_services(self):
@@ -123,7 +130,7 @@ class FakeConnector(WimConnector):
 
         """
         self.logger.debug("clear_all_connectivity_services")
-        self.connectivity.clear()
+        self.connections.clear()
         return None
 
     def get_all_active_connectivity_services(self):
@@ -131,7 +138,7 @@ class FakeConnector(WimConnector):
         WIM.
 
         Raises:
-            WimConnectorException: In case of error.
+            SdnConnectorException: In case of error.
         """
         self.logger.debug("get_all_active_connectivity_services")
-        return self.connectivity
+        return self.connections

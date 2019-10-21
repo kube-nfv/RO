@@ -103,12 +103,10 @@ class UndefinedAction(HttpMappedError):
 class UndefinedWimConnector(DbBaseException):
     """The connector class for the specified wim type is not implemented"""
 
-    def __init__(self, wim_type, module_name, location_reference):
-        super(UndefinedWimConnector, self).__init__(
-            ('{}: `{}`. Could not find module `{}` '
-             '(check if it is necessary to install a plugin)'
-             .format(self.__class__.__doc__, wim_type, module_name)),
-            http_code=Bad_Request)
+    def __init__(self, wim_type, module_name):
+        super(UndefinedWimConnector, self).__init__("Cannot load a module for {t} type '{n}'. The plugin 'osm_{n}' has"
+                                                    " not been registered".format(t=wim_type, n=module_name),
+                                                    http_code=Bad_Request)
 
 
 class WimAccountOverwrite(DbBaseException):

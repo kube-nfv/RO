@@ -51,3 +51,16 @@ cp RO-VIM-azure/deb_dist/python3-osm-rovim-azure_*.deb deb_dist/
 # VIM Opennebula plugin
 make -C RO-VIM-opennebula clean package
 cp RO-VIM-opennebula/deb_dist/python3-osm-rovim-opennebula_*.deb deb_dist/
+
+# SDN Dynpack plugin
+make -C RO-SDN-dynpac clean package
+cp RO-SDN-dynpac/deb_dist/python3-osm-rosdn-dynpac_*.deb deb_dist/
+
+# SDN Tapi plugin
+make -C RO-SDN-tapi clean package
+cp RO-SDN-tapi/deb_dist/python3-osm-rosdn-tapi_*.deb deb_dist/
+
+# SDN Onos openflow
+make -C RO-SDN-onos_openflow clean package
+cp RO-SDN-onos_openflow/deb_dist/python3-osm-rosdn-onosof_*.deb deb_dist/
+

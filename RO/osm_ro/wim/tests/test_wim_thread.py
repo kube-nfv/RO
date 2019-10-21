@@ -67,7 +67,7 @@ class TestWimThreadWithDb(TestCaseWithDatabasePerTest):
         wim = eg.wim(0)
         account = eg.wim_account(0, 0)
         account['wim'] = wim
-        self.thread = WimThread(self.persist, account)
+        self.thread = WimThread(self.persist, {}, account)
         self.thread.connector = MagicMock()
 
     def assertTasksEqual(self, left, right):
@@ -282,7 +282,7 @@ class TestWimThread(unittest.TestCase):
         account = eg.wim_account(0, 0)
         account['wim'] = wim
         self.persist = MagicMock()
-        self.thread = WimThread(self.persist, account)
+        self.thread = WimThread(self.persist, {}, account)
         self.thread.connector = MagicMock()
 
         super(TestWimThread, self).setUp()

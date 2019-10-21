@@ -26,10 +26,10 @@ import json
 import logging
 from enum import Enum
 
-from .wimconn import WimConnector, WimConnectorError
+from osm_ro.wim.sdnconn import SdnConnectorBase, SdnConnectorError
 
 
-class WimError(Enum):
+class SdnError(Enum):
     UNREACHABLE = 'Unable to reach the WIM.',
     SERVICE_TYPE_ERROR = 'Unexpected service_type. Only "L2" is accepted.',
     CONNECTION_POINTS_SIZE = \
@@ -47,7 +47,7 @@ class WimError(Enum):
     UNAUTHORIZED = "Failed while authenticating"
 
 
-class WimAPIActions(Enum):
+class SdnAPIActions(Enum):
     CHECK_CONNECTIVITY = "CHECK_CONNECTIVITY",
     CREATE_SERVICE = "CREATE_SERVICE",
     DELETE_SERVICE = "DELETE_SERVICE",
@@ -55,36 +55,34 @@ class WimAPIActions(Enum):
     SERVICE_STATUS = "SERVICE_STATUS",
 
 
-class DynpacConnector(WimConnector):
+class DynpacConnector(SdnConnectorBase):
     __supported_service_types = ["ELINE (L2)", "ELINE"]
     __supported_encapsulation_types = ["dot1q"]
-    __WIM_LOGGER = 'openmano.wimconn.dynpac'
+    __WIM_LOGGER = 'openmano.sdnconn.dynpac'
     __ENCAPSULATION_TYPE_PARAM = "service_endpoint_encapsulation_type"
     __ENCAPSULATION_INFO_PARAM = "service_endpoint_encapsulation_info"
     __BACKUP_PARAM = "backup"
     __BANDWIDTH_PARAM = "bandwidth"
     __SERVICE_ENDPOINT_PARAM = "service_endpoint_id"
-    __WAN_SERVICE_ENDPOINT_PARAM = "wan_service_endpoint_id"
-    __WAN_MAPPING_INFO_PARAM = "wan_service_mapping_info"
-    __SW_ID_PARAM = "wan_switch_dpid"
-    __SW_PORT_PARAM = "wan_switch_port"
+    __WAN_SERVICE_ENDPOINT_PARAM = "service_endpoint_id"
+    __WAN_MAPPING_INFO_PARAM = "service_mapping_info"
+    __SW_ID_PARAM = "switch_dpid"
+    __SW_PORT_PARAM = "switch_port"
     __VLAN_PARAM = "vlan"
 
     # Public functions exposed to the Resource Orchestrator
-    def __init__(self, wim, wim_account, config):
-        self.logger = logging.getLogger(self.__WIM_LOGGER)
+    def __init__(self, wim, wim_account, config=None, logger=None):
+        self.logger = logger or logging.getLogger(self.__WIM_LOGGER)
+        super().__init__(wim, wim_account, config, self.logger)
         self.__wim = wim
         self.__wim_account = wim_account
         self.__config = config
         self.__wim_url = self.__wim.get("wim_url")
         self.__user = wim_account.get("user")
-        self.__passwd = wim_account.get("passwd")
+        self.__passwd = wim_account.get("password")
         self.logger.info("Initialized.")
 
-    def create_connectivity_service(self,
-                                    service_type,
-                                    connection_points,
-                                    **kwargs):
+    def create_connectivity_service(self, service_type, connection_points, **kwargs):
         self.__check_service(service_type, connection_points, kwargs)
 
         body = self.__get_body(service_type, connection_points, kwargs)
@@ -110,7 +108,7 @@ class DynpacConnector(WimConnector):
     def edit_connectivity_service(self, service_uuid,
                                   conn_info, connection_points,
                                   **kwargs):
-        self.__exception(WimError.UNSUPPORTED_FEATURE, http_code=501)
+        self.__exception(SdnError.UNSUPPORTED_FEATURE, http_code=501)
 
     def get_connectivity_service_status(self, service_uuid):
         endpoint = "{}/service/status/{}".format(self.__wim_url, service_uuid)
@@ -120,7 +118,7 @@ class DynpacConnector(WimConnector):
             self.__exception(e.message, http_code=503)
 
         if response.status_code != 200:
-            self.__exception(WimError.STATUS, http_code=response.status_code)
+            self.__exception(SdnError.STATUS, http_code=response.status_code)
         self.logger.info("Status for service with uuid {}: {}"
                          .format(service_uuid, response.content))
         return response.content
@@ -132,7 +130,7 @@ class DynpacConnector(WimConnector):
         except requests.exceptions.RequestException as e:
             self.__exception(e.message, http_code=503)
         if response.status_code != 200:
-            self.__exception(WimError.DELETE, http_code=response.status_code)
+            self.__exception(SdnError.DELETE, http_code=response.status_code)
 
         self.logger.info("Service with uuid: {} deleted".format(service_uuid))
 
@@ -144,7 +142,7 @@ class DynpacConnector(WimConnector):
         except requests.exceptions.RequestException as e:
             self.__exception(e.message, http_code=503)
         if http_code != 200:
-            self.__exception(WimError.CLEAR_ALL, http_code=http_code)
+            self.__exception(SdnError.CLEAR_ALL, http_code=http_code)
 
         self.logger.info("{} services deleted".format(response.content))
         return "{} services deleted".format(response.content)
@@ -159,7 +157,7 @@ class DynpacConnector(WimConnector):
             self.__exception(e.message, http_code=503)
 
         if http_code != 200:
-            self.__exception(WimError.UNREACHABLE, http_code=http_code)
+            self.__exception(SdnError.UNREACHABLE, http_code=http_code)
         self.logger.info("Connectivity checked")
 
     def check_credentials(self):
@@ -173,7 +171,7 @@ class DynpacConnector(WimConnector):
             self.__exception(e.message, http_code=503)
 
         if http_code != 200:
-            self.__exception(WimError.UNAUTHORIZED, http_code=http_code)
+            self.__exception(SdnError.UNAUTHORIZED, http_code=http_code)
         self.logger.info("Credentials checked")
 
     # Private functions
@@ -184,29 +182,29 @@ class DynpacConnector(WimConnector):
         else:
             error = x
         self.logger.error(error)
-        raise WimConnectorError(error, http_code=http_code)
+        raise SdnConnectorError(error, http_code=http_code)
 
     def __check_service(self, service_type, connection_points, kwargs):
         if service_type not in self.__supported_service_types:
-            self.__exception(WimError.SERVICE_TYPE_ERROR, http_code=400)
+            self.__exception(SdnError.SERVICE_TYPE_ERROR, http_code=400)
 
         if len(connection_points) != 2:
-            self.__exception(WimError.CONNECTION_POINTS_SIZE, http_code=400)
+            self.__exception(SdnError.CONNECTION_POINTS_SIZE, http_code=400)
 
         for connection_point in connection_points:
             enc_type = connection_point.get(self.__ENCAPSULATION_TYPE_PARAM)
             if enc_type not in self.__supported_encapsulation_types:
-                self.__exception(WimError.ENCAPSULATION_TYPE, http_code=400)
+                self.__exception(SdnError.ENCAPSULATION_TYPE, http_code=400)
 
         # Commented out for as long as parameter isn't implemented
         # bandwidth = kwargs.get(self.__BANDWIDTH_PARAM)
         # if not isinstance(bandwidth, int):
-            # self.__exception(WimError.BANDWIDTH, http_code=400)
+            # self.__exception(SdnError.BANDWIDTH, http_code=400)
 
         # Commented out for as long as parameter isn't implemented
         # backup = kwargs.get(self.__BACKUP_PARAM)
         # if not isinstance(backup, bool):
-            # self.__exception(WimError.BACKUP, http_code=400)
+            # self.__exception(SdnError.BACKUP, http_code=400)
 
     def __get_body(self, service_type, connection_points, kwargs):
         port_mapping = self.__config.get("service_endpoint_mapping")

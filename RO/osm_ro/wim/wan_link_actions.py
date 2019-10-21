@@ -34,7 +34,7 @@
 # pylint: disable=E1101,E0203,W0201
 import json
 from pprint import pformat
-from sys import exc_info
+# from sys import exc_info
 from time import time
 
 from ..utils import filter_dict_keys as filter_keys
@@ -45,7 +45,7 @@ from .errors import (
     NoRecordFound,
     NoExternalPortFound
 )
-from .wimconn import WimConnectorError
+from .sdnconn import SdnConnectorError
 
 INSTANCE_NET_STATUS_ERROR = ('DOWN', 'ERROR', 'VIM_ERROR',
                              'DELETED', 'SCHEDULED_DELETION')
@@ -64,26 +64,26 @@ class RefreshMixin(object):
                 Infrastructure Manager system
             persistence: abstraction layer for the database
         """
-        fields = ('wim_status', 'wim_info', 'error_msg')
+        fields = ('sdn_status', 'sdn_info', 'error_msg')
         result = dict.fromkeys(fields)
 
         try:
             result.update(
                 connector
                 .get_connectivity_service_status(self.wim_internal_id))
-        except WimConnectorError as ex:
+        except SdnConnectorError as ex:
             self.logger.exception(ex)
-            result.update(wim_status='WIM_ERROR', error_msg=truncate(ex))
+            result.update(sdn_status='WIM_ERROR', error_msg=truncate(ex))
 
         result = filter_keys(result, fields)
 
         action_changes = remove_none_items({
             'extra': merge_dicts(self.extra, result),
-            'status': 'BUILD' if result['wim_status'] == 'BUILD' else None,
+            'status': 'BUILD' if result['sdn_status'] == 'BUILD' else None,
             'error_msg': result['error_msg'],
             'modified_at': time()})
-        link_changes = merge_dicts(result, status=result.pop('wim_status'))
-        # ^  Rename field: wim_status => status
+        link_changes = merge_dicts(result, status=result.pop('sdn_status'))
+        # ^  Rename field: sdn_status => status
 
         persistence.update_wan_link(self.item_id,
                                     remove_none_items(link_changes))
@@ -159,10 +159,10 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         Returns:
             dict: Record representing the wan_port_mapping associated to the
                   given instance_net. The expected fields are:
-                  **wim_id**, **datacenter_id**, **pop_switch_dpid** (the local
-                  network is expected to be connected at this switch),
-                  **pop_switch_port**, **wan_service_endpoint_id**,
-                  **wan_service_mapping_info**.
+                  **wim_id**, **datacenter_id**, **device_id** (the local
+                  network is expected to be connected at this switch dpid),
+                  **device_interface_id**, **service_endpoint_id**,
+                  **service_mapping_info**.
         """
         # First, we need to find a route from the datacenter to the outside
         # world. For that, we can use the rules given in the datacenter
@@ -185,8 +185,8 @@ class WanLinkCreate(RefreshMixin, CreateAction):
 
             criteria = {
                 'wim_id': wim_account['wim_id'],
-                'pop_switch_dpid': external_port[0],
-                'pop_switch_port': external_port[1],
+                'device_id': external_port[0],
+                'device_interface_id': external_port[1],
                 'datacenter_id': datacenter_id}
 
             wan_port_mapping = persistence.query_one(
@@ -200,11 +200,11 @@ class WanLinkCreate(RefreshMixin, CreateAction):
 
         # It is important to return encapsulation information if present
         mapping = merge_dicts(
-            wan_port_mapping.get('wan_service_mapping_info'),
+            wan_port_mapping.get('service_mapping_info'),
             filter_keys(vim_info, ('encapsulation_type', 'encapsulation_id'))
         )
 
-        return merge_dicts(wan_port_mapping, wan_service_mapping_info=mapping)
+        return merge_dicts(wan_port_mapping, service_mapping_info=mapping)
 
     def _get_port_sdn(self, ovim, instance_net):
         criteria = {'net_id': instance_net['sdn_net_id']}
@@ -310,9 +310,9 @@ class WanLinkCreate(RefreshMixin, CreateAction):
 
     @staticmethod
     def _derive_connection_point(wan_info):
-        point = {'service_endpoint_id': wan_info['wan_service_endpoint_id']}
+        point = {'service_endpoint_id': wan_info['service_endpoint_id']}
         # TODO: Cover other scenarios, e.g. VXLAN.
-        details = wan_info.get('wan_service_mapping_info', {})
+        details = wan_info.get('service_mapping_info', {})
         if details.get('encapsulation_type') == 'vlan':
             point['service_endpoint_encapsulation_type'] = 'dot1q'
             point['service_endpoint_encapsulation_info'] = {
@@ -335,7 +335,7 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         """Store plugin/connector specific information in the database"""
         persistence.update_wan_link(self.item_id, {
             'wim_internal_id': service_uuid,
-            'wim_info': {'conn_info': conn_info},
+            'sdn_info': {'conn_info': conn_info},
             'status': 'BUILD'})
 
     def execute(self, connector, persistence, ovim, instance_nets):
@@ -353,7 +353,7 @@ class WanLinkCreate(RefreshMixin, CreateAction):
                 connection_points
                 # TODO: other properties, e.g. bandwidth
             )
-        except (WimConnectorError, InconsistentState,
+        except (SdnConnectorError, InconsistentState,
                 NoExternalPortFound) as ex:
             self.logger.exception(ex)
             return self.fail(
@@ -412,12 +412,12 @@ class WanLinkDelete(DeleteAction):
 
         try:
             id = self.wim_internal_id
-            conn_info = safe_get(wan_link, 'wim_info.conn_info')
+            conn_info = safe_get(wan_link, 'sdn_info.conn_info')
             self.logger.debug('Connection Service %s (wan_link: %s):\n%s\n',
                               id, wan_link['uuid'],
                               json.dumps(conn_info, indent=4))
             result = connector.delete_connectivity_service(id, conn_info)
-        except (WimConnectorError, InconsistentState) as ex:
+        except (SdnConnectorError, InconsistentState) as ex:
             self.logger.exception(ex)
             return self.fail(
                 persistence,

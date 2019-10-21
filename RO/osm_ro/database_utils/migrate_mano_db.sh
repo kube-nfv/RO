@@ -36,7 +36,7 @@ QUIET_MODE=""
 BACKUP_DIR=""
 BACKUP_FILE=""
 #TODO update it with the last database version
-LAST_DB_VERSION=39
+LAST_DB_VERSION=40
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -197,6 +197,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 6009 ] && DB_VERSION=37  #0.6.09 =>  37
 #[ $OPENMANO_VER_NUM -ge 6011 ] && DB_VERSION=38  #0.6.11 =>  38
 #[ $OPENMANO_VER_NUM -ge 6020 ] && DB_VERSION=39  #0.6.20 =>  39
+#[ $OPENMANO_VER_NUM -ge 6000004 ] && DB_VERSION=40  #6.0.4 =>  40
 #TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1461,6 +1462,56 @@ function downgrade_from_39(){
 
     sql "DELETE FROM schema_version WHERE version_int='39';"
 }
+function upgrade_to_40(){
+    echo "      Adding instance_wim_net_id, created_at, modified_at at 'instance_interfaces'"
+    sql "ALTER TABLE instance_interfaces ADD COLUMN instance_wim_net_id VARCHAR(36) NULL AFTER instance_net_id, "\
+        "ADD COLUMN model VARCHAR(12) NULL DEFAULT NULL AFTER type, "\"
+        "ADD COLUMN created_at DOUBLE NULL DEFAULT NULL AFTER vlan, " \
+        "ADD COLUMN modified_at DOUBLE NULL DEFAULT NULL AFTER created_at;"
+    echo "      Adding sdn to 'instance_wim_nets'"
+    sql "ALTER TABLE instance_wim_nets ADD COLUMN sdn ENUM('true','false') NOT NULL DEFAULT 'false' AFTER created;"
+    echo "      Change from created to sdn at 'wim_accounts'"
+    sql "ALTER TABLE wim_accounts CHANGE COLUMN created sdn ENUM('true','false') NOT NULL DEFAULT 'false' AFTER wim_id;"
+    echo "      Remove unique_datacenter_port_mapping at 'wim_port_mappings'"
+    sql "ALTER TABLE wim_port_mappings DROP INDEX unique_datacenter_port_mapping;"
+    echo "      change 'wim_port_mappings' pop_x to device_x, adding switch_dpid, switch_port"
+    sql "ALTER TABLE wim_port_mappings ALTER pop_switch_dpid DROP DEFAULT, ALTER pop_switch_port DROP DEFAULT;"
+    sql "ALTER TABLE wim_port_mappings CHANGE COLUMN pop_switch_dpid device_id VARCHAR(64) NULL AFTER datacenter_id," \
+        " CHANGE COLUMN pop_switch_port device_interface_id VARCHAR(64) NULL AFTER device_id, " \
+        " CHANGE COLUMN wan_service_endpoint_id service_endpoint_id VARCHAR(256) NOT NULL AFTER device_interface_id, " \
+        " CHANGE COLUMN wan_service_mapping_info service_mapping_info TEXT NULL AFTER service_endpoint_id, " \
+        " ADD COLUMN switch_dpid VARCHAR(64) NULL AFTER wan_service_endpoint_id," \
+        " ADD COLUMN switch_port VARCHAR(64) NULL AFTER switch_dpid;"
+    echo "      remove unique name to 'datacenters'"
+    sql "ALTER TABLE datacenters DROP INDEX name;"
+
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) " \
+        "VALUES (40, '0.40', '6.0.4', 'Chagnes to SDN ', '2019-10-23');"
+}
+function downgrade_from_40(){
+    echo "      Removing instance_wim_net_id, created_at, modified_at from 'instance_interfaces'"
+    sql "ALTER TABLE instance_interfaces DROP COLUMN instance_wim_net_id, DROP COLUMN created_at, " \
+        "DROP COLUMN modified_at, DROP COLUMN model;"
+    echo "      Removing sdn from 'instance_wim_nets'"
+    sql "ALTER TABLE instance_wim_nets DROP COLUMN sdn;"
+    echo "      Change back from sdn to created at 'wim_accounts'"
+    sql "ALTER TABLE wim_accounts CHANGE COLUMN sdn created ENUM('true','false') NOT NULL DEFAULT 'false' AFTER wim_id;"
+    echo "      Restore back unique_datacenter_port_mapping at 'wim_port_mappings'"
+    echo "      change 'wim_port_mappings' device_x to pop_x, remove switch_dpid, switch_port"
+    sql "ALTER TABLE wim_port_mappings ALTER device_id DROP DEFAULT, ALTER device_interface_id DROP DEFAULT;"
+    sql "ALTER TABLE wim_port_mappings CHANGE COLUMN device_id pop_switch_dpid VARCHAR(64) NOT NULL AFTER " \
+        "datacenter_id,	CHANGE COLUMN device_interface_id pop_switch_port VARCHAR(64) NOT NULL AFTER pop_switch_dpid," \
+        " CHANGE COLUMN service_endpoint_id wan_service_endpoint_id VARCHAR(256) NOT NULL AFTER pop_switch_port, " \
+        " CHANGE COLUMN service_mapping_info wan_service_mapping_info TEXT NULL AFTER wan_service_endpoint_id, " \
+	      " DROP COLUMN switch_dpid, DROP COLUMN switch_port;"
+    sql "ALTER TABLE wim_port_mappings ADD UNIQUE INDEX unique_datacenter_port_mapping(datacenter_id, pop_switch_dpid,
+         pop_switch_port);"
+    echo "      add unique name to 'datacenters'"
+    sql "ALTER TABLE datacenters ADD UNIQUE INDEX name (name);"
+    sql "DELETE FROM schema_version WHERE version_int='40';"
+}
+
+
 #TODO ... put functions here
 
 

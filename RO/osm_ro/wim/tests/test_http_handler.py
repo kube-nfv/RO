@@ -147,9 +147,9 @@ class TestHttpHandler(TestCaseWithDatabasePerTest):
                     config={'wim_port_mapping': [{
                         'datacenter_name': 'dc0',
                         'pop_wan_mappings': [{
-                            'pop_switch_dpid': '00:AA:11:BB:22:CC:33:DD',
-                            'pop_switch_port': 1,
-                            'wan_service_mapping_info': {
+                            'device_id': '00:AA:11:BB:22:CC:33:DD',
+                            'device_interface_id': 1,
+                            'service_mapping_info': {
                                 'mapping_type': 'dpid-port',
                                 'wan_switch_dpid': 'BB:BB:BB:BB:BB:BB:BB:0A',
                                 'wan_switch_port': 1
@@ -170,7 +170,7 @@ class TestHttpHandler(TestCaseWithDatabasePerTest):
         mappings = response.json['wim']['config']['wim_port_mapping']
         self.assertEqual(len(mappings), 1)
         self.assertEqual(
-            mappings[0]['pop_wan_mappings'][0]['pop_switch_dpid'],
+            mappings[0]['pop_wan_mappings'][0]['device_id'],
             '00:AA:11:BB:22:CC:33:DD')
 
     def test_delete_wim(self):
@@ -224,9 +224,9 @@ class TestHttpHandler(TestCaseWithDatabasePerTest):
                     config={'wim_port_mapping': [{
                         'datacenter_name': 'dc0',
                         'pop_wan_mappings': [{
-                            'pop_switch_dpid': 'AA:AA:AA:AA:AA:AA:AA:01',
-                            'pop_switch_port': 1,
-                            'wan_service_mapping_info': {
+                            'device_id': 'AA:AA:AA:AA:AA:AA:AA:01',
+                            'device_interface_id': 1,
+                            'service_mapping_info': {
                                 'mapping_type': 'dpid-port',
                                 'wan_switch_dpid': 'BB:BB:BB:BB:BB:BB:BB:01',
                                 'wan_switch_port': 1
@@ -523,9 +523,9 @@ class TestHttpHandler(TestCaseWithDatabasePerTest):
             {'wim_port_mapping': [{
                 'datacenter_name': 'dc888',
                 'pop_wan_mappings': [
-                    {'pop_switch_dpid': 'AA:AA:AA:AA:AA:AA:AA:AA',
-                     'pop_switch_port': 1,
-                     'wan_service_mapping_info': {
+                    {'device_id': 'AA:AA:AA:AA:AA:AA:AA:AA',
+                     'device_interface_id': 1,
+                     'service_mapping_info': {
                          'mapping_type': 'dpid-port',
                          'wan_switch_dpid': 'BB:BB:BB:BB:BB:BB:BB:BB',
                          'wan_switch_port': 1

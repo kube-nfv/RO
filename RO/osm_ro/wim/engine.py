@@ -48,7 +48,7 @@ import logging
 from contextlib import contextmanager
 from itertools import groupby
 from operator import itemgetter
-from sys import exc_info
+# from sys import exc_info
 from uuid import uuid4
 
 from ..utils import remove_none_items
@@ -57,21 +57,32 @@ from .errors import (
     DbBaseException,
     NoWimConnectedToDatacenters,
     UnexpectedDatabaseError,
-    WimAccountNotActive
+    WimAccountNotActive,
+    UndefinedWimConnector
 )
 from .wim_thread import WimThread
+# from ..http_tools.errors import Bad_Request
+from pkg_resources import iter_entry_points
 
 
 class WimEngine(object):
     """Logic supporting the establishment of WAN links when NS spans across
     different datacenters.
     """
-    def __init__(self, persistence, logger=None, ovim=None):
+    def __init__(self, persistence, plugins, logger=None, ovim=None):
         self.persist = persistence
+        self.plugins = plugins if plugins is not None else {}
         self.logger = logger or logging.getLogger('openmano.wim.engine')
         self.threads = {}
         self.connectors = {}
         self.ovim = ovim
+
+    def _load_plugin(self, name, type="sdn"):
+        # type can be vim or sdn
+        for v in iter_entry_points('osm_ro{}.plugins'.format(type), name):
+            self.plugins[name] = v.load()
+        if name and name not in self.plugins:
+            raise UndefinedWimConnector(type, name)
 
     def create_wim(self, properties):
         """Create a new wim record according to the properties
@@ -88,6 +99,10 @@ class WimEngine(object):
         """
         port_mapping = ((properties.get('config', {}) or {})
                         .pop('wim_port_mapping', {}))
+        plugin_name = "rosdn_" + properties["type"]
+        if plugin_name not in self.plugins:
+            self._load_plugin(plugin_name, type="sdn")
+
         uuid = self.persist.create_wim(properties)
 
         if port_mapping:
@@ -415,7 +430,7 @@ class WimEngine(object):
         past"""
         if instance_scenario_id:
             wan_links = self.persist.get_wan_links(
-                instance_scenario_id=instance_scenario_id)
+                instance_scenario_id=instance_scenario_id, sdn='false')
         return [self.delete_action(l) for l in wan_links]
 
     def incorporate_actions(self, wim_actions, instance_action):
@@ -466,7 +481,7 @@ class WimEngine(object):
         """
         thread = None
         try:
-            thread = WimThread(self.persist, wim_account, ovim=self.ovim)
+            thread = WimThread(self.persist, self.plugins, wim_account, ovim=self.ovim)
             self.threads[wim_account['uuid']] = thread
             thread.start()
         except:  # noqa
@@ -478,8 +493,16 @@ class WimEngine(object):
     def start_threads(self):
         """Start the threads responsible for processing WIM Actions"""
         accounts = self.persist.get_wim_accounts(error_if_none=False)
-        self.threads = remove_none_items(
-            {a['uuid']: self._spawn_thread(a) for a in accounts})
+        thread_dict = {}
+        for account in accounts:
+            try:
+                plugin_name = "rosdn_" + account["wim"]["type"]
+                if plugin_name not in self.plugins:
+                    self._load_plugin(plugin_name, type="sdn")
+                thread_dict[account["uuid"]] = self._spawn_thread(account)
+            except UndefinedWimConnector as e:
+                self.logger.error(e)
+        self.threads = remove_none_items(thread_dict)
 
     def stop_threads(self):
         """Stop the threads responsible for processing WIM Actions"""

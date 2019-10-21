@@ -53,9 +53,9 @@ import osm_ro
 
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
-__version__ = "6.0.3.post5"
+__version__ = "6.0.4.post6"
 version_date = "Oct 2019"
-database_version = 39      # expected database schema version
+database_version = 40      # expected database schema version
 
 global global_config
 global logger
@@ -327,7 +327,7 @@ if __name__ == "__main__":
 
         # WIM module
         wim_persistence = WimPersistence(mydb)
-        wim_engine = WimEngine(wim_persistence)
+        wim_engine = WimEngine(wim_persistence, nfvo.plugins)
         # ---
         nfvo.start_service(mydb, wim_persistence, wim_engine)
 

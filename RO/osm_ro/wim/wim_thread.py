@@ -45,7 +45,7 @@ from contextlib import contextmanager
 from functools import partial
 from itertools import islice, chain, takewhile
 from operator import itemgetter, attrgetter
-from sys import exc_info
+# from sys import exc_info
 from time import time, sleep
 
 import queue
@@ -60,10 +60,8 @@ from .errors import (
     UndefinedAction,
 )
 from .failing_connector import FailingConnector
-from .wimconn import WimConnectorError
-from .wimconn_dynpac import DynpacConnector
+from .sdnconn import SdnConnectorError
 from .wimconn_fake import FakeConnector
-from .wimconn_ietfl2vpn import WimconnectorIETFL2VPN
 
 ACTIONS = {
     'instance_wim_nets': wan_link_actions.ACTIONS
@@ -71,10 +69,8 @@ ACTIONS = {
 
 CONNECTORS = {
     # "odl": wimconn_odl.OdlConnector,
-    "dynpac": DynpacConnector,
     "fake": FakeConnector,
-    "tapi": WimconnectorIETFL2VPN,
-    # Add extra connectors here
+    # Add extra connectors here not managed via plugins
 }
 
 
@@ -101,17 +97,21 @@ class WimThread(threading.Thread):
     MAX_RECOVERY_TIME = 180
     WAITING_TIME = 1      # Wait 1s for taks to arrive, when there are none
 
-    def __init__(self, persistence, wim_account, logger=None, ovim=None):
+    def __init__(self, persistence, plugins, wim_account, logger=None, ovim=None):
         """Init a thread.
 
         Arguments:
             persistence: Database abstraction layer
+            plugins: dictionary with the vim/sdn plugins
             wim_account: Record containing wim_account, tenant and wim
                 information.
         """
         name = '{}.{}.{}'.format(wim_account['wim']['name'],
                                  wim_account['name'], wim_account['uuid'])
         super(WimThread, self).__init__(name=name)
+        self.plugins = plugins
+        if "rosdn_fake" not in self.plugins:
+            self.plugins["rosdn_fake"] = FakeConnector
 
         self.name = name
         self.connector = None
@@ -160,9 +160,11 @@ class WimThread(threading.Thread):
             mapping = self.persist.query('wim_port_mappings',
                                          WHERE={'wim_id': wim['uuid']},
                                          error_if_none=False)
-            return CONNECTORS[wim['type']](wim, account, {
-                'service_endpoint_mapping': mapping or []
-            })
+            if wim["type"] in CONNECTORS:
+                return CONNECTORS[wim['type']](wim, account, {'service_endpoint_mapping': mapping or []})
+            else:    # load a plugin
+                return self.plugins["rosdn_" + wim["type"]](
+                    wim, account, {'service_endpoint_mapping': mapping or []})
         except DbBaseException as ex:
             error_msg = ('Error when retrieving WIM account ({})\n'
                          .format(account_id)) + str(ex)
@@ -170,8 +172,8 @@ class WimThread(threading.Thread):
         except KeyError as ex:
             error_msg = ('Unable to find the WIM connector for WIM ({})\n'
                          .format(wim['type'])) + str(ex)
-            self.logger.error(error_msg, exc_info=True)
-        except (WimConnectorError, Exception) as ex:
+            self.logger.error(error_msg)
+        except (SdnConnectorError, Exception) as ex:
             # TODO: Remove the Exception class here when the connector class is
             # ready
             error_msg = ('Error when loading WIM connector for WIM ({})\n'
