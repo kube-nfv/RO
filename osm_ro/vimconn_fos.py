@@ -165,7 +165,7 @@ class vimconnector(vimconn.vimconnector):
         except Exception as e:
             raise vimconn.vimconnException("Unable to create network {}. Error {}".format(net_name, e))
             # No way from the current rest service to get the actual error, most likely it will be an already existing error
-        return net_uuid
+        return net_uuid,{}
 
     def get_network_list(self, filter_dict={}):
         """Obtain tenant networks of VIM
@@ -234,7 +234,7 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnNotFoundException("Network {} not found at VIM".format(net_id))
         return res[0]
 
-    def delete_network(self, net_id):
+    def delete_network(self, net_id, created_items=None):
         """Deletes a tenant network from VIM
         Returns the network identifier or raises an exception upon error or when network is not found
         """
