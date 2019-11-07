@@ -20,7 +20,7 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact with: nfvlabs@tid.es
 ##
-
+ 
 '''
 NFVO engine, implementing all the methods for the creation, deletion and management of vnfs, scenarios and instances
 '''
@@ -1352,7 +1352,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
             if vnfd["mgmt-interface"].get("ip-address"):
                 mgmt_access["ip-address"] = str(vnfd["mgmt-interface"].get("ip-address"))
-            if vnfd["mgmt-interface"].get("cp"):
+            if vnfd["mgmt-interface"].get("cp") and vnfd.get("vdu"):
                 if vnfd["mgmt-interface"]["cp"] not in cp_name2iface_uuid:
                     raise NfvoException("Error. Invalid VNF descriptor at 'vnfd[{vnf}]':'mgmt-interface':'cp'['{cp}']. "
                                         "Reference to a non-existing connection-point".format(
@@ -2429,47 +2429,51 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                 elif vld.get("vim-network-name"):
                     db_sce_net["vim_network_name"] = get_str(vld, "vim-network-name", 255)
 
+                
                 # table sce_interfaces (vld:vnfd-connection-point-ref)
                 for iface in vld.get("vnfd-connection-point-ref").itervalues():
+                    # Check if there are VDUs in the descriptor
                     vnf_index = str(iface['member-vnf-index-ref'])
-                    # check correct parameters
-                    if vnf_index not in vnf_index2vnf_uuid:
-                        raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'vld[{}]':'vnfd-connection-point"
-                                            "-ref':'member-vnf-index-ref':'{}'. Reference to a non-existing index at "
-                                            "'nsd':'constituent-vnfd'".format(
-                                                str(nsd["id"]), str(vld["id"]), str(iface["member-vnf-index-ref"])),
-                                            httperrors.Bad_Request)
-
-                    existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid', 'i.type as iface_type'),
-                                                    FROM="interfaces as i join vms on i.vm_id=vms.uuid",
-                                                    WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index],
-                                                           'external_name': get_str(iface, "vnfd-connection-point-ref",
-                                                                                    255)})
-                    if not existing_ifaces:
-                        raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'vld[{}]':'vnfd-connection-point"
-                                            "-ref':'vnfd-connection-point-ref':'{}'. Reference to a non-existing "
-                                            "connection-point name at VNFD '{}'".format(
-                                                str(nsd["id"]), str(vld["id"]), str(iface["vnfd-connection-point-ref"]),
-                                                str(iface.get("vnfd-id-ref"))[:255]),
-                                            httperrors.Bad_Request)
-                    interface_uuid = existing_ifaces[0]["uuid"]
-                    if existing_ifaces[0]["iface_type"] == "data":
-                        db_sce_net["type"] = "data"
-                    sce_interface_uuid = str(uuid4())
-                    uuid_list.append(sce_net_uuid)
-                    iface_ip_address = None
-                    if iface.get("ip-address"):
-                        iface_ip_address = str(iface.get("ip-address"))
-                    db_sce_interface = {
-                        "uuid": sce_interface_uuid,
-                        "sce_vnf_id": vnf_index2scevnf_uuid[vnf_index],
-                        "sce_net_id": sce_net_uuid,
-                        "interface_id": interface_uuid,
-                        "ip_address": iface_ip_address,
-                    }
-                    db_sce_interfaces.append(db_sce_interface)
-                if not db_sce_net["type"]:
-                    db_sce_net["type"] = "bridge"
+                    existing_vdus = mydb.get_rows(SELECT=('vms.uuid'), FROM="vms", WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index]})
+                    if existing_vdus:
+                        # check correct parameters
+                        if vnf_index not in vnf_index2vnf_uuid:
+                            raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'vld[{}]':'vnfd-connection-point"
+                                              "-ref':'member-vnf-index-ref':'{}'. Reference to a non-existing index at "
+                                              "'nsd':'constituent-vnfd'".format(
+                                                  str(nsd["id"]), str(vld["id"]), str(iface["member-vnf-index-ref"])),
+                                              httperrors.Bad_Request)
+  
+                        existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid', 'i.type as iface_type'),
+                                                      FROM="interfaces as i join vms on i.vm_id=vms.uuid",
+                                                      WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index],
+                                                             'external_name': get_str(iface, "vnfd-connection-point-ref",
+                                                                                      255)})
+                        if not existing_ifaces:
+                            raise NfvoException("Error. Invalid NS descriptor at 'nsd[{}]':'vld[{}]':'vnfd-connection-point"
+                                              "-ref':'vnfd-connection-point-ref':'{}'. Reference to a non-existing "
+                                              "connection-point name at VNFD '{}'".format(
+                                                  str(nsd["id"]), str(vld["id"]), str(iface["vnfd-connection-point-ref"]),
+                                                  str(iface.get("vnfd-id-ref"))[:255]),
+                                              httperrors.Bad_Request)
+                        interface_uuid = existing_ifaces[0]["uuid"]
+                        if existing_ifaces[0]["iface_type"] == "data":
+                            db_sce_net["type"] = "data"
+                        sce_interface_uuid = str(uuid4())
+                        uuid_list.append(sce_net_uuid)
+                        iface_ip_address = None
+                        if iface.get("ip-address"):
+                            iface_ip_address = str(iface.get("ip-address"))
+                        db_sce_interface = {
+                            "uuid": sce_interface_uuid,
+                            "sce_vnf_id": vnf_index2scevnf_uuid[vnf_index],
+                            "sce_net_id": sce_net_uuid,
+                            "interface_id": interface_uuid,
+                            "ip_address": iface_ip_address,
+                        }    
+                        db_sce_interfaces.append(db_sce_interface)
+                        if not db_sce_net["type"]:
+                            db_sce_net["type"] = "bridge"
 
             # table sce_vnffgs (vnffgd)
             for vnffg in nsd.get("vnffgd").itervalues():
