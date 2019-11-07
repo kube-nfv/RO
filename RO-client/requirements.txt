@@ -15,4 +15,3 @@
 argcomplete
 requests==2.*
 PyYAML
-

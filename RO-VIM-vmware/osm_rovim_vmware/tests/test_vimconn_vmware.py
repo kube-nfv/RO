@@ -22,8 +22,8 @@
 ##
 
 
-from vimconn_vmware import vimconnector
-from osm_ro.vimconn import vimconnUnexpectedResponse,vimconnNotFoundException,vimconnException
+from osm_rovim_vmware.vimconn_vmware import vimconnector
+from osm_ro.vimconn import vimconnUnexpectedResponse, vimconnNotFoundException,vimconnException
 from pyvcloud.vcd.client import Client
 from lxml import etree as lxmlElementTree
 from pyvcloud.vcd.org import Org
@@ -31,7 +31,7 @@ from pyvcloud.vcd.vdc import VDC
 from pyvcloud.vcd.vapp import VApp
 import os
 import unittest
-import mock
+from unittest import mock
 import test_vimconn_vmware_xml_response as xml_resp
 from os import path
 
@@ -177,7 +177,7 @@ class TestVimconn_VMware(unittest.TestCase):
         result = self.vim.new_network(net_name, net_type)
 
         # assert verified expected and return result from VIM connector
-        self.assertEqual(result, 'df1956fa-da04-419e-a6a2-427b6f83788f')
+        self.assertEqual(result, ('df1956fa-da04-419e-a6a2-427b6f83788f', {}))
 
     @mock.patch.object(vimconnector, 'create_network_rest')
     def test_new_network_not_created(self, create_network_rest):

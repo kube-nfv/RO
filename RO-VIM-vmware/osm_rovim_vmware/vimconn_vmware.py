@@ -57,7 +57,7 @@ import time
 import uuid
 # import httplib
 #For python3
-#import http.client
+#import http.client  # TODO py3 check
 import hashlib
 import socket
 import struct
@@ -446,9 +446,7 @@ class vimconnector(vimconn.vimconnector):
                     raise vimconn.vimconnNotFoundException("Fail to get tenant {}".format(tenant_id))
 
                 lxmlroot_respond = lxmlElementTree.fromstring(response.content)
-                namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
-                #For python3
-                #namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
+                namespaces = {prefix: uri for prefix, uri in lxmlroot_respond.nsmap.items() if prefix}
                 namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
                 vdc_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']",namespaces).attrib['href']
                 vdc_remove_href = vdc_remove_href + '?recursive=true&force=true'
@@ -976,9 +974,7 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnNotFoundException("Fail to get image {}".format(image_id))
 
         lxmlroot_respond = lxmlElementTree.fromstring(response.content)
-        namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
-        #For python3
-        #namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
+        namespaces = {prefix: uri for prefix, uri in lxmlroot_respond.nsmap.items() if prefix}
         namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
 
         catalogItems_section = lxmlroot_respond.find("xmlns:CatalogItems",namespaces)
@@ -999,9 +995,7 @@ class vimconnector(vimconn.vimconnector):
                                                                                     image_id))
 
             lxmlroot_respond = lxmlElementTree.fromstring(response.content)
-            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
-            #For python3
-            #namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
+            namespaces = {prefix: uri for prefix, uri in lxmlroot_respond.nsmap.items() if prefix}
             namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
             catalogitem_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']",namespaces).attrib['href']
 
@@ -1409,11 +1403,8 @@ class vimconnector(vimconn.vimconnector):
             return None
         # UUID has following format https://host/api/vApp/vapp-30da58a3-e7c7-4d09-8f68-d4c8201169cf
         try:
-            refs = filter(lambda ref: ref.name == vapp_name and ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml',
-                          vdc.ResourceEntities.ResourceEntity)
-            #For python3
-            #refs = [ref for ref in vdc.ResourceEntities.ResourceEntity\
-            #         if ref.name == vapp_name and ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml']
+            refs = [ref for ref in vdc.ResourceEntities.ResourceEntity \
+                    if ref.name == vapp_name and ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml']
             if len(refs) == 1:
                 return refs[0].href.split("vapp")[1][1:]
         except Exception as e:
@@ -1435,12 +1426,8 @@ class vimconnector(vimconn.vimconnector):
                 :param vapp_uuid:
         """
         try:
-            refs = filter(lambda ref:
-                          ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml',
-                          vdc.ResourceEntities.ResourceEntity)
-            #For python3
-            #refs = [ref for ref in vdc.ResourceEntities.ResourceEntity\
-            #         if ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml']
+            refs = [ref for ref in vdc.ResourceEntities.ResourceEntity\
+                     if ref.type_ == 'application/vnd.vmware.vcloud.vApp+xml']
             for ref in refs:
                 vappid = ref.href.split("vapp")[1][1:]
                 # find vapp with respected vapp uuid
@@ -1926,9 +1913,7 @@ class vimconnector(vimconn.vimconnector):
 
                 if primary_netname is not None:
                     self.logger.debug("new_vminstance(): Filtering by net name {}".format(interface_net_name))
-                    nets = filter(lambda n: n.get('name') == interface_net_name, self.get_network_list())
-                    #For python3
-                    #nets = [n for n in self.get_network_list() if n.get('name') == interface_net_name]
+                    nets = [n for n in self.get_network_list() if n.get('name') == interface_net_name]
                     if len(nets) == 1:
                         self.logger.info("new_vminstance(): Found requested network: {}".format(nets[0].get('name')))
 
@@ -3062,7 +3047,6 @@ class vimconnector(vimconn.vimconnector):
         except XmlElementTree.ParseError as Err:
             self.logger.debug("ParseError in response from NSX Manager {}".format(Err.message), exc_info=True)
 
-
     def action_vminstance(self, vm__vim_uuid=None, action_dict=None, created_items={}):
         """Send and action over a VM instance from VIM
         Returns the vm_id if the action was successfully sent to the VIM"""
@@ -3073,7 +3057,7 @@ class vimconnector(vimconn.vimconnector):
 
         org, vdc = self.get_vdc_details()
         if vdc is None:
-            raise  vimconn.vimconnException("Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
+            raise vimconn.vimconnException("Failed to get a reference of VDC for a tenant {}".format(self.tenant_name))
 
         vapp_name = self.get_namebyvappid(vm__vim_uuid)
         if vapp_name is None:
@@ -3107,9 +3091,7 @@ class vimconnector(vimconn.vimconnector):
                 result = self.client.get_task_monitor().wait_for_success(task=poweron_task)
                 self.instance_actions_result("resume", result, vapp_name)
             elif "shutoff" in action_dict or "shutdown" in action_dict:
-                action_name , value = action_dict.items()[0]
-                #For python3
-                #action_name , value = list(action_dict.items())[0]
+                action_name , value = list(action_dict.items())[0]
                 self.logger.info("action_vminstance: {} vApp: {}".format(action_name, vapp_name))
                 shutdown_task = vapp.shutdown()
                 result = self.client.get_task_monitor().wait_for_success(task=shutdown_task)
@@ -3294,9 +3276,7 @@ class vimconnector(vimconn.vimconnector):
             org_dict = self.get_org(self.org_uuid)
             if org_dict and 'networks' in org_dict:
                 org_network_dict = org_dict['networks']
-                for net_uuid,net_name in org_network_dict.items():
-                #For python3
-                #for net_uuid,net_name in org_network_dict.items():
+                for net_uuid, net_name in org_network_dict.items():
                     if net_name == network_name:
                         return net_uuid
 
@@ -3451,11 +3431,8 @@ class vimconnector(vimconn.vimconnector):
         vm_list_rest_call = ''.join(url_list)
 
         if not (not vca.vcloud_session or not vca.vcloud_session.organization):
-            refs = filter(lambda ref: ref.name == vdc_name and ref.type_ == 'application/vnd.vmware.vcloud.vdc+xml',
-                          vca.vcloud_session.organization.Link)
-            #For python3
-            #refs = [ref for ref in vca.vcloud_session.organization.Link if ref.name == vdc_name and\
-            #        ref.type_ == 'application/vnd.vmware.vcloud.vdc+xml']
+            refs = [ref for ref in vca.vcloud_session.organization.Link if ref.name == vdc_name and
+                    ref.type_ == 'application/vnd.vmware.vcloud.vdc+xml']
             if len(refs) == 1:
                 response = Http.get(url=vm_list_rest_call,
                                     headers=vca.vcloud_session.get_vcloud_headers(),
@@ -4399,9 +4376,7 @@ class vimconnector(vimconn.vimconnector):
             return None
         try:
             lxmlroot_respond = lxmlElementTree.fromstring(response.content)
-            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
-            #For python3
-            #namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
+            namespaces = {prefix: uri for prefix, uri in lxmlroot_respond.nsmap.items() if prefix}
             namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
 
             for item in lxmlroot_respond.iterfind('xmlns:Item',namespaces):
@@ -5538,9 +5513,7 @@ class vimconnector(vimconn.vimconnector):
         try:
             #Find but type & max of instance IDs assigned to disks
             lxmlroot_respond = lxmlElementTree.fromstring(response.content)
-            namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
-            #For python3
-            #namespaces = {prefix:uri for prefix,uri in lxmlroot_respond.nsmap.items() if prefix}
+            namespaces = {prefix: uri for prefix, uri in lxmlroot_respond.nsmap.items() if prefix}
             namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
             instance_id = 0
             for item in lxmlroot_respond.iterfind('xmlns:Item',namespaces):
@@ -6278,14 +6251,12 @@ class vimconnector(vimconn.vimconnector):
             used_ids = list(self.persistent_info["used_vlanIDs"].values())
 
         for vlanID_range in self.config.get('vlanID_range'):
-            start_vlanid , end_vlanid = vlanID_range.split("-")
+            start_vlanid, end_vlanid = vlanID_range.split("-")
             if start_vlanid > end_vlanid:
                 raise vimconn.vimconnConflictException("Invalid vlan ID range {}".format(
                                                                         vlanID_range))
 
-            for id in xrange(int(start_vlanid), int(end_vlanid) + 1):
-            #For python3
-            #for id in range(int(start_vlanid), int(end_vlanid) + 1):
+            for id in range(int(start_vlanid), int(end_vlanid) + 1):
                 if id not in used_ids:
                     vlan_id = id
                     self.persistent_info["used_vlanIDs"][network_name] = vlan_id

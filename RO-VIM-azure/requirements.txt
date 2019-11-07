@@ -17,4 +17,4 @@ PyYAML
 requests
 netaddr
 azure
-
+git+https://osm.etsi.org/gerrit/osm/RO.git@py3#egg=osm-ro&subdirectory=RO
