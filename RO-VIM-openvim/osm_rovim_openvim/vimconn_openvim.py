@@ -323,6 +323,7 @@ get_processor_rankings_response_schema = {
     }
 }
 
+
 class vimconnector(vimconn.vimconnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
                  log_level="DEBUG", config={}, persistent_info={}):
@@ -391,13 +392,16 @@ class vimconnector(vimconn.vimconnector):
                 a= self._remove_extra_items(d, schema['items'])
                 if a is not None: deleted.append(a)
         elif type(data) is dict:
+            to_delete = []
             for k in data.keys():
                 if 'properties' not in schema or k not in schema['properties'].keys():
-                    del data[k]
+                    to_delete.append(k)
                     deleted.append(k)
                 else:
                     a = self._remove_extra_items(data[k], schema['properties'][k])
                     if a is not None:  deleted.append({k:a})
+            for k in to_delete:
+                del data[k]
         if len(deleted) == 0: return None
         elif len(deleted) == 1: return deleted[0]
         else: return deleted
