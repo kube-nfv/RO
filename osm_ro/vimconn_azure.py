@@ -1,385 +1,860 @@
 # -*- coding: utf-8 -*-
+##
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+##
 
-__author__='Sergio Gonzalez'
-__date__ ='$18-apr-2019 23:59:59$'
-
+import base64
 import vimconn
 import logging
+import netaddr
+import re
 
 from os import getenv
-from uuid import uuid4
-
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.compute.models import DiskCreateOption
+from msrestazure.azure_exceptions import CloudError
+from msrest.exceptions import AuthenticationError
+from requests.exceptions import ConnectionError
+
+__author__ = 'Isabel Lloret, Sergio Gonzalez, Alfonso Tierno'
+__date__ = '$18-apr-2019 23:59:59$'
+
+
+if getenv('OSMRO_PDB_DEBUG'):
+    import sys
+    print(sys.path)
+    import pdb
+    pdb.set_trace()
 
 
 class vimconnector(vimconn.vimconnector):
 
+    # Translate azure provisioning state to OSM provision state
+    # The first three ones are the transitional status once a user initiated action has been requested
+    # Once the operation is complete, it will transition into the states Succeeded or Failed
+    # https://docs.microsoft.com/en-us/azure/virtual-machines/windows/states-lifecycle
+    provision_state2osm = {
+        "Creating": "BUILD",
+        "Updating": "BUILD",
+        "Deleting": "INACTIVE",
+        "Succeeded": "ACTIVE",
+        "Failed": "ERROR"
+    }
+
+    # Translate azure power state to OSM provision state
+    power_state2osm = {
+        "starting": "INACTIVE",
+        "running": "ACTIVE",
+        "stopping": "INACTIVE",
+        "stopped": "INACTIVE",
+        "unknown": "OTHER",
+        "deallocated": "BUILD",
+        "deallocating": "BUILD"
+    }
+
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
                  config={}, persistent_info={}):
+        """
+        Constructor of VIM. Raise an exception is some needed parameter is missing, but it must not do any connectivity
+        checking against the VIM
+        Using common constructor parameters.
+        In this case: config must include the following parameters:
+        subscription_id: assigned azure subscription identifier
+        region_name: current region for azure network
+        resource_group: used for all azure created resources
+        vnet_name: base vnet for azure, created networks will be subnets from this base network
+        config may also include the following parameter:
+        flavors_pattern: pattern that will be used to select a range of vm sizes, for example
+            "^((?!Standard_B).)*$" will filter out Standard_B range that is cheap but is very overused
+            "^Standard_B" will select a serie B maybe for test environment
+        """
 
         vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config, persistent_info)
 
+        # Variable that indicates if client must be reloaded or initialized
+        self.reload_client = True
+
+        self.vnet_address_space = None
         # LOGGER
         self.logger = logging.getLogger('openmano.vim.azure')
         if log_level:
             logging.basicConfig()
             self.logger.setLevel(getattr(logging, log_level))
 
-        # CREDENTIALS 
-        self.credentials = ServicePrincipalCredentials(
-            client_id=user,
-            secret=passwd,
-            tenant=(tenant_id or tenant_name)
-        )
+        self.tenant = (tenant_id or tenant_name)
+
+        # Store config to create azure subscription later
+        self._config = {
+            "user": user,
+            "passwd": passwd,
+            "tenant": tenant_id or tenant_name
+        }
 
         # SUBSCRIPTION
         if 'subscription_id' in config:
-            self.subscription_id = config.get('subscription_id')
-            self.logger.debug('Setting subscription '+str(self.subscription_id))
+            self._config["subscription_id"] = config.get('subscription_id')
+            # self.logger.debug('Setting subscription to: %s', self.config["subscription_id"])
         else:
             raise vimconn.vimconnException('Subscription not specified')
+
         # REGION
         if 'region_name' in config:
             self.region = config.get('region_name')
         else:
             raise vimconn.vimconnException('Azure region_name is not specified at config')
+
         # RESOURCE_GROUP
         if 'resource_group' in config:
             self.resource_group = config.get('resource_group')
         else:
             raise vimconn.vimconnException('Azure resource_group is not specified at config')
+
         # VNET_NAME
         if 'vnet_name' in config:
             self.vnet_name = config["vnet_name"]
             
         # public ssh key
         self.pub_key = config.get('pub_key')
+
+        # flavor pattern regex
+        if 'flavors_pattern' in config:
+            self._config['flavors_pattern'] = config['flavors_pattern']
             
     def _reload_connection(self):
         """
-        Sets connections to work with Azure service APIs
-        :return:
+        Called before any operation, checks python azure clients
         """
-        self.logger.debug('Reloading API Connection')
-        try:
-            self.conn = ResourceManagementClient(self.credentials, self.subscription_id)
-            self.conn_compute = ComputeManagementClient(self.credentials, self.subscription_id)
-            self.conn_vnet = NetworkManagementClient(self.credentials, self.subscription_id)
-            self._check_or_create_resource_group()
-            self._check_or_create_vnet()
-        except Exception as e:
-            self.format_vimconn_exception(e)            
+        if self.reload_client:
+            self.logger.debug('reloading azure client')
+            try:
+                self.credentials = ServicePrincipalCredentials(
+                    client_id=self._config["user"],
+                    secret=self._config["passwd"],
+                    tenant=self._config["tenant"]
+                )
+                self.conn = ResourceManagementClient(self.credentials, self._config["subscription_id"])
+                self.conn_compute = ComputeManagementClient(self.credentials, self._config["subscription_id"])
+                self.conn_vnet = NetworkManagementClient(self.credentials, self._config["subscription_id"])
+                self._check_or_create_resource_group()
+                self._check_or_create_vnet()
+
+                # Set to client created
+                self.reload_client = False
+            except Exception as e:
+                self._format_vimconn_exception(e)
 
     def _get_resource_name_from_resource_id(self, resource_id):
-        return str(resource_id.split('/')[-1])
+        """
+        Obtains resource_name from the azure complete identifier: resource_name will always be last item
+        """
+        try:
+            resource = str(resource_id.split('/')[-1])
+            return resource
+        except Exception as e:
+            raise vimconn.vimconnException("Unable to get resource name from resource_id '{}' Error: '{}'".
+                                           format(resource_id, e))
 
     def _get_location_from_resource_group(self, resource_group_name):
-        return self.conn.resource_groups.get(resource_group_name).location
-        
+        try:
+            location = self.conn.resource_groups.get(resource_group_name).location
+            return location
+        except Exception as e:
+            raise vimconn.vimconnNotFoundException("Location '{}' not found".format(resource_group_name))
+
     def _get_resource_group_name_from_resource_id(self, resource_id):
-        return str(resource_id.split('/')[4])
+
+        try:
+            rg = str(resource_id.split('/')[4])
+            return rg
+        except Exception as e:
+            raise vimconn.vimconnException("Unable to get resource group from invalid resource_id format '{}'".
+                                           format(resource_id))
+
+    def _get_net_name_from_resource_id(self, resource_id):
+
+        try:
+            net_name = str(resource_id.split('/')[8])
+            return net_name
+        except Exception as e:
+            raise vimconn.vimconnException("Unable to get azure net_name from invalid resource_id format '{}'".
+                                           format(resource_id))
 
     def _check_subnets_for_vm(self, net_list):
         # All subnets must belong to the same resource group and vnet
-        if len(set(self._get_resource_group_name_from_resource_id(net['id']) +
-                   self._get_resource_name_from_resource_id(net['id']) for net in net_list)) != 1:
-            raise self.format_vimconn_exception('Azure VMs can only attach to subnets in same VNET')
+        rg_vnet = set(self._get_resource_group_name_from_resource_id(net['net_id']) +
+                      self._get_net_name_from_resource_id(net['net_id']) for net in net_list)
 
-    def format_vimconn_exception(self, e):
+        if len(rg_vnet) != 1:
+            raise self._format_vimconn_exception('Azure VMs can only attach to subnets in same VNET')
+
+    def _format_vimconn_exception(self, e):
         """
-        Params: an Exception object
-        :param e:
-        :return: Raises the proper vimconnException
+        Transforms a generic or azure exception to a vimcommException
         """
-        self.conn = None
-        self.conn_vnet = None
-        raise vimconn.vimconnConnectionException(type(e).__name__ + ': ' + str(e))        
+        if isinstance(e, vimconn.vimconnException):
+            raise
+        elif isinstance(e, AuthenticationError):
+            raise vimconn.vimconnAuthException(type(e).__name__ + ': ' + str(e))
+        elif isinstance(e, ConnectionError):
+            raise vimconn.vimconnConnectionException(type(e).__name__ + ': ' + str(e))
+        else:
+            # In case of generic error recreate client
+            self.reload_client = True
+            raise vimconn.vimconnException(type(e).__name__ + ': ' + str(e))
 
     def _check_or_create_resource_group(self):
         """
-        Creates a resource group in indicated region
-        :return: None
+        Creates the base resource group if it does not exist
         """
-        self.logger.debug('Creating RG {} in location {}'.format(self.resource_group, self.region))
-        self.conn.resource_groups.create_or_update(self.resource_group, {'location': self.region})
+        try:
+            rg_exists = self.conn.resource_groups.check_existence(self.resource_group)
+            if not rg_exists:
+                self.logger.debug("create base rgroup: %s", self.resource_group)
+                self.conn.resource_groups.create_or_update(self.resource_group, {'location': self.region})
+        except Exception as e:
+            self._format_vimconn_exception(e)
 
     def _check_or_create_vnet(self):
+        """
+        Try to get existent base vnet, in case it does not exist it creates it
+        """
+        try:
+            vnet = self.conn_vnet.virtual_networks.get(self.resource_group, self.vnet_name)
+            self.vnet_address_space = vnet.address_space.address_prefixes[0]
+            self.vnet_id = vnet.id
+            return
+        except CloudError as e:
+            if e.error.error and "notfound" in e.error.error.lower():
+                pass
+                # continue and create it
+            else:
+                self._format_vimconn_exception(e)
+
+        # if it does not exist, create it
         try:
             vnet_params = {
                 'location': self.region,
                 'address_space': {
-                    'address_prefixes': "10.0.0.0/8"
+                    'address_prefixes': ["10.0.0.0/8"]
                 },
             }
+            self.vnet_address_space = "10.0.0.0/8"
+
+            self.logger.debug("create base vnet: %s", self.vnet_name)
             self.conn_vnet.virtual_networks.create_or_update(self.resource_group, self.vnet_name, vnet_params)
+            vnet = self.conn_vnet.virtual_networks.get(self.resource_group, self.vnet_name)
+            self.vnet_id = vnet.id
         except Exception as e:
-            self.format_vimconn_exception(e)
+            self._format_vimconn_exception(e)
 
     def new_network(self, net_name, net_type, ip_profile=None, shared=False, vlan=None):
         """
         Adds a tenant network to VIM
         :param net_name: name of the network
-        :param net_type:
+        :param net_type: not used for azure networks
         :param ip_profile: is a dict containing the IP parameters of the network (Currently only IPv4 is implemented)
                 'ip-version': can be one of ['IPv4','IPv6']
                 'subnet-address': ip_prefix_schema, that is X.X.X.X/Y
-                'gateway-address': (Optional) ip_schema, that is X.X.X.X
-                'dns-address': (Optional) ip_schema,
-                'dhcp': (Optional) dict containing
+                'gateway-address': (Optional) ip_schema, that is X.X.X.X, not implemented for azure connector
+                'dns-address': (Optional) ip_schema, not implemented for azure connector
+                'dhcp': (Optional) dict containing, not implemented for azure connector
                     'enabled': {'type': 'boolean'},
                     'start-address': ip_schema, first IP to grant
                     'count': number of IPs to grant.
-        :param shared:
-        :param vlan:
+        :param shared: Not allowed for Azure Connector
+        :param vlan: VLAN tagging is not allowed for Azure
         :return: a tuple with the network identifier and created_items, or raises an exception on error
             created_items can be None or a dictionary where this method can include key-values that will be passed to
             the method delete_network. Can be used to store created segments, created l2gw connections, etc.
             Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
         """
-
         return self._new_subnet(net_name, ip_profile)
 
     def _new_subnet(self, net_name, ip_profile):
         """
-        Adds a tenant network to VIM. It creates a new VNET with a single subnet
-        :param net_name:
+        Adds a tenant network to VIM. It creates a new subnet at existing base vnet
+        :param net_name: subnet name
         :param ip_profile:
-        :return:
+                subnet-address: if it is not provided a subnet/24 in the default vnet is created,
+                otherwise it creates a subnet in the indicated address
+        :return: a tuple with the network identifier and created_items, or raises an exception on error
         """
-        self.logger.debug('Adding a subnet to VNET '+self.vnet_name)
+        self.logger.debug('create subnet name %s, ip_profile %s', net_name, ip_profile)
         self._reload_connection()
 
         if ip_profile is None:
-            # TODO get a non used vnet ip range /24 and allocate automatically
-            raise vimconn.vimconnException('Azure cannot create VNET with no CIDR')
+            # get a non used vnet ip range /24 and allocate automatically inside the range self.vnet_address_space
+            used_subnets = self.get_network_list()
+            for ip_range in netaddr.IPNetwork(self.vnet_address_space).subnet(24):
+                for used_subnet in used_subnets:
+                    subnet_range = netaddr.IPNetwork(used_subnet["cidr_block"])
+                    if subnet_range in ip_range or ip_range in subnet_range:
+                        # this range overlaps with an existing subnet ip range. Breaks and look for another
+                        break
+                else:
+                    ip_profile = {"subnet_address": str(ip_range)}
+                    self.logger.debug('dinamically obtained ip_profile: %s', ip_range)
+                    break
+            else:
+                raise vimconn.vimconnException("Cannot find a non-used subnet range in {}".
+                                               format(self.vnet_address_space))
+        else:
+            ip_profile = {"subnet_address": ip_profile['subnet_address']}
 
         try:
-            vnet_params= {
-                'location': self.region,
-                'address_space': {
-                    'address_prefixes': [ip_profile['subnet_address']]
-                },
-                'subnets': [
-                    {
-                        'name': "{}-{}".format(net_name[:24], uuid4()),
-                        'address_prefix': ip_profile['subnet_address']
-                    }
-                ]
+            # subnet_name = "{}-{}".format(net_name[:24], uuid4())
+            subnet_params = {
+                'address_prefix': ip_profile['subnet_address']
             }
-            self.conn_vnet.virtual_networks.create_or_update(self.resource_group, self.vnet_name, vnet_params)
-            # TODO return a tuple (subnet-ID, None)
-        except Exception as e:
-            self.format_vimconn_exception(e)
+            # Assign a not duplicated net name
+            subnet_name = self._get_unused_subnet_name(net_name)
 
-    def _create_nic(self, subnet_id, nic_name, static_ip=None):
+            self.logger.debug('creating subnet_name: {}'.format(subnet_name))
+            async_creation = self.conn_vnet.subnets.create_or_update(self.resource_group, self.vnet_name,
+                                                                     subnet_name, subnet_params)
+            async_creation.wait()
+            self.logger.debug('created subnet_name: {}'.format(subnet_name))
+
+            return "{}/subnets/{}".format(self.vnet_id, subnet_name), None
+        except Exception as e:
+            self._format_vimconn_exception(e)
+
+    def _get_unused_subnet_name(self, subnet_name):
+        """
+        Adds a prefix to the subnet_name with a number in case the indicated name is repeated
+        Checks subnets with the indicated name (without suffix) and adds a suffix with a number
+        """
+        all_subnets = self.conn_vnet.subnets.list(self.resource_group, self.vnet_name)
+        # Filter to subnets starting with the indicated name
+        subnets = list(filter(lambda subnet: (subnet.name.startswith(subnet_name)), all_subnets))
+        net_names = [str(subnet.name) for subnet in subnets]
+
+        # get the name with the first not used suffix
+        name_suffix = 0
+        # name = subnet_name + "-" + str(name_suffix)
+        name = subnet_name  # first subnet created will have no prefix
+        while name in net_names:
+            name_suffix += 1
+            name = subnet_name + "-" + str(name_suffix)
+        return name
+
+    def _create_nic(self, net, nic_name, static_ip=None):
+
+        self.logger.debug('create nic name %s, net_name %s', nic_name, net)
         self._reload_connection()
-        
-        resource_group_name=self._get_resource_group_name_from_resource_id(subnet_id)
-        location = self._get_location_from_resource_group(resource_group_name)
-            
-        if static_ip:
-            async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(
-                resource_group_name,
-                nic_name,
-                {
+
+        subnet_id = net['net_id']
+        location = self._get_location_from_resource_group(self.resource_group)
+        try:
+            net_ifz = {'location': location}
+            net_ip_config = {'name': nic_name + '-ipconfiguration', 'subnet': {'id': subnet_id}}
+            if static_ip:
+                net_ip_config['privateIPAddress'] = static_ip
+                net_ip_config['privateIPAllocationMethod'] = 'Static'
+            net_ifz['ip_configurations'] = [net_ip_config]
+            mac_address = net.get('mac_address')
+            if mac_address:
+                net_ifz['mac_address'] = mac_address
+
+            async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(self.resource_group, nic_name,
+                                                                                    net_ifz)
+            async_nic_creation.wait()
+            self.logger.debug('created nic name %s', nic_name)
+
+            public_ip = net.get('floating_ip')
+            if public_ip:
+                public_ip_address_params = {
                     'location': location,
-                    'ip_configurations': [{
-                        'name': nic_name + 'ipconfiguration',
-                        'privateIPAddress': static_ip,
-                        'privateIPAllocationMethod': 'Static',
-                        'subnet': {
-                            'id': subnet_id
-                        }
-                    }]
+                    'public_ip_allocation_method': 'Dynamic'
                 }
-            )
-        else:
-            async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(
-                resource_group_name,
-                nic_name,
-                {
-                    'location': location,
-                    'ip_configurations': [{
-                        'name': nic_name + 'ipconfiguration',
-                        'subnet': {
-                            'id': subnet_id
-                        }
-                    }]
-                }
-            )
+                public_ip_name = nic_name + '-public-ip'
+                public_ip = self.conn_vnet.public_ip_addresses.create_or_update(
+                    self.resource_group,
+                    public_ip_name,
+                    public_ip_address_params
+                )
+                self.logger.debug('created public IP: {}'.format(public_ip.result()))
+
+                # Associate NIC to Public IP
+                nic_data = self.conn_vnet.network_interfaces.get(
+                    self.resource_group,
+                    nic_name)
+
+                nic_data.ip_configurations[0].public_ip_address = public_ip.result()
+
+                self.conn_vnet.network_interfaces.create_or_update(
+                    self.resource_group,
+                    nic_name,
+                    nic_data)
+
+        except Exception as e:
+            self._format_vimconn_exception(e)
 
         return async_nic_creation.result()
 
-    def get_image_list(self, filter_dict={}):
+    def new_flavor(self, flavor_data):
         """
-        The urn contains for marketplace  'publisher:offer:sku:version'
+        It is not allowed to create new flavors in Azure, must always use an existing one
+        """
+        raise vimconn.vimconnAuthException("It is not possible to create new flavors in AZURE")
 
-        :param filter_dict:
-        :return:
+    def new_tenant(self, tenant_name, tenant_description):
         """
-        image_list = []
+        It is not allowed to create new tenants in azure
+        """
+        raise vimconn.vimconnAuthException("It is not possible to create a TENANT in AZURE")
+
+    def new_image(self, image_dict):
+        """
+        It is not allowed to create new images in Azure, must always use an existing one
+        """
+        raise vimconn.vimconnAuthException("It is not possible to create new images in AZURE")
+
+    def get_image_id_from_path(self, path):
+        """Get the image id from image path in the VIM database.
+           Returns the image_id or raises a vimconnNotFoundException
+        """
+        raise vimconn.vimconnAuthException("It is not possible to obtain image from path in AZURE")
+
+    def get_image_list(self, filter_dict={}):
+        """Obtain tenant images from VIM
+        Filter_dict can be:
+            name: image name with the format: publisher:offer:sku:version
+            If some part of the name is provide ex: publisher:offer it will search all availables skus and version
+            for the provided publisher and offer
+            id: image uuid, currently not supported for azure
+        Returns the image list of dictionaries:
+            [{<the fields at Filter_dict plus some VIM specific>}, ...]
+            List can be empty
+        """
+
+        self.logger.debug("get_image_list filter {}".format(filter_dict))
 
         self._reload_connection()
-        if filter_dict.get("name"):
-            params = filter_dict["name"].split(":")
-            if len(params) >= 3:
+        try:
+            image_list = []
+            if filter_dict.get("name"):
+                # name will have the format 'publisher:offer:sku:version'
+                # publisher is required, offer sku and version will be searched if not provided
+                params = filter_dict["name"].split(":")
                 publisher = params[0]
-                offer = params[1]
-                sku = params[2]
-                version = None
-                if len(params) == 4:
-                    version = params[3]
-                images = self.conn_compute.virtual_machine_images.list(self.region, publisher, offer, sku)
-                for image in images:
-                    if version:
-                        image_version = str(image.id).split("/")[-1]
-                        if image_version != version:
-                            continue
-                    image_list.append({
-                        'id': str(image.id),
-                        'name': self._get_resource_name_from_resource_id(image.id)
-                    })
-                return image_list
+                if publisher:
+                    # obtain offer list
+                    offer_list = self._get_offer_list(params, publisher)
+                    for offer in offer_list:
+                        # obtain skus
+                        sku_list = self._get_sku_list(params, publisher, offer)
+                        for sku in sku_list:
+                            # if version is defined get directly version, else list images
+                            if len(params) == 4 and params[3]:
+                                version = params[3]
+                                image_list = self._get_version_image_list(publisher, offer, sku, version)
+                            else:
+                                image_list = self._get_sku_image_list(publisher, offer, sku)
+                else:
+                    raise vimconn.vimconnAuthException(
+                        "List images in Azure must include name param with at least publisher")
+            else:
+                raise vimconn.vimconnAuthException("List images in Azure must include name param with at"
+                                                   " least publisher")
 
-        images = self.conn_compute.virtual_machine_images.list()
+            return image_list
+        except Exception as e:
+            self._format_vimconn_exception(e)
 
-        for image in images:
-            # TODO implement filter_dict
-            if filter_dict:
-                if filter_dict.get("id") and str(image.id) != filter_dict["id"]:
-                    continue
-                if filter_dict.get("name") and \
-                        self._get_resource_name_from_resource_id(image.id) != filter_dict["name"]:
-                    continue
-                # TODO add checksum
-            image_list.append({
-                'id': str(image.id),
-                'name': self._get_resource_name_from_resource_id(image.id),
-            })
+    def _get_offer_list(self, params, publisher):
+        """
+        Helper method to obtain offer list for defined publisher
+        """
+        if len(params) >= 2 and params[1]:
+            return [params[1]]
+        else:
+            try:
+                # get list of offers from azure
+                result_offers = self.conn_compute.virtual_machine_images.list_offers(self.region, publisher)
+                return [offer.name for offer in result_offers]
+            except CloudError as e:
+                # azure raises CloudError when not found
+                self.logger.info("error listing offers for publisher {}, Error: {}".format(publisher, e))
+                return []
+
+    def _get_sku_list(self, params, publisher, offer):
+        """
+        Helper method to obtain sku list for defined publisher and offer
+        """
+        if len(params) >= 3 and params[2]:
+            return [params[2]]
+        else:
+            try:
+                # get list of skus from azure
+                result_skus = self.conn_compute.virtual_machine_images.list_skus(self.region, publisher, offer)
+                return [sku.name for sku in result_skus]
+            except CloudError as e:
+                # azure raises CloudError when not found
+                self.logger.info("error listing skus for publisher {}, offer {}, Error: {}".format(publisher, offer, e))
+                return []
+
+    def _get_sku_image_list(self, publisher, offer, sku):
+        """
+        Helper method to obtain image list for publisher, offer and sku
+        """
+        image_list = []
+        try:
+            result_images = self.conn_compute.virtual_machine_images.list(self.region, publisher, offer, sku)
+            for result_image in result_images:
+                image_list.append({
+                    'id': str(result_image.id),
+                    'name': ":".join([publisher, offer, sku, result_image.name])
+                })
+        except CloudError as e:
+            self.logger.info(
+                "error listing skus for publisher {}, offer {}, Error: {}".format(publisher, offer, e))
+            image_list = []
+        return image_list
+
+    def _get_version_image_list(self, publisher, offer, sku, version):
+        image_list = []
+        try:
+            result_image = self.conn_compute.virtual_machine_images.get(self.region, publisher, offer, sku, version)
+            if result_image:
+                image_list.append({
+                    'id': str(result_image.id),
+                    'name': ":".join([publisher, offer, sku, version])
+                })
+        except CloudError as e:
+            # azure gives CloudError when not found
+            self.logger.info("error listing images for publisher {}, offer {}, sku {}, version {} Error: {}".
+                             format(publisher, offer, sku, version, e))
+            image_list = []
         return image_list
 
     def get_network_list(self, filter_dict={}):
         """Obtain tenant networks of VIM
         Filter_dict can be:
             name: network name
-            id: network uuid
-            shared: boolean
-            tenant_id: tenant
-            admin_state_up: boolean
-            status: 'ACTIVE'
+            id: network id
+            shared: boolean, not implemented in Azure
+            tenant_id: tenant, not used in Azure, all networks same tenants
+            admin_state_up: boolean, not implemented in Azure
+            status: 'ACTIVE', not implemented in Azure #
         Returns the network list of dictionaries
         """
-        self.logger.debug('Getting all subnets from VIM')
+        # self.logger.debug('getting network list for vim, filter %s', filter_dict)
         try:
             self._reload_connection()
-            vnet = self.conn_vnet.virtual_networks.get(self.config["resource_group"], self.vnet_name)
+
+            vnet = self.conn_vnet.virtual_networks.get(self.resource_group, self.vnet_name)
             subnet_list = []
-            
+
             for subnet in vnet.subnets:
-                # TODO implement filter_dict
                 if filter_dict:
                     if filter_dict.get("id") and str(subnet.id) != filter_dict["id"]:
                         continue
                     if filter_dict.get("name") and \
-                            self._get_resource_name_from_resource_id(subnet.id) != filter_dict["name"]:
+                            str(subnet.name) != filter_dict["name"]:
                         continue
+
+                name = self._get_resource_name_from_resource_id(subnet.id)
 
                 subnet_list.append({
                     'id': str(subnet.id),
-                     'name': self._get_resource_name_from_resource_id(subnet.id),
-                     'status': str(vnet.provisioning_state),  # TODO Does subnet contains status???
-                     'cidr_block': str(subnet.address_prefix)
-                    }
-                )
+                    'name': name,
+                    'status': self.provision_state2osm[subnet.provisioning_state],
+                    'cidr_block': str(subnet.address_prefix),
+                    'type': 'bridge',
+                    'shared': False
+                })
+
             return subnet_list
         except Exception as e:
-            self.format_vimconn_exception(e)
+            self._format_vimconn_exception(e)
 
-    def new_vminstance(self, vm_name, description, start, image_id, flavor_id, net_list, cloud_config=None,
+    def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None,
                        disk_list=None, availability_zone_index=None, availability_zone_list=None):
 
-        return self._new_vminstance(vm_name, image_id, flavor_id, net_list)
-        
-    def _new_vminstance(self, vm_name, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
-                        availability_zone_index=None, availability_zone_list=None):
-        #Create NICs
+        self.logger.debug("new vm instance name: %s, image_id: %s, flavor_id: %s, net_list: %s, cloud_config: %s, "
+                          "disk_list: %s, availability_zone_index: %s, availability_zone_list: %s",
+                          name, image_id, flavor_id, net_list, cloud_config, disk_list,
+                          availability_zone_index, availability_zone_list)
+
+        self._reload_connection()
+
+        # Validate input data is valid
+        # The virtual machine name must have less or 64 characters and it can not have the following
+        # characters: (~ ! @ # $ % ^ & * ( ) = + _ [ ] { } \ | ; : ' " , < > / ?.)
+        vm_name = self._check_vm_name(name)
+        # Obtain vm unused name
+        vm_name = self._get_unused_vm_name(vm_name)
+
+        # At least one network must be provided
+        if not net_list:
+            raise vimconn.vimconnException("At least one net must be provided to create a new VM")
+
+        # image_id are several fields of the image_id
+        image_reference = self._get_image_reference(image_id)
+
         self._check_subnets_for_vm(net_list)
         vm_nics = []
         for idx, net in enumerate(net_list):
-            subnet_id=net['subnet_id']
+            # Fault with subnet_id
+            # subnet_id=net['subnet_id']
+            # subnet_id=net['net_id']
             nic_name = vm_name + '-nic-'+str(idx)
-            vm_nic = self._create_nic(subnet_id, nic_name)
-            vm_nics.append({ 'id': str(vm_nic.id)})
+            vm_nic = self._create_nic(net, nic_name, net.get('ip_address'))
+            vm_nics.append({'id': str(vm_nic.id)})
+            net['vim_id'] = vm_nic.id
 
         try:
+
+            # cloud-init configuration
+            # cloud config
+            if cloud_config:
+                config_drive, userdata = self._create_user_data(cloud_config)
+                custom_data = base64.b64encode(userdata.encode('utf-8')).decode('latin-1')
+                key_data = None
+                key_pairs = cloud_config.get("key-pairs")
+                if key_pairs:
+                    key_data = key_pairs[0]
+
+                if cloud_config.get("users"):
+                    user_name = cloud_config.get("users")[0].get("name", "osm")
+                else:
+                    user_name = "osm"  # DEFAULT USER IS OSM
+
+                os_profile = {
+                    'computer_name': vm_name,
+                    'admin_username': user_name,
+                    'linux_configuration': {
+                        "disable_password_authentication": True,
+                        "ssh": {
+                            "public_keys": [{
+                                "path": "/home/{}/.ssh/authorized_keys".format(user_name),
+                                "key_data": key_data
+                            }]
+                        }
+                    },
+                    'custom_data': custom_data
+                }
+            else:
+                os_profile = {
+                    'computer_name': vm_name,
+                    'admin_username': 'osm',
+                    'admin_password': 'Osm4u!',
+                }
+
             vm_parameters = {
                 'location': self.region,
-                'os_profile': {
-                    'computer_name': vm_name,  # TODO if vm_name cannot be repeated add uuid4() suffix
-                    'admin_username': 'sergio',  # TODO is it mandatory???
-                    'linuxConfiguration': {
-                        'disablePasswordAuthentication': 'true',
-                        'ssh': {
-                          'publicKeys': [
-                            {
-                              'path': '/home/sergio/.ssh/authorized_keys',
-                              'keyData': self.pub_key
-                            }
-                          ]
-                        }
-                    }                    
-                    
-                },
+                'os_profile': os_profile,
                 'hardware_profile': {
-                    'vm_size':flavor_id
+                    'vm_size': flavor_id
                 },
                 'storage_profile': {
-                    'image_reference': image_id
-                },
-                'network_profile': {
-                    'network_interfaces': [
-                        vm_nics[0]
-                    ]
+                    'image_reference': image_reference
                 }
             }
+
+            # Add data disks if they are provided
+            if disk_list:
+                data_disks = []
+                for lun_name, disk in enumerate(disk_list):
+                    self.logger.debug("add disk size: %s, image: %s", disk.get("size"), disk.get("image_id"))
+                    if not disk.get("image_id"):
+                        data_disks.append({
+                            'lun': lun_name,  # You choose the value, depending of what is available for you
+                            'name': vm_name + "_data_disk-" + str(lun_name),
+                            'create_option': DiskCreateOption.empty,
+                            'disk_size_gb': disk.get("size")
+                        })
+                    else:
+                        # self.logger.debug("currently not able to create data disks from image for azure, ignoring")
+                        data_disks.append({
+                            'lun': lun_name,  # You choose the value, depending of what is available for you
+                            'name': vm_name + "_data_disk-" + str(lun_name),
+                            'create_option': 'Attach',
+                            'disk_size_gb': disk.get("size"),
+                            'managed_disk': {
+                                'id': disk.get("image_id")
+                            }
+                        })
+
+                if data_disks:
+                    vm_parameters["storage_profile"]["data_disks"] = data_disks
+
+            # If the machine has several networks one must be marked as primary
+            # As it is not indicated in the interface the first interface will be marked as primary
+            if len(vm_nics) > 1:
+                for idx, vm_nic in enumerate(vm_nics):
+                    if idx == 0:
+                        vm_nics[0]['Primary'] = True
+                    else:
+                        vm_nics[idx]['Primary'] = False
+
+            vm_parameters['network_profile'] = {'network_interfaces': vm_nics}
+
+            self.logger.debug("create vm name: %s", vm_name)
             creation_result = self.conn_compute.virtual_machines.create_or_update(
                 self.resource_group, 
-                vm_name, 
+                vm_name,
                 vm_parameters
             )
+            # creation_result.wait()
+            result = creation_result.result()
+            self.logger.debug("created vm name: %s", vm_name)
+
+            if start:
+                self.conn_compute.virtual_machines.start(
+                    self.resource_group,
+                    vm_name)
+            # start_result.wait()
+
+            return result.id, None
             
-            run_command_parameters = {
-                'command_id': 'RunShellScript', # For linux, don't change it
-                'script': [
-                'date > /home/sergio/test.txt'
-                ]
-            }
-            poller = self.conn_compute.virtual_machines.run_command(
-                self.resource_group, 
-                vm_name, 
-                run_command_parameters
-            )
-            # TODO return a tuple (vm-ID, None)
+            # run_command_parameters = {
+            #     'command_id': 'RunShellScript', # For linux, don't change it
+            #     'script': [
+            #     'date > /tmp/test.txt'
+            #     ]
+            # }
         except Exception as e:
-            self.format_vimconn_exception(e)
+            self.logger.debug('Exception creating new vminstance: %s', e, exc_info=True)
+            self._format_vimconn_exception(e)
+
+    def _get_unused_vm_name(self, vm_name):
+        """
+        Checks the vm name and in case it is used adds a suffix to the name to allow creation
+        :return:
+        """
+        all_vms = self.conn_compute.virtual_machines.list(self.resource_group)
+        # Filter to vms starting with the indicated name
+        vms = list(filter(lambda vm: (vm.name.startswith(vm_name)), all_vms))
+        vm_names = [str(vm.name) for vm in vms]
+
+        # get the name with the first not used suffix
+        name_suffix = 0
+        # name = subnet_name + "-" + str(name_suffix)
+        name = vm_name  # first subnet created will have no prefix
+        while name in vm_names:
+            name_suffix += 1
+            name = vm_name + "-" + str(name_suffix)
+        return name
+
+    # It is necesary extract from image_id data to create the VM with this format
+    #        'image_reference': {
+    #           'publisher': vm_reference['publisher'],
+    #           'offer': vm_reference['offer'],
+    #           'sku': vm_reference['sku'],
+    #           'version': vm_reference['version']
+    #        },
+    def _get_image_reference(self, image_id):
+
+        try:
+            # The data input format example:
+            # /Subscriptions/ca3d18ab-d373-4afb-a5d6-7c44f098d16a/Providers/Microsoft.Compute/Locations/westeurope/
+            # Publishers/Canonical/ArtifactTypes/VMImage/
+            # Offers/UbuntuServer/
+            # Skus/18.04-LTS/
+            # Versions/18.04.201809110
+            publisher = str(image_id.split('/')[8])
+            offer = str(image_id.split('/')[12])
+            sku = str(image_id.split('/')[14])
+            version = str(image_id.split('/')[16])
+
+            return {
+                'publisher': publisher,
+                'offer': offer,
+                'sku': sku,
+                'version': version
+            }
+        except Exception as e:
+            raise vimconn.vimconnException(
+                "Unable to get image_reference from invalid image_id format: '{}'".format(image_id))
+
+    # Azure VM names can not have some special characters
+    def _check_vm_name(self, vm_name):
+        """
+        Checks vm name, in case the vm has not allowed characters they are removed, not error raised
+        """
+
+        chars_not_allowed_list = "~!@#$%^&*()=+_[]{}|;:<>/?."
+
+        # First: the VM name max length is 64 characters
+        vm_name_aux = vm_name[:64]
+
+        # Second: replace not allowed characters
+        for elem in chars_not_allowed_list:
+            # Check if string is in the main string
+            if elem in vm_name_aux:
+                # self.logger.debug('Dentro del IF')
+                # Replace the string
+                vm_name_aux = vm_name_aux.replace(elem, '-')
+
+        return vm_name_aux
 
     def get_flavor_id_from_data(self, flavor_dict):
-        self.logger.debug("Getting flavor id from data")
-        self._reload_connection()
-        vm_sizes_list = [vm_size.serialize() for vm_size in self.conn_compute.virtual_machine_sizes.list(self.region)]
 
-        cpus = flavor_dict['vcpus']
-        memMB = flavor_dict['ram']
+        self.logger.debug("getting flavor id from data, flavor_dict: %s", flavor_dict)
+        filter_dict = flavor_dict or {}
+        try:
+            self._reload_connection()
+            vm_sizes_list = [vm_size.serialize() for vm_size in
+                             self.conn_compute.virtual_machine_sizes.list(self.region)]
 
-        filteredSizes = [size for size in vm_sizes_list if size['numberOfCores'] > cpus and size['memoryInMB'] > memMB]
-        listedFilteredSizes = sorted(filteredSizes, key=lambda k: k['numberOfCores'])
+            cpus = filter_dict.get('vcpus') or 0
+            memMB = filter_dict.get('ram') or 0
 
-        return listedFilteredSizes[0]['name']
+            # Filter
+            if self._config.get("flavors_pattern"):
+                filtered_sizes = [size for size in vm_sizes_list if size['numberOfCores'] >= cpus and
+                                  size['memoryInMB'] >= memMB and
+                                  re.search(self._config.get("flavors_pattern"), size["name"])]
+            else:
+                filtered_sizes = [size for size in vm_sizes_list if size['numberOfCores'] >= cpus and
+                                  size['memoryInMB'] >= memMB]
+
+            # Sort
+            listedFilteredSizes = sorted(filtered_sizes, key=lambda k: (k['numberOfCores'], k['memoryInMB'],
+                                                                        k['resourceDiskSizeInMB']))
+
+            if listedFilteredSizes:
+                return listedFilteredSizes[0]['name']
+            raise vimconn.vimconnNotFoundException("Cannot find any flavor matching '{}'".format(str(flavor_dict)))
+
+        except Exception as e:
+            self._format_vimconn_exception(e)
+
+    def _get_flavor_id_from_flavor_name(self, flavor_name):
+
+        # self.logger.debug("getting flavor id from flavor name {}".format(flavor_name))
+        try:
+            self._reload_connection()
+            vm_sizes_list = [vm_size.serialize() for vm_size in
+                             self.conn_compute.virtual_machine_sizes.list(self.region)]
+
+            output_flavor = None
+            for size in vm_sizes_list:
+                if size['name'] == flavor_name:
+                    output_flavor = size
+
+            # None is returned if not found anything
+            return output_flavor
+
+        except Exception as e:
+            self._format_vimconn_exception(e)
 
     def check_vim_connectivity(self):
         try:
@@ -389,53 +864,382 @@ class vimconnector(vimconn.vimconnector):
             raise vimconn.vimconnException("Connectivity issue with Azure API: {}".format(e))
 
     def get_network(self, net_id):
-        resGroup = self._get_resource_group_name_from_resource_id(net_id)
-        resName = self._get_resource_name_from_resource_id(net_id)
-        
-        self._reload_connection()
-        vnet = self.conn_vnet.virtual_networks.get(resGroup, resName)
 
-        return vnet
-
-    def delete_network(self, net_id):
-        resGroup = self._get_resource_group_name_from_resource_id(net_id)
-        resName = self._get_resource_name_from_resource_id(net_id)
-        
+        # self.logger.debug('get network id: {}'.format(net_id))
+        # res_name = self._get_resource_name_from_resource_id(net_id)
         self._reload_connection()
-        self.conn_vnet.virtual_networks.delete(resGroup, resName)
 
-    def delete_vminstance(self, vm_id):
-        resGroup = self._get_resource_group_name_from_resource_id(net_id)
-        resName = self._get_resource_name_from_resource_id(net_id)
-        
+        filter_dict = {'name': net_id}
+        network_list = self.get_network_list(filter_dict)
+
+        if not network_list:
+            raise vimconn.vimconnNotFoundException("network '{}' not found".format(net_id))
+        else:
+            return network_list[0]
+
+    def delete_network(self, net_id, created_items=None):
+
+        self.logger.debug('deleting network {} - {}'.format(self.resource_group, net_id))
+
         self._reload_connection()
-        self.conn_compute.virtual_machines.delete(resGroup, resName)
+        res_name = self._get_resource_name_from_resource_id(net_id)
+        filter_dict = {'name': res_name}
+        network_list = self.get_network_list(filter_dict)
+        if not network_list:
+            raise vimconn.vimconnNotFoundException("network '{}' not found".format(net_id))
+
+        try:
+            # Subnet API fails (CloudError: Azure Error: ResourceNotFound)
+            # Put the initial virtual_network API
+            async_delete = self.conn_vnet.subnets.delete(self.resource_group, self.vnet_name, res_name)
+            async_delete.wait()
+            return net_id
+
+        except CloudError as e:
+            if e.error.error and "notfound" in e.error.error.lower():
+                raise vimconn.vimconnNotFoundException("network '{}' not found".format(net_id))
+            else:
+                self._format_vimconn_exception(e)
+        except Exception as e:
+            self._format_vimconn_exception(e)
+
+    def delete_vminstance(self, vm_id, created_items=None):
+        """ Deletes a vm instance from the vim.
+        """
+        self.logger.debug('deleting VM instance {} - {}'.format(self.resource_group, vm_id))
+        self._reload_connection()
+
+        try:
+
+            res_name = self._get_resource_name_from_resource_id(vm_id)
+            vm = self.conn_compute.virtual_machines.get(self.resource_group, res_name)
+
+            # Shuts down the virtual machine and releases the compute resources
+            # vm_stop = self.conn_compute.virtual_machines.power_off(self.resource_group, resName)
+            # vm_stop.wait()
+
+            vm_delete = self.conn_compute.virtual_machines.delete(self.resource_group, res_name)
+            vm_delete.wait()
+            self.logger.debug('deleted VM name: %s', res_name)
+
+            # Delete OS Disk
+            os_disk_name = vm.storage_profile.os_disk.name
+            self.logger.debug('delete OS DISK: %s', os_disk_name)
+            self.conn_compute.disks.delete(self.resource_group, os_disk_name)
+            self.logger.debug('deleted OS DISK name: %s', os_disk_name)
+
+            for data_disk in vm.storage_profile.data_disks:
+                self.logger.debug('delete data_disk: %s', data_disk.name)
+                self.conn_compute.disks.delete(self.resource_group, data_disk.name)
+                self.logger.debug('deleted OS DISK name: %s', data_disk.name)
+
+            # After deleting VM, it is necessary to delete NIC, because if is not deleted delete_network
+            # does not work because Azure says that is in use the subnet
+            network_interfaces = vm.network_profile.network_interfaces
+
+            for network_interface in network_interfaces:
+
+                nic_name = self._get_resource_name_from_resource_id(network_interface.id)
+                nic_data = self.conn_vnet.network_interfaces.get(
+                    self.resource_group,
+                    nic_name)
+
+                public_ip_name = None
+                exist_public_ip = nic_data.ip_configurations[0].public_ip_address
+                if exist_public_ip:
+                    public_ip_id = nic_data.ip_configurations[0].public_ip_address.id
+
+                    # Delete public_ip
+                    public_ip_name = self._get_resource_name_from_resource_id(public_ip_id)
+
+                    # Public ip must be deleted afterwards of nic that is attached
+
+                self.logger.debug('delete NIC name: %s', nic_name)
+                nic_delete = self.conn_vnet.network_interfaces.delete(self.resource_group, nic_name)
+                nic_delete.wait()
+                self.logger.debug('deleted NIC name: %s', nic_name)
+
+                # Delete list of public ips
+                if public_ip_name:
+                    self.logger.debug('delete PUBLIC IP - ' + public_ip_name)
+                    self.conn_vnet.public_ip_addresses.delete(self.resource_group, public_ip_name)
+
+        except CloudError as e:
+            if e.error.error and "notfound" in e.error.error.lower():
+                raise vimconn.vimconnNotFoundException("No vm instance found '{}'".format(vm_id))
+            else:
+                self._format_vimconn_exception(e)
+        except Exception as e:
+            self._format_vimconn_exception(e)
+
+    def action_vminstance(self, vm_id, action_dict, created_items={}):
+        """Send and action over a VM instance from VIM
+        Returns the vm_id if the action was successfully sent to the VIM
+        """
+
+        self.logger.debug("Action over VM '%s': %s", vm_id, str(action_dict))
+        try:
+            self._reload_connection()
+            resName = self._get_resource_name_from_resource_id(vm_id)
+            if "start" in action_dict:
+                self.conn_compute.virtual_machines.start(self.resource_group, resName)
+            elif "stop" in action_dict or "shutdown" in action_dict or "shutoff" in action_dict:
+                self.conn_compute.virtual_machines.power_off(self.resource_group, resName)
+            elif "terminate" in action_dict:
+                self.conn_compute.virtual_machines.delete(self.resource_group, resName)
+            elif "reboot" in action_dict:
+                self.conn_compute.virtual_machines.restart(self.resource_group, resName)
+            return None
+        except CloudError as e:
+            if e.error.error and "notfound" in e.error.error.lower():
+                raise vimconn.vimconnNotFoundException("No vm found '{}'".format(vm_id))
+            else:
+                self._format_vimconn_exception(e)
+        except Exception as e:
+            self._format_vimconn_exception(e)
+
+    def delete_flavor(self, flavor_id):
+        raise vimconn.vimconnAuthException("It is not possible to delete a FLAVOR in AZURE")
+
+    def delete_tenant(self, tenant_id,):
+        raise vimconn.vimconnAuthException("It is not possible to delete a TENANT in AZURE")
+
+    def delete_image(self, image_id):
+        raise vimconn.vimconnAuthException("It is not possible to delete a IMAGE in AZURE")
 
     def get_vminstance(self, vm_id):
-        resGroup = self._get_resource_group_name_from_resource_id(net_id)
-        resName = self._get_resource_name_from_resource_id(net_id)
-        
+        """
+        Obtaing the vm instance data from v_id
+        """
+        self.logger.debug("get vm instance: %s", vm_id)
         self._reload_connection()
-        vm=self.conn_compute.virtual_machines.get(resGroup, resName)
+        try:
+            resName = self._get_resource_name_from_resource_id(vm_id)
+            vm = self.conn_compute.virtual_machines.get(self.resource_group, resName)
+        except CloudError as e:
+            if e.error.error and "notfound" in e.error.error.lower():
+                raise vimconn.vimconnNotFoundException("No vminstance found '{}'".format(vm_id))
+            else:
+                self._format_vimconn_exception(e)
+        except Exception as e:
+            self._format_vimconn_exception(e)
 
         return vm
 
     def get_flavor(self, flavor_id):
+        """
+        Obtains the flavor_data from the flavor_id
+        """
         self._reload_connection()
-        for vm_size in self.conn_compute.virtual_machine_sizes.list(self.region):
-            if vm_size.name == flavor_id :
-                return vm_size
+        self.logger.debug("get flavor from id: %s", flavor_id)
+        flavor_data = self._get_flavor_id_from_flavor_name(flavor_id)
+        if flavor_data:
+            flavor = {
+                'id': flavor_id,
+                'name': flavor_id,
+                'ram': flavor_data['memoryInMB'],
+                'vcpus': flavor_data['numberOfCores'],
+                'disk': flavor_data['resourceDiskSizeInMB']/1024
+            }
+            return flavor
+        else:
+            raise vimconn.vimconnNotFoundException("flavor '{}' not found".format(flavor_id))
 
+    def get_tenant_list(self, filter_dict={}):
+        """ Obtains the list of tenants
+            For the azure connector only the azure tenant will be returned if it is compatible
+            with filter_dict
+        """
+        tenants_azure = [{'name': self.tenant, 'id': self.tenant}]
+        tenant_list = []
 
-# TODO refresh_nets_status ver estado activo
-# TODO refresh_vms_status  ver estado activo
-# TODO get_vminstance_console  for getting console
+        self.logger.debug("get tenant list: %s", filter_dict)
+        for tenant_azure in tenants_azure:
+            if filter_dict:
+                if filter_dict.get("id") and str(tenant_azure.get("id")) != filter_dict["id"]:
+                    continue
+                if filter_dict.get("name") and str(tenant_azure.get("name")) != filter_dict["name"]:
+                    continue
+
+            tenant_list.append(tenant_azure)
+
+        return tenant_list
+
+    def refresh_nets_status(self, net_list):
+        """Get the status of the networks
+            Params: the list of network identifiers
+            Returns a dictionary with:
+                net_id:  #VIM id of this network
+                status:  #Mandatory. Text with one of:
+                         #  DELETED (not found at vim)
+                         #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                         #  OTHER (Vim reported other status not understood)
+                         #  ERROR (VIM indicates an ERROR status)
+                         #  ACTIVE, INACTIVE, DOWN (admin down),
+                         #  BUILD (on building process)
+                         #
+                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                 vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
+
+        """
+
+        out_nets = {}
+        self._reload_connection()
+
+        self.logger.debug("reload nets status net_list: %s", net_list)
+        for net_id in net_list:
+            try:
+                netName = self._get_net_name_from_resource_id(net_id)
+                resName = self._get_resource_name_from_resource_id(net_id)
+
+                net = self.conn_vnet.subnets.get(self.resource_group, netName, resName)
+
+                out_nets[net_id] = {
+                    "status": self.provision_state2osm[net.provisioning_state],
+                    "vim_info": str(net)
+                }
+            except CloudError as e:
+                if e.error.error and "notfound" in e.error.error.lower():
+                    self.logger.info("Not found subnet net_name: %s, subnet_name: %s", netName, resName)
+                    out_nets[net_id] = {
+                        "status": "DELETED",
+                        "error_msg": str(e)
+                    }
+                else:
+                    self.logger.error("CloudError Exception %s when searching subnet", e)
+                    out_nets[net_id] = {
+                        "status": "VIM_ERROR",
+                        "error_msg": str(e)
+                    }
+            except vimconn.vimconnNotFoundException as e:
+                self.logger.error("VimConnNotFoundException %s when searching subnet", e)
+                out_nets[net_id] = {
+                    "status": "DELETED",
+                    "error_msg": str(e)
+                }
+            except Exception as e:
+                self.logger.error("Exception %s when searching subnet", e, exc_info=True)
+                out_nets[net_id] = {
+                    "status": "VIM_ERROR",
+                    "error_msg": str(e)
+                }
+        return out_nets
+
+    def refresh_vms_status(self, vm_list):
+        """ Get the status of the virtual machines and their interfaces/ports
+        Params: the list of VM identifiers
+        Returns a dictionary with:
+            vm_id:          # VIM id of this Virtual Machine
+                status:     # Mandatory. Text with one of:
+                            #  DELETED (not found at vim)
+                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                            #  OTHER (Vim reported other status not understood)
+                            #  ERROR (VIM indicates an ERROR status)
+                            #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running),
+                            #  BUILD (on building process), ERROR
+                            #  ACTIVE:NoMgmtIP (Active but none of its interfaces has an IP address
+                            #     (ACTIVE:NoMgmtIP is not returned for Azure)
+                            #
+                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
+                interfaces: list with interface info. Each item a dictionary with:
+                    vim_interface_id -  The ID of the interface
+                    mac_address - The MAC address of the interface.
+                    ip_address - The IP address of the interface within the subnet.
+        """
+
+        out_vms = {}
+        self._reload_connection()
+
+        self.logger.debug("refresh vm status vm_list: %s", vm_list)
+        search_vm_list = vm_list or {}
+
+        for vm_id in search_vm_list:
+            out_vm = {}
+            try:
+                res_name = self._get_resource_name_from_resource_id(vm_id)
+
+                vm = self.conn_compute.virtual_machines.get(self.resource_group, res_name)
+                out_vm['vim_info'] = str(vm)
+                out_vm['status'] = self.provision_state2osm.get(vm.provisioning_state, 'OTHER')
+                if vm.provisioning_state == 'Succeeded':
+                    # check if machine is running or stopped
+                    instance_view = self.conn_compute.virtual_machines.instance_view(self.resource_group,
+                                                                                     res_name)
+                    for status in instance_view.statuses:
+                        splitted_status = status.code.split("/")
+                        if len(splitted_status) == 2 and splitted_status[0] == 'PowerState':
+                            out_vm['status'] = self.power_state2osm.get(splitted_status[1], 'OTHER')
+
+                network_interfaces = vm.network_profile.network_interfaces
+                out_vm['interfaces'] = self._get_vm_interfaces_status(vm_id, network_interfaces)
+
+            except CloudError as e:
+                if e.error.error and "notfound" in e.error.error.lower():
+                    self.logger.debug("Not found vm id: %s", vm_id)
+                    out_vm['status'] = "DELETED"
+                    out_vm['error_msg'] = str(e)
+                    out_vm['vim_info'] = None
+                else:
+                    # maybe connection error or another type of error, return vim error
+                    self.logger.error("Exception %s refreshing vm_status", e)
+                    out_vm['status'] = "VIM_ERROR"
+                    out_vm['error_msg'] = str(e)
+                    out_vm['vim_info'] = None
+            except Exception as e:
+                self.logger.error("Exception %s refreshing vm_status", e, exc_info=True)
+                out_vm['status'] = "VIM_ERROR"
+                out_vm['error_msg'] = str(e)
+                out_vm['vim_info'] = None
+
+            out_vms[vm_id] = out_vm
+
+        return out_vms
+
+    def _get_vm_interfaces_status(self, vm_id, interfaces):
+        """
+        Gets the interfaces detail for a vm
+        :param interfaces: List of interfaces.
+        :return: Dictionary with list of interfaces including, vim_interface_id, mac_address and ip_address
+        """
+        try:
+            interface_list = []
+            for network_interface in interfaces:
+                interface_dict = {}
+                nic_name = self._get_resource_name_from_resource_id(network_interface.id)
+                interface_dict['vim_interface_id'] = network_interface.id
+
+                nic_data = self.conn_vnet.network_interfaces.get(
+                    self.resource_group,
+                    nic_name)
+
+                ips = []
+                if nic_data.ip_configurations[0].public_ip_address:
+                    self.logger.debug("Obtain public ip address")
+                    public_ip_name = self._get_resource_name_from_resource_id(
+                        nic_data.ip_configurations[0].public_ip_address.id)
+                    public_ip = self.conn_vnet.public_ip_addresses.get(self.resource_group, public_ip_name)
+                    self.logger.debug("Public ip address is: %s", public_ip.ip_address)
+                    ips.append(public_ip.ip_address)
+
+                private_ip = nic_data.ip_configurations[0].private_ip_address
+                ips.append(private_ip)
+
+                interface_dict['mac_address'] = nic_data.mac_address
+                interface_dict['ip_address'] = ";".join(ips)
+                interface_list.append(interface_dict)
+
+            return interface_list
+        except Exception as e:
+            self.logger.error("Exception %s obtaining interface data for vm: %s, error: %s", vm_id, e, exc_info=True)
+            self._format_vimconn_exception(e)
+
 
 if __name__ == "__main__":
 
     # Making some basic test
-    vim_id='azure'
-    vim_name='azure'
+    vim_id = 'azure'
+    vim_name = 'azure'
     needed_test_params = {
         "client_id": "AZURE_CLIENT_ID",
         "secret": "AZURE_SECRET",
@@ -453,11 +1257,11 @@ if __name__ == "__main__":
         test_params[param] = value
 
     config = {
-            'region_name': getenv("AZURE_REGION_NAME", 'westeurope'),
-            'resource_group': getenv("AZURE_RESOURCE_GROUP"),
-            'subscription_id': getenv("AZURE_SUBSCRIPTION_ID"),
-            'pub_key': getenv("AZURE_PUB_KEY", None),
-            'vnet_name': getenv("AZURE_VNET_NAME", 'myNetwork'),
+        'region_name': getenv("AZURE_REGION_NAME", 'westeurope'),
+        'resource_group': getenv("AZURE_RESOURCE_GROUP"),
+        'subscription_id': getenv("AZURE_SUBSCRIPTION_ID"),
+        'pub_key': getenv("AZURE_PUB_KEY", None),
+        'vnet_name': getenv("AZURE_VNET_NAME", 'myNetwork'),
     }
 
     virtualMachine = {
@@ -480,7 +1284,7 @@ if __name__ == "__main__":
 
     vnet_config = {
         'subnet_address': '10.1.2.0/24',
-        #'subnet_name': 'subnet-oam'
+        # 'subnet_name': 'subnet-oam'
     }
     ###########################
 
@@ -492,4 +1296,9 @@ if __name__ == "__main__":
     # azure.new_vminstance(virtualMachine['name'], virtualMachine['description'], virtualMachine['status'],
     #                      virtualMachine['image'], virtualMachine['hardware_profile']['vm_size'], subnets)
 
-    azure.get_flavor("Standard_A11")
+    azure.new_network("mynet", None)
+    net_id = "/subscriptions/82f80cc1-876b-4591-9911-1fb5788384fd/resourceGroups/osmRG/providers/Microsoft."\
+             "Network/virtualNetworks/test"
+    net_id_not_found = "/subscriptions/82f80cc1-876b-4591-9911-1fb5788384fd/resourceGroups/osmRG/providers/"\
+                       "Microsoft.Network/virtualNetworks/testALF"
+    azure.refresh_nets_status([net_id, net_id_not_found])
