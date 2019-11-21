@@ -13,7 +13,7 @@ from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.compute.v2019_03_01.models import DiskCreateOptionTypes
+from azure.mgmt.compute.models import DiskCreateOption
 from msrestazure.azure_exceptions import CloudError
 from msrest.exceptions import AuthenticationError
 from requests.exceptions import ConnectionError
@@ -348,39 +348,22 @@ class vimconnector(vimconn.vimconnector):
         subnet_id = net['net_id']
         location = self._get_location_from_resource_group(self.resource_group)
         try:
+            net_ifz = {'location':location}
+            net_ip_config = {'name': nic_name + '-ipconfiguration', 'subnet': {'id': subnet_id}}
             if static_ip:
-                async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(
+                net_ip_config['privateIPAddress'] = static_ip
+                net_ip_config['privateIPAllocationMethod'] = 'Static'
+            net_ifz['ip_configurations'] = [net_ip_config]
+            mac_address = net.get('mac_address')
+            if mac_address:
+                net_ifz['mac_address'] = mac_address
+
+            async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(
                     self.resource_group,
                     nic_name,
-                    {
-                        'location': location,
-                        'ip_configurations': [{
-                            'name': nic_name + '-ipconfiguration',
-                            'privateIPAddress': static_ip,
-                            'privateIPAllocationMethod': 'Static',
-                            'subnet': {
-                                'id': subnet_id
-                            }
-                        }]
-                    }
+                    net_ifz
                 )
-                async_nic_creation.wait()
-            else:
-                ip_configuration_name = nic_name + '-ipconfiguration'
-                async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(
-                    self.resource_group,
-                    nic_name,
-                    {
-                        'location': location,
-                        'ip_configurations': [{
-                            'name': ip_configuration_name,
-                            'subnet': {
-                                'id': subnet_id
-                            }
-                        }]
-                    }
-                )
-                async_nic_creation.wait()
+            async_nic_creation.wait()
             self.logger.debug('created nic name %s', nic_name)
 
             public_ip = net.get('floating_ip')
@@ -632,7 +615,7 @@ class vimconnector(vimconn.vimconnector):
             # subnet_id=net['subnet_id']
             # subnet_id=net['net_id']
             nic_name = vm_name + '-nic-'+str(idx)
-            vm_nic = self._create_nic(net, nic_name)
+            vm_nic = self._create_nic(net, nic_name, net.get('ip_address'))
             vm_nics.append({'id': str(vm_nic.id)})
             net['vim_id'] = vm_nic.id
 
@@ -694,11 +677,20 @@ class vimconnector(vimconn.vimconnector):
                         data_disks.append({
                             'lun': lun_name,  # You choose the value, depending of what is available for you
                             'name': vm_name + "_data_disk-" + str(lun_name),
-                            'create_option': DiskCreateOptionTypes.empty,
+                            'create_option': DiskCreateOption.empty,
                             'disk_size_gb': disk.get("size")
                         })
                     else:
-                        self.logger.debug("currently not able to create data disks from image for azure, ignoring")
+                        #self.logger.debug("currently not able to create data disks from image for azure, ignoring")
+                        data_disks.append({
+                            'lun': lun_name,  # You choose the value, depending of what is available for you
+                            'name': vm_name + "_data_disk-" + str(lun_name),
+                            'create_option': 'Attach',
+                            'disk_size_gb': disk.get("size"),
+                            'managed_disk': {
+                                'id': disk.get("image_id")
+                            }
+                        })
 
                 if data_disks:
                     vm_parameters["storage_profile"]["data_disks"] = data_disks
@@ -720,10 +712,9 @@ class vimconnector(vimconn.vimconnector):
                 vm_name,
                 vm_parameters
             )
-            self.logger.debug("created vm name: %s", vm_name)
-            
             #creation_result.wait()
             result = creation_result.result()
+            self.logger.debug("created vm name: %s", vm_name)
 
             if start:
                 start_result = self.conn_compute.virtual_machines.start(
@@ -1223,10 +1214,19 @@ class vimconnector(vimconn.vimconnector):
                     self.resource_group,
                     nic_name)
 
+                ips = []
+                if nic_data.ip_configurations[0].public_ip_address:
+                    self.logger.debug("Obtain public ip address")
+                    public_ip_name = self._get_resource_name_from_resource_id(nic_data.ip_configurations[0].public_ip_address.id)
+                    public_ip = self.conn_vnet.public_ip_addresses.get(self.resource_group, public_ip_name)
+                    self.logger.debug("Public ip address is: %s", public_ip.ip_address)
+                    ips.append(public_ip.ip_address)
+
                 private_ip = nic_data.ip_configurations[0].private_ip_address
+                ips.append(private_ip)
 
                 interface_dict['mac_address'] = nic_data.mac_address
-                interface_dict['ip_address'] = private_ip
+                interface_dict['ip_address'] = ";".join(ips)
                 interface_list.append(interface_dict)
 
             return interface_list
