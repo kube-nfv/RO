@@ -1,0 +1,91 @@
+# -*- coding: utf-8 -*-
+##
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+##
+
+# pylint: disable=E1101
+
+import unittest
+
+from ..utils import (
+    get_arg,
+    inject_args,
+    remove_extra_items,
+)
+
+
+class TestUtils(unittest.TestCase):
+    def test_inject_args_curries_arguments(self):
+        fn = inject_args(lambda a=None, b=None: a + b, a=3, b=5)
+        self.assertEqual(fn(), 8)
+
+    def test_inject_args_doesnt_add_arg_if_not_needed(self):
+        fn = inject_args(lambda: 7, a=1, b=2)
+        self.assertEqual(fn(), 7)
+        fn = inject_args(lambda a=None: a, b=2)
+        self.assertEqual(fn(1), 1)
+
+    def test_inject_args_knows_how_to_handle_arg_order(self):
+        fn = inject_args(lambda a=None, b=None: b - a, a=3)
+        self.assertEqual(fn(b=4), 1)
+        fn = inject_args(lambda b=None, a=None: b - a, a=3)
+        self.assertEqual(fn(b=4), 1)
+
+    def test_inject_args_works_as_decorator(self):
+        fn = inject_args(x=1)(lambda x=None: x)
+        self.assertEqual(fn(), 1)
+
+    def test_get_arg__positional(self):
+        def _fn(x, y, z):
+            return x + y + z
+
+        x = get_arg("x", _fn, (1, 3, 4), {})
+        self.assertEqual(x, 1)
+        y = get_arg("y", _fn, (1, 3, 4), {})
+        self.assertEqual(y, 3)
+        z = get_arg("z", _fn, (1, 3, 4), {})
+        self.assertEqual(z, 4)
+
+    def test_get_arg__keyword(self):
+        def _fn(x, y, z=5):
+            return x + y + z
+
+        z = get_arg("z", _fn, (1, 2), {"z": 3})
+        self.assertEqual(z, 3)
+
+
+
+    def test_remove_extra_items__keep_aditional_properties(self):
+        schema = {
+            "type": "object",
+            "properties": {
+                "a": {
+                    "type": "object",
+                    "properties": {
+                        "type": "object",
+                        "properties": {"b": "string"},
+                    },
+                    "additionalProperties": True,
+                }
+            },
+        }
+
+        example = {"a": {"b": 1, "c": 2}, "d": 3}
+        deleted = remove_extra_items(example, schema)
+        self.assertIn("d", deleted)
+        self.assertIs(example.get("d"), None)
+        self.assertEqual(example["a"]["c"], 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

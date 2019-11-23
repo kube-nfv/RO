@@ -1,5 +1,5 @@
-#!/bin/sh
-
+##
+# Copyright VMware Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,7 +12,14 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+##
 
-flake8 RO/osm_ro/wim RO/osm_ro/vim_thread.py --max-line-length 120 \
-    --exclude .svn,CVS,.gz,.git,__pycache__,.tox,local,temp,osm_im --ignore W291,W293,E226,E402,W504
-
+PyYAML
+requests
+netaddr
+pyvcloud==19.1.1
+pyvmomi
+progressbar
+prettytable
+# TODO py3 genisoimage
+git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO

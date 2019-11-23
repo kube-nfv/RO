@@ -1,5 +1,4 @@
-#!/bin/sh
-
+##
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,7 +11,14 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+##
 
-flake8 RO/osm_ro/wim RO/osm_ro/vim_thread.py --max-line-length 120 \
-    --exclude .svn,CVS,.gz,.git,__pycache__,.tox,local,temp,osm_im --ignore W291,W293,E226,E402,W504
+all: clean package
+
+clean:
+	rm -rf dist deb_dist osm_rosdn_tapi-*.tar.gz osm_rosdn_tapi.egg-info .eggs
+
+package:
+	python3 setup.py --command-packages=stdeb.command sdist_dsc
+	cd deb_dist/osm-rosdn-tapi*/ && dpkg-buildpackage -rfakeroot -uc -us
 
