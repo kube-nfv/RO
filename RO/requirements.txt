@@ -14,7 +14,7 @@
 
 PyYAML
 bottle
-MySQL-python
+mysqlclient
 jsonschema
 paramiko
 requests==2.18.*

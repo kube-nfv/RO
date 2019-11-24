@@ -13,6 +13,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-flake8 RO/osm_ro/wim RO/osm_ro/vim_thread.py --max-line-length 120 \
-    --exclude .svn,CVS,.gz,.git,__pycache__,.tox,local,temp,osm_im --ignore W291,W293,E226,E402,W504
+tox -c RO/tox.ini
 
