@@ -14,7 +14,7 @@
 ##
 
 import base64
-import vimconn
+from osm_ro import vimconn
 import logging
 import netaddr
 import re

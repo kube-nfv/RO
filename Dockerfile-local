@@ -19,7 +19,7 @@ LABEL authors="Alfonso Tierno"
 
 RUN apt-get update && apt-get install -y git python3 python3-pip \
     && python3 -m pip install --upgrade pip \
-    && DEBIAN_FRONTEND=noninteractive apt-get -y install libmysqlclient-dev mysql-client \
+    && DEBIAN_FRONTEND=noninteractive apt-get -y install libssl-dev libmysqlclient-dev mysql-client \
     && DEBIAN_FRONTEND=noninteractive python3 -m pip install -U networking-l2gw  \
     && DEBIAN_FRONTEND=noninteractive python3 -m pip install -U progressbar pyvmomi pyvcloud==19.1.1  \
     && DEBIAN_FRONTEND=noninteractive apt-get -y install genisoimage
@@ -52,6 +52,7 @@ RUN /root/RO/RO/osm_ro/scripts/install-osm-im.sh --develop && \
     python3 -m pip install -e /root/RO/RO-VIM-openstack && \
     python3 -m pip install -e /root/RO/RO-VIM-openvim && \
     python3 -m pip install -e /root/RO/RO-VIM-aws && \
+    python3 -m pip install -e /root/RO/RO-VIM-azure && \
     python3 -m pip install -e /root/RO/RO-VIM-fos && \
     python3 -m pip install -e /root/RO/RO-SDN-dynpac && \
     python3 -m pip install -e /root/RO/RO-SDN-tapi && \

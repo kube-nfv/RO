@@ -37,7 +37,7 @@ __date__ ="$13-may-2019 10:35:12$"
 import uuid
 import socket
 import struct
-from . import vimconn
+from osm_ro import vimconn
 import random
 import yaml
 from functools import partial
