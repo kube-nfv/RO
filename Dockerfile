@@ -21,7 +21,7 @@ FROM ubuntu:16.04
 RUN  apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install git tox make python-all python3 python3-pip debhelper wget && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install python3-all libssl-dev apt-utils && \
-  DEBIAN_FRONTEND=noninteractive pip3 install -U setuptools setuptools-version-command stdeb && \
+  DEBIAN_FRONTEND=noninteractive python3 -m pip install -U setuptools setuptools-version-command stdeb && \
   DEBIAN_FRONTEND=noninteractive apt-get --yes install libmysqlclient-dev mysql-client
 
   # needed for tests:  libmysqlclient-dev mysql-client tox  
