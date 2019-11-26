@@ -3422,7 +3422,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                 task_extra = {}
                 if create_network:
                     task_action = "CREATE"
-                    task_extra["params"] = (net_vim_name, net_type, sce_net.get('ip_profile', None), None, sce_net.get('provider_network', None), wim_account_name)
+                    task_extra["params"] = (net_vim_name, net_type, sce_net.get('ip_profile', None), False,
+                                            sce_net.get('provider_network', None), wim_account_name)
 
                     if lookfor_network:
                         task_extra["find"] = (lookfor_filter,)
