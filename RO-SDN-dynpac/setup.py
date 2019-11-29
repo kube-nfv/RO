@@ -48,6 +48,6 @@ setup(
     install_requires=["requests", "osm-ro"],
     setup_requires=['setuptools-version-command'],
     entry_points={
-        'osm_rosdn.plugins': ['rosdn_dynpac = osm_rosdn_dynpac.wimconn_dynpac'],
+        'osm_rosdn.plugins': ['rosdn_dynpac = osm_rosdn_dynpac.wimconn_dynpac:DynpacConnector'],
     },
 )
