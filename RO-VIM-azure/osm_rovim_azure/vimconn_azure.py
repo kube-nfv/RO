@@ -27,6 +27,7 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import DiskCreateOption
 from msrestazure.azure_exceptions import CloudError
 from msrest.exceptions import AuthenticationError
+import msrestazure.tools as azure_tools
 from requests.exceptions import ConnectionError
 
 __author__ = 'Isabel Lloret, Sergio Gonzalez, Alfonso Tierno'
@@ -64,6 +65,8 @@ class vimconnector(vimconn.vimconnector):
         "deallocated": "BUILD",
         "deallocating": "BUILD"
     }
+
+    AZURE_ZONES = ["1", "2", "3"]
 
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
                  config={}, persistent_info={}):
@@ -353,7 +356,7 @@ class vimconnector(vimconn.vimconnector):
             name = subnet_name + "-" + str(name_suffix)
         return name
 
-    def _create_nic(self, net, nic_name, static_ip=None):
+    def _create_nic(self, net, nic_name, static_ip=None, created_items={}):
 
         self.logger.debug('create nic name %s, net_name %s', nic_name, net)
         self._reload_connection()
@@ -371,9 +374,9 @@ class vimconnector(vimconn.vimconnector):
             if mac_address:
                 net_ifz['mac_address'] = mac_address
 
-            async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(self.resource_group, nic_name,
-                                                                                    net_ifz)
-            async_nic_creation.wait()
+            async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(self.resource_group, nic_name,                                                                                    net_ifz)
+            nic_data = async_nic_creation.result()
+            created_items[nic_data.id] = True
             self.logger.debug('created nic name %s', nic_name)
 
             public_ip = net.get('floating_ip')
@@ -383,19 +386,21 @@ class vimconnector(vimconn.vimconnector):
                     'public_ip_allocation_method': 'Dynamic'
                 }
                 public_ip_name = nic_name + '-public-ip'
-                public_ip = self.conn_vnet.public_ip_addresses.create_or_update(
+                async_public_ip = self.conn_vnet.public_ip_addresses.create_or_update(
                     self.resource_group,
                     public_ip_name,
                     public_ip_address_params
                 )
-                self.logger.debug('created public IP: {}'.format(public_ip.result()))
+                public_ip = async_public_ip.result()
+                self.logger.debug('created public IP: {}'.format(public_ip))
 
                 # Associate NIC to Public IP
                 nic_data = self.conn_vnet.network_interfaces.get(
                     self.resource_group,
                     nic_name)
 
-                nic_data.ip_configurations[0].public_ip_address = public_ip.result()
+                nic_data.ip_configurations[0].public_ip_address = public_ip
+                created_items[public_ip.id] = True
 
                 self.conn_vnet.network_interfaces.create_or_update(
                     self.resource_group,
@@ -405,7 +410,7 @@ class vimconnector(vimconn.vimconnector):
         except Exception as e:
             self._format_vimconn_exception(e)
 
-        return async_nic_creation.result()
+        return nic_data, created_items
 
     def new_flavor(self, flavor_data):
         """
@@ -608,18 +613,23 @@ class vimconnector(vimconn.vimconnector):
         # image_id are several fields of the image_id
         image_reference = self._get_image_reference(image_id)
 
-        self._check_subnets_for_vm(net_list)
-        vm_nics = []
-        for idx, net in enumerate(net_list):
-            # Fault with subnet_id
-            # subnet_id=net['subnet_id']
-            # subnet_id=net['net_id']
-            nic_name = vm_name + '-nic-'+str(idx)
-            vm_nic = self._create_nic(net, nic_name, net.get('ip_address'))
-            vm_nics.append({'id': str(vm_nic.id)})
-            net['vim_id'] = vm_nic.id
+
 
         try:
+            virtual_machine = None
+            created_items = {}
+
+            # Create nics for each subnet
+            self._check_subnets_for_vm(net_list)
+            vm_nics = []
+            for idx, net in enumerate(net_list):
+                # Fault with subnet_id
+                # subnet_id=net['subnet_id']
+                # subnet_id=net['net_id']
+                nic_name = vm_name + '-nic-' + str(idx)
+                vm_nic, nic_items = self._create_nic(net, nic_name, net.get('ip_address'), created_items)
+                vm_nics.append({'id': str(vm_nic.id)})
+                #net['vim_id'] = vm_nic.id
 
             # cloud-init configuration
             # cloud config
@@ -668,33 +678,6 @@ class vimconnector(vimconn.vimconnector):
                 }
             }
 
-            # Add data disks if they are provided
-            if disk_list:
-                data_disks = []
-                for lun_name, disk in enumerate(disk_list):
-                    self.logger.debug("add disk size: %s, image: %s", disk.get("size"), disk.get("image_id"))
-                    if not disk.get("image_id"):
-                        data_disks.append({
-                            'lun': lun_name,  # You choose the value, depending of what is available for you
-                            'name': vm_name + "_data_disk-" + str(lun_name),
-                            'create_option': DiskCreateOption.empty,
-                            'disk_size_gb': disk.get("size")
-                        })
-                    else:
-                        # self.logger.debug("currently not able to create data disks from image for azure, ignoring")
-                        data_disks.append({
-                            'lun': lun_name,  # You choose the value, depending of what is available for you
-                            'name': vm_name + "_data_disk-" + str(lun_name),
-                            'create_option': 'Attach',
-                            'disk_size_gb': disk.get("size"),
-                            'managed_disk': {
-                                'id': disk.get("image_id")
-                            }
-                        })
-
-                if data_disks:
-                    vm_parameters["storage_profile"]["data_disks"] = data_disks
-
             # If the machine has several networks one must be marked as primary
             # As it is not indicated in the interface the first interface will be marked as primary
             if len(vm_nics) > 1:
@@ -706,15 +689,25 @@ class vimconnector(vimconn.vimconnector):
 
             vm_parameters['network_profile'] = {'network_interfaces': vm_nics}
 
+            # Obtain zone information
+            vm_zone = self._get_vm_zone(availability_zone_index, availability_zone_list)
+            if vm_zone:
+                vm_parameters['zones'] = [vm_zone]
+
             self.logger.debug("create vm name: %s", vm_name)
             creation_result = self.conn_compute.virtual_machines.create_or_update(
                 self.resource_group, 
                 vm_name,
                 vm_parameters
             )
-            # creation_result.wait()
-            result = creation_result.result()
+            virtual_machine = creation_result.result()
             self.logger.debug("created vm name: %s", vm_name)
+
+            # Add disks if they are provided
+            if disk_list:
+                for disk_index, disk in enumerate(disk_list):
+                    self.logger.debug("add disk size: %s, image: %s", disk.get("size"), disk.get("image"))
+                    self._add_newvm_disk(virtual_machine, vm_name, disk_index, disk, created_items)
 
             if start:
                 self.conn_compute.virtual_machines.start(
@@ -722,7 +715,7 @@ class vimconnector(vimconn.vimconnector):
                     vm_name)
             # start_result.wait()
 
-            return result.id, None
+            return virtual_machine.id, created_items
             
             # run_command_parameters = {
             #     'command_id': 'RunShellScript', # For linux, don't change it
@@ -731,6 +724,16 @@ class vimconnector(vimconn.vimconnector):
             #     ]
             # }
         except Exception as e:
+            # Rollback vm creacion
+            vm_id = None
+            if virtual_machine:
+                vm_id = virtual_machine.id
+            try:
+                self.logger.debug("exception creating vm try to rollback")
+                self.delete_vminstance(vm_id, created_items)
+            except Exception as e2:
+                self.logger.error("new_vminstance rollback fail {}".format(e2))
+
             self.logger.debug('Exception creating new vminstance: %s', e, exc_info=True)
             self._format_vimconn_exception(e)
 
@@ -752,6 +755,109 @@ class vimconnector(vimconn.vimconnector):
             name_suffix += 1
             name = vm_name + "-" + str(name_suffix)
         return name
+
+    def _get_vm_zone(self, availability_zone_index, availability_zone_list):
+
+        if availability_zone_index is None:
+            return None
+
+        vim_availability_zones = self._get_azure_availability_zones()
+        # check if VIM offer enough availability zones describe in the VNFD
+        if vim_availability_zones and len(availability_zone_list) <= len(vim_availability_zones):
+            # check if all the names of NFV AV match VIM AV names
+            match_by_index = False
+            if not availability_zone_list:
+                match_by_index = True
+            else:
+                for av in availability_zone_list:
+                    if av not in vim_availability_zones:
+                        match_by_index = True
+                        break
+            if match_by_index:
+                return vim_availability_zones[availability_zone_index]
+            else:
+                return availability_zone_list[availability_zone_index]
+        else:
+            raise vimconn.vimconnConflictException("No enough availability zones at VIM for this deployment")
+
+    def _get_azure_availability_zones(self):
+        return self.AZURE_ZONES
+
+    def _add_newvm_disk(self, virtual_machine, vm_name, disk_index, disk, created_items={}):
+
+        disk_name = None
+        data_disk = None
+
+        # Check if must create empty disk or from image
+        if disk.get('vim_id'):
+            # disk already exists, just get
+            parsed_id = azure_tools.parse_resource_id(disk.get('vim_id'))
+            disk_name = parsed_id.get("name")
+            data_disk = self.conn_compute.disks.get(self.resource_group, disk_name)
+        else:
+            disk_name = vm_name + "_DataDisk_" + str(disk_index)
+            if not disk.get("image_id"):
+                self.logger.debug("create new data disk name: %s", disk_name)
+                async_disk_creation = self.conn_compute.disks.create_or_update(
+                    self.resource_group,
+                    disk_name,
+                    {
+                        'location': self.region,
+                        'disk_size_gb': disk.get("size"),
+                        'creation_data': {
+                            'create_option': DiskCreateOption.empty
+                        }
+                    }
+                )
+                data_disk = async_disk_creation.result()
+                created_items[data_disk.id] = True
+            else:
+                image_id = disk.get("image_id")
+                if azure_tools.is_valid_resource_id(image_id):
+                    parsed_id = azure_tools.parse_resource_id(image_id)
+
+                    # Check if image is snapshot or disk
+                    image_name = parsed_id.get("name")
+                    type = parsed_id.get("resource_type")
+                    if type == 'snapshots' or type == 'disks':
+
+                        self.logger.debug("create disk from copy name: %s", image_name)
+                        # ¿Should check that snapshot exists?
+                        async_disk_creation = self.conn_compute.disks.create_or_update(
+                            self.resource_group,
+                            disk_name,
+                            {
+                                'location': self.region,
+                                'creation_data': {
+                                    'create_option': 'Copy',
+                                    'source_uri': image_id
+                                }
+                            }
+                        )
+                        data_disk = async_disk_creation.result()
+                        created_items[data_disk.id] = True
+
+                    else:
+                        raise vimconn.vimconnNotFoundException("Invalid image_id: %s ", image_id)
+                else:
+                    raise vimconn.vimconnNotFoundException("Invalid image_id: %s ", image_id)
+
+        # Attach the disk created
+        virtual_machine.storage_profile.data_disks.append({
+            'lun': disk_index,
+            'name': disk_name,
+            'create_option': DiskCreateOption.attach,
+            'managed_disk': {
+                'id': data_disk.id
+            },
+            'disk_size_gb': disk.get('size')
+        })
+        self.logger.debug("attach disk name: %s", disk_name)
+        async_disk_attach = self.conn_compute.virtual_machines.create_or_update(
+            self.resource_group,
+            virtual_machine.name,
+            virtual_machine
+        )
 
     # It is necesary extract from image_id data to create the VM with this format
     #        'image_reference': {
@@ -909,60 +1015,72 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug('deleting VM instance {} - {}'.format(self.resource_group, vm_id))
         self._reload_connection()
 
+        created_items = created_items or {}
         try:
+            # Check vm exists, we can call delete_vm to clean created_items
+            if vm_id:
+                res_name = self._get_resource_name_from_resource_id(vm_id)
+                vm = self.conn_compute.virtual_machines.get(self.resource_group, res_name)
 
-            res_name = self._get_resource_name_from_resource_id(vm_id)
-            vm = self.conn_compute.virtual_machines.get(self.resource_group, res_name)
+                # Shuts down the virtual machine and releases the compute resources
+                # vm_stop = self.conn_compute.virtual_machines.power_off(self.resource_group, resName)
+                # vm_stop.wait()
 
-            # Shuts down the virtual machine and releases the compute resources
-            # vm_stop = self.conn_compute.virtual_machines.power_off(self.resource_group, resName)
-            # vm_stop.wait()
+                vm_delete = self.conn_compute.virtual_machines.delete(self.resource_group, res_name)
+                vm_delete.wait()
+                self.logger.debug('deleted VM name: %s', res_name)
 
-            vm_delete = self.conn_compute.virtual_machines.delete(self.resource_group, res_name)
-            vm_delete.wait()
-            self.logger.debug('deleted VM name: %s', res_name)
+                # Delete OS Disk
+                os_disk_name = vm.storage_profile.os_disk.name
+                self.logger.debug('delete OS DISK: %s', os_disk_name)
+                async_disk_delete = self.conn_compute.disks.delete(self.resource_group, os_disk_name)
+                async_disk_delete.wait()
+                # os disks are created always with the machine
+                self.logger.debug('deleted OS DISK name: %s', os_disk_name)
 
-            # Delete OS Disk
-            os_disk_name = vm.storage_profile.os_disk.name
-            self.logger.debug('delete OS DISK: %s', os_disk_name)
-            self.conn_compute.disks.delete(self.resource_group, os_disk_name)
-            self.logger.debug('deleted OS DISK name: %s', os_disk_name)
+                for data_disk in vm.storage_profile.data_disks:
+                    self.logger.debug('delete data_disk: %s', data_disk.name)
+                    async_disk_delete = self.conn_compute.disks.delete(self.resource_group, data_disk.name)
+                    async_disk_delete.wait()
+                    self._markdel_created_item(data_disk.managed_disk.id, created_items)
+                    self.logger.debug('deleted OS DISK name: %s', data_disk.name)
 
-            for data_disk in vm.storage_profile.data_disks:
-                self.logger.debug('delete data_disk: %s', data_disk.name)
-                self.conn_compute.disks.delete(self.resource_group, data_disk.name)
-                self.logger.debug('deleted OS DISK name: %s', data_disk.name)
+                # After deleting VM, it is necessary to delete NIC, because if is not deleted delete_network
+                # does not work because Azure says that is in use the subnet
+                network_interfaces = vm.network_profile.network_interfaces
 
-            # After deleting VM, it is necessary to delete NIC, because if is not deleted delete_network
-            # does not work because Azure says that is in use the subnet
-            network_interfaces = vm.network_profile.network_interfaces
+                for network_interface in network_interfaces:
 
-            for network_interface in network_interfaces:
+                    nic_name = self._get_resource_name_from_resource_id(network_interface.id)
+                    nic_data = self.conn_vnet.network_interfaces.get(
+                        self.resource_group,
+                        nic_name)
 
-                nic_name = self._get_resource_name_from_resource_id(network_interface.id)
-                nic_data = self.conn_vnet.network_interfaces.get(
-                    self.resource_group,
-                    nic_name)
+                    public_ip_name = None
+                    exist_public_ip = nic_data.ip_configurations[0].public_ip_address
+                    if exist_public_ip:
+                        public_ip_id = nic_data.ip_configurations[0].public_ip_address.id
 
-                public_ip_name = None
-                exist_public_ip = nic_data.ip_configurations[0].public_ip_address
-                if exist_public_ip:
-                    public_ip_id = nic_data.ip_configurations[0].public_ip_address.id
+                        # Delete public_ip
+                        public_ip_name = self._get_resource_name_from_resource_id(public_ip_id)
 
-                    # Delete public_ip
-                    public_ip_name = self._get_resource_name_from_resource_id(public_ip_id)
+                        # Public ip must be deleted afterwards of nic that is attached
 
-                    # Public ip must be deleted afterwards of nic that is attached
+                    self.logger.debug('delete NIC name: %s', nic_name)
+                    nic_delete = self.conn_vnet.network_interfaces.delete(self.resource_group, nic_name)
+                    nic_delete.wait()
+                    self._markdel_created_item(network_interface.id, created_items)
+                    self.logger.debug('deleted NIC name: %s', nic_name)
 
-                self.logger.debug('delete NIC name: %s', nic_name)
-                nic_delete = self.conn_vnet.network_interfaces.delete(self.resource_group, nic_name)
-                nic_delete.wait()
-                self.logger.debug('deleted NIC name: %s', nic_name)
+                    # Delete list of public ips
+                    if public_ip_name:
+                        self.logger.debug('delete PUBLIC IP - ' + public_ip_name)
+                        ip_delete = self.conn_vnet.public_ip_addresses.delete(self.resource_group, public_ip_name)
+                        ip_delete.wait()
+                        self._markdel_created_item(public_ip_id, created_items)
 
-                # Delete list of public ips
-                if public_ip_name:
-                    self.logger.debug('delete PUBLIC IP - ' + public_ip_name)
-                    self.conn_vnet.public_ip_addresses.delete(self.resource_group, public_ip_name)
+            # Delete created items
+            self._delete_created_items(created_items)
 
         except CloudError as e:
             if e.error.error and "notfound" in e.error.error.lower():
@@ -971,6 +1089,67 @@ class vimconnector(vimconn.vimconnector):
                 self._format_vimconn_exception(e)
         except Exception as e:
             self._format_vimconn_exception(e)
+
+    def _markdel_created_item(self, item_id, created_items):
+        if item_id in created_items:
+            created_items[item_id] = False
+
+    def _delete_created_items(self, created_items):
+        """ Delete created_items elements that have not been deleted with the virtual machine
+            Created_items may not be deleted correctly with the created machine if the
+            virtual machine fails creating or in other cases of error
+        """
+        self.logger.debug("Created items: %s", created_items)
+        # Must delete in order first nics, then public_ips
+        # As dictionaries don't preserve order, first get items to be deleted then delete them
+        nics_to_delete = []
+        publics_ip_to_delete = []
+        disks_to_delete = []
+        for item_id, v in created_items.items():
+            if not v:  # skip already deleted
+                continue
+
+            #self.logger.debug("Must delete item id: %s", item_id)
+
+            # Obtain type, supported nic, disk or public ip
+            parsed_id = azure_tools.parse_resource_id(item_id)
+            resource_type = parsed_id.get("resource_type")
+            name = parsed_id.get("name")
+
+            if resource_type == "networkInterfaces":
+                nics_to_delete.append(name)
+            elif resource_type == "publicIPAddresses":
+                publics_ip_to_delete.append(name)
+            elif resource_type == "disks":
+                disks_to_delete.append(name)
+
+        # Now delete
+        for item_name in nics_to_delete:
+            try:
+                self.logger.debug("deleting nic name %s:", item_name)
+                nic_delete = self.conn_vnet.network_interfaces.delete(self.resource_group, item_name)
+                nic_delete.wait()
+                self.logger.debug("deleted nic name %s:", item_name)
+            except Exception as e:
+                self.logger.error("Error deleting item: {}: {}".format(type(e).__name__, e))
+
+        for item_name in publics_ip_to_delete:
+            try:
+                self.logger.debug("deleting public ip name %s:", item_name)
+                ip_delete = self.conn_vnet.public_ip_addresses.delete(self.resource_group, name)
+                ip_delete.wait()
+                self.logger.debug("deleted public ip name %s:", item_name)
+            except Exception as e:
+                self.logger.error("Error deleting item: {}: {}".format(type(e).__name__, e))
+
+        for item_name in disks_to_delete:
+            try:
+                self.logger.debug("deleting data disk name %s:", name)
+                async_disk_delete = self.conn_compute.disks.delete(self.resource_group, item_name)
+                async_disk_delete.wait()
+                self.logger.debug("deleted data disk name %s:", name)
+            except Exception as e:
+                self.logger.error("Error deleting item: {}: {}".format(type(e).__name__, e))
 
     def action_vminstance(self, vm_id, action_dict, created_items={}):
         """Send and action over a VM instance from VIM
