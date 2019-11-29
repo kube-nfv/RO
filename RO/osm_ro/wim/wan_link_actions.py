@@ -329,8 +329,8 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         if len(connection_points) == 2:
             return 'ELINE'
         else:
-            raise NotImplementedError('Multipoint connectivity is not '
-                                      'supported yet.')
+            # added to support DPB WIM connector
+            return 'ELAN'
 
     def _update_persistent_data(self, persistence, service_uuid, conn_info):
         """Store plugin/connector specific information in the database"""
