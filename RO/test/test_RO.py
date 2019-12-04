@@ -2228,7 +2228,7 @@ def test_vimconnector(args):
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/osm_ro")
     test_config['vimtype'] = args.vimtype
     if args.vimtype == "vmware":
-        import vimconn_vmware as vim
+        from osm_rovim_vmware import vimconn_vmware as vim
 
         test_config["test_directory"] = os.path.dirname(__file__) + "/RO_tests"
 
@@ -2248,9 +2248,9 @@ def test_vimconnector(args):
                                                    passwd=org_passwd, url=vim_url, config=config_params)
 
     elif args.vimtype == "aws":
-        import vimconn_aws as vim
+        from osm_rovim_aws import vimconn_aws as vim
     elif args.vimtype == "openstack":
-        import vimconn_openstack as vim
+        from osm_rovim_openstack import vimconn_openstack as vim
 
         test_config["test_directory"] = os.path.dirname(__file__) + "/RO_tests"
 
@@ -2276,9 +2276,9 @@ def test_vimconnector(args):
         test_config['vim_conn'].debug = "true"
 
     elif args.vimtype == "openvim":
-        import vimconn_openvim as vim
+        from osm_rovim_openvim import vimconn_openvim as vim
     elif args.vimtype == "azure":
-        import vimconn_azure as vim
+        from osm_rovim_azure import vimconn_azure as vim
 
         test_config["test_directory"] = os.path.dirname(__file__) + "/RO_tests"
 
@@ -2365,7 +2365,7 @@ def test_vimconnector(args):
 def test_vim(args):
     global test_config
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/osm_ro")
-    import openmanoclient
+    from osm_ro import openmanoclient
     executed = 0
     failed = 0
     test_config["client"] = openmanoclient.openmanoclient(
@@ -2431,7 +2431,7 @@ def test_vim(args):
 def test_wim(args):
     global test_config
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/osm_ro")
-    import openmanoclient
+    from osm_ro import openmanoclient
     executed = 0
     failed = 0
     test_config["client"] = openmanoclient.openmanoclient(
@@ -2497,7 +2497,7 @@ def test_wim(args):
 def test_deploy(args):
     global test_config
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/osm_ro")
-    import openmanoclient
+    from osm_ro import openmanoclient
     executed = 0
     failed = 0
     test_config["test_directory"] = os.path.dirname(__file__) + "/RO_tests"
