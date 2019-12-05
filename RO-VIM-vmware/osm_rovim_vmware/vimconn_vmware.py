@@ -3720,21 +3720,21 @@ class vimconnector(vimconn.vimconnector):
 
         try:
             content = self.get_network_action(network_uuid=network_uuid)
-            vm_list_xmlroot = XmlElementTree.fromstring(content)
+            if content is not None:
+                vm_list_xmlroot = XmlElementTree.fromstring(content)
 
-            network_configuration['status'] = vm_list_xmlroot.get("status")
-            network_configuration['name'] = vm_list_xmlroot.get("name")
-            network_configuration['uuid'] = vm_list_xmlroot.get("id").split(":")[3]
+                network_configuration['status'] = vm_list_xmlroot.get("status")
+                network_configuration['name'] = vm_list_xmlroot.get("name")
+                network_configuration['uuid'] = vm_list_xmlroot.get("id").split(":")[3]
 
-            for child in vm_list_xmlroot:
-                if child.tag.split("}")[1] == 'IsShared':
-                    network_configuration['isShared'] = child.text.strip()
-                if child.tag.split("}")[1] == 'Configuration':
-                    for configuration in child.iter():
-                        tagKey = configuration.tag.split("}")[1].strip()
-                        if tagKey != "":
-                            network_configuration[tagKey] = configuration.text.strip()
-            return network_configuration
+                for child in vm_list_xmlroot:
+                    if child.tag.split("}")[1] == 'IsShared':
+                        network_configuration['isShared'] = child.text.strip()
+                    if child.tag.split("}")[1] == 'Configuration':
+                        for configuration in child.iter():
+                            tagKey = configuration.tag.split("}")[1].strip()
+                            if tagKey != "":
+                                network_configuration[tagKey] = configuration.text.strip()
         except Exception as exp :
             self.logger.debug("get_vcd_network: Failed with Exception {}".format(exp))
             raise vimconn.vimconnException("get_vcd_network: Failed with Exception {}".format(exp))

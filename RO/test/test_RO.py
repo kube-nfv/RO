@@ -518,7 +518,7 @@ class test_vimconn_new_network(test_base):
         #unknown_net_id = "/subscriptions/ca3d18ab-d373-4afb-a5d6-7c44f098d16a/resourceGroups/osmRG/providers/Microsoft.Network/virtualNetworks/osm_vnet/subnets/unnkown_net"
 
         net_dict = test_config["vim_conn"].refresh_nets_status([unknown_net_id])
-        if test_config['vimtype'] in ('openstack', 'azure'):
+        if test_config['vimtype'] in ('openstack', 'azure', 'vmware'):
             self.assertEqual(net_dict[unknown_net_id]['status'], 'DELETED')
         else:
             # TODO : Fix vmware connector to return status DELETED as per vimconn.py
@@ -2220,7 +2220,7 @@ def _get_random_string(maxLength):
     if maxLength < min_string: maxLength = min_string
     maxLength -= len(prefix)
     length = random.randint(minLength,maxLength)
-    return 'testing_'+"".join([random.choice(string.letters+string.digits) for i in xrange(length)])
+    return 'testing_'+"".join([random.choice(string.ascii_letters+string.digits) for i in range(length)])
 
 
 def test_vimconnector(args):
