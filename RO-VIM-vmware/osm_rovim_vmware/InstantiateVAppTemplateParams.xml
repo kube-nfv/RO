@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright 2016-2019 VMware Inc.
+ This file is part of ETSI OSM
+ All Rights Reserved.
+
+ Licensed under the Apache License, Version 2.0 (the "License"); you may
+ not use this file except in compliance with the License. You may obtain
+ a copy of the License at
+
+         http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ License for the specific language governing permissions and limitations
+ under the License.
+
+ For those usages not covered by the Apache License, Version 2.0 please
+ contact:  osslegalrouting@vmware.com
+-->
+<InstantiateVAppTemplateParams xmlns="http://www.vmware.com/vcloud/v1.5" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="{}" deploy="false" powerOn="false">
+   <Description>Vapp instantiation</Description>
+   <InstantiationParams>
+      <NetworkConfigSection>
+         <ovf:Info>Configuration parameters for logical networks</ovf:Info>
+         <NetworkConfig networkName="{}">
+            <Configuration>
+               <ParentNetwork href="{}" />
+               <FenceMode>bridged</FenceMode>
+            </Configuration>
+         </NetworkConfig>
+      </NetworkConfigSection>
+      <LeaseSettingsSection type="application/vnd.vmware.vcloud.leaseSettingsSection+xml">
+         <ovf:Info>Lease Settings</ovf:Info>
+         <StorageLeaseInSeconds>172800</StorageLeaseInSeconds>
+         <StorageLeaseExpiration>2014-04-25T08:08:16.438-07:00</StorageLeaseExpiration>
+      </LeaseSettingsSection>
+   </InstantiationParams>
+   <Source href="{}" />
+   <SourcedItem>
+      <Source href="{}" id="{}" name="{}" type="application/vnd.vmware.vcloud.vm+xml" />
+      <VmGeneralParams>
+         <NeedsCustomization>false</NeedsCustomization>
+      </VmGeneralParams>
+      <InstantiationParams>
+         <NetworkConnectionSection>
+            <ovf:Info>Specifies the available VM network connections</ovf:Info>
+            <NetworkConnection network="{}">
+               <NetworkConnectionIndex>0</NetworkConnectionIndex>
+               <IsConnected>true</IsConnected>
+               <IpAddressAllocationMode>DHCP</IpAddressAllocationMode>
+            </NetworkConnection>
+         </NetworkConnectionSection>
+         <ovf:VirtualHardwareSection>
+            <ovf:Info>Virtual hardware requirements</ovf:Info>
+            <ovf:Item xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" xmlns:vmw="http://www.vmware.com/schema/ovf">
+               <rasd:AllocationUnits>hertz * 10^6</rasd:AllocationUnits>
+               <rasd:Description>Number of Virtual CPUs</rasd:Description>
+               <rasd:ElementName xmlns:py="http://codespeak.net/lxml/objectify/pytype" py:pytype="str">{cpu} virtual CPU(s)</rasd:ElementName>
+               <rasd:InstanceID>4</rasd:InstanceID>
+               <rasd:Reservation>0</rasd:Reservation>
+               <rasd:ResourceType>3</rasd:ResourceType>
+               <rasd:VirtualQuantity xmlns:py="http://codespeak.net/lxml/objectify/pytype" py:pytype="int">{cpu}</rasd:VirtualQuantity>
+               <rasd:Weight>0</rasd:Weight>
+               <vmw:CoresPerSocket ovf:required="false">{core}</vmw:CoresPerSocket>
+            </ovf:Item>
+            <ovf:Item xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData">
+               <rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits>
+               <rasd:Description>Memory Size</rasd:Description>
+               <rasd:ElementName xmlns:py="http://codespeak.net/lxml/objectify/pytype" py:pytype="str">{memory} MB of memory</rasd:ElementName>
+               <rasd:InstanceID>5</rasd:InstanceID>
+               <rasd:Reservation>0</rasd:Reservation>
+               <rasd:ResourceType>4</rasd:ResourceType>
+               <rasd:VirtualQuantity xmlns:py="http://codespeak.net/lxml/objectify/pytype" py:pytype="int">{memory}</rasd:VirtualQuantity>
+               <rasd:Weight>0</rasd:Weight>
+            </ovf:Item>
+         </ovf:VirtualHardwareSection>
+      </InstantiationParams>
+   </SourcedItem>
+   <AllEULAsAccepted>false</AllEULAsAccepted>
+</InstantiateVAppTemplateParams>
