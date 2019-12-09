@@ -22,7 +22,7 @@ _name = "osm_rosdn_onos_vpls"
 
 README = """
 ===========
-osm-rosdn_onosvpls
+osm-rosdn_onos_vpls
 ===========
 
 osm-ro pluging for ONOS VPLS SDN
@@ -48,6 +48,6 @@ setup(
     install_requires=["requests", "osm-ro"],
     setup_requires=['setuptools-version-command'],
     entry_points={
-        'osm_rosdn.plugins': ['rosdn_onosvpls = osm_rosdn_onosvpls.sdn_assist_onos_vpls:OnosVpls'],
+        'osm_rosdn.plugins': ['rosdn_onos_vpls = osm_rosdn_onos_vpls.sdn_assist_onos_vpls:OnosVpls'],
     },
 )

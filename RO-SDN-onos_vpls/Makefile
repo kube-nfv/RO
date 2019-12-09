@@ -16,9 +16,9 @@
 all: clean package
 
 clean:
-	rm -rf dist deb_dist osm_rosdn_onosvpls-*.tar.gz osm_rosdn_tapi.egg-info .eggs
+	rm -rf dist deb_dist osm_rosdn_onos_vpls-*.tar.gz osm_rosdn_onos_vpls.egg-info .eggs
 
 package:
 	python3 setup.py --command-packages=stdeb.command sdist_dsc
-	cd deb_dist/osm-rosdn-onosvpls*/ && dpkg-buildpackage -rfakeroot -uc -us
+	cd deb_dist/osm-rosdn-onos-vpls*/ && dpkg-buildpackage -rfakeroot -uc -us
 
