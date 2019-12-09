@@ -70,7 +70,7 @@ class OnosVpls(SdnConnectorBase):
         for vpls in onos_config['apps']['org.onosproject.vpls']['vpls']['vplsList']:
             if vpls['name'] == service_uuid:
                 return vpls
-        raise SdnConnectorError('VPLS %s not found' % service_uuid, http_code=404)
+        raise SdnConnectorError('VPLS {} not found'.format(service_uuid), http_code=404)
 
     def create_connectivity_service(self, service_type, connection_points):
         if service_type.lower() != 'elan':
@@ -87,7 +87,7 @@ class OnosVpls(SdnConnectorBase):
                 }
             for vpls in onos_config['apps']['org.onosproject.vpls']['vpls']['vplsList']:
                 if vpls['name'] == service_uuid:
-                    raise SdnConnectorError('Network %s already exists.' % service_uuid)
+                    raise SdnConnectorError('Network {} already exists.'.format(service_uuid))
             onos_config['apps']['org.onosproject.vpls']['vpls']['vplsList'].append({
                 'name': service_uuid,
                 'interfaces': []
@@ -176,7 +176,7 @@ class OnosVpls(SdnConnectorBase):
             onos_config['apps']['org.onosproject.vpls']['vpls'].pop('lastUpdateTime')
 
     def _append_port_to_onos_config(self, port, onos_config):
-        port_name = 'of:%s/%s' % (port['service_endpoint_encapsulation_info']['switch_dpid'],
+        port_name = 'of:{}/{}'.format(port['service_endpoint_encapsulation_info']['switch_dpid'],
                                   port['service_endpoint_encapsulation_info']['switch_port'])
         interface_config = {'name': port['service_endpoint_id']}
         if 'vlan' in port['service_endpoint_encapsulation_info'] and port['service_endpoint_encapsulation_info'][
