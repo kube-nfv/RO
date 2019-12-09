@@ -445,7 +445,7 @@ class vimconnector(vimconn.vimconnector):
                                                                      response.status_code))
                     raise vimconn.vimconnNotFoundException("Fail to get tenant {}".format(tenant_id))
 
-                lxmlroot_respond = lxmlElementTree.fromstring(response.text)
+                lxmlroot_respond = lxmlElementTree.fromstring(response.content)
                 namespaces = {prefix: uri for prefix, uri in lxmlroot_respond.nsmap.items() if prefix}
                 namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
                 vdc_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']",namespaces).attrib['href']
@@ -970,55 +970,55 @@ class vimconnector(vimconn.vimconnector):
         url_list = [self.url, '/api/catalog/', image_id]
         catalog_herf = ''.join(url_list)
 
-        headers = {'Accept':'application/*+xml;version=' + API_VERSION,
-                  'x-vcloud-authorization': conn._session.headers['x-vcloud-authorization']}
+        headers = {'Accept': 'application/*+xml;version=' + API_VERSION,
+                   'x-vcloud-authorization': conn._session.headers['x-vcloud-authorization']}
 
         response = self.perform_request(req_type='GET',
                                         url=catalog_herf,
                                         headers=headers)
 
         if response.status_code != requests.codes.ok:
-            self.logger.debug("delete_image():GET REST API call {} failed. "\
+            self.logger.debug("delete_image():GET REST API call {} failed. "
                               "Return status code {}".format(catalog_herf,
                                                              response.status_code))
             raise vimconn.vimconnNotFoundException("Fail to get image {}".format(image_id))
 
-        lxmlroot_respond = lxmlElementTree.fromstring(response.text)
+        lxmlroot_respond = lxmlElementTree.fromstring(response.content)
         namespaces = {prefix: uri for prefix, uri in lxmlroot_respond.nsmap.items() if prefix}
-        namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
+        namespaces["xmlns"] = "http://www.vmware.com/vcloud/v1.5"
 
-        catalogItems_section = lxmlroot_respond.find("xmlns:CatalogItems",namespaces)
-        catalogItems = catalogItems_section.iterfind("xmlns:CatalogItem",namespaces)
+        catalogItems_section = lxmlroot_respond.find("xmlns:CatalogItems", namespaces)
+        catalogItems = catalogItems_section.iterfind("xmlns:CatalogItem", namespaces)
         for catalogItem in catalogItems:
             catalogItem_href = catalogItem.attrib['href']
 
             response = self.perform_request(req_type='GET',
-                                        url=catalogItem_href,
-                                        headers=headers)
+                                            url=catalogItem_href,
+                                            headers=headers)
 
             if response.status_code != requests.codes.ok:
-                self.logger.debug("delete_image():GET REST API call {} failed. "\
+                self.logger.debug("delete_image():GET REST API call {} failed. "
                                   "Return status code {}".format(catalog_herf,
                                                                  response.status_code))
                 raise vimconn.vimconnNotFoundException("Fail to get catalogItem {} for catalog {}".format(
-                                                                                    catalogItem,
-                                                                                    image_id))
+                    catalogItem,
+                    image_id))
 
-            lxmlroot_respond = lxmlElementTree.fromstring(response.text)
+            lxmlroot_respond = lxmlElementTree.fromstring(response.content)
             namespaces = {prefix: uri for prefix, uri in lxmlroot_respond.nsmap.items() if prefix}
-            namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
-            catalogitem_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']",namespaces).attrib['href']
+            namespaces["xmlns"] = "http://www.vmware.com/vcloud/v1.5"
+            catalogitem_remove_href = lxmlroot_respond.find("xmlns:Link[@rel='remove']", namespaces).attrib['href']
 
-            #Remove catalogItem
+            # Remove catalogItem
             response = self.perform_request(req_type='DELETE',
-                                        url=catalogitem_remove_href,
-                                        headers=headers)
+                                            url=catalogitem_remove_href,
+                                            headers=headers)
             if response.status_code == requests.codes.no_content:
                 self.logger.debug("Deleted Catalog item {}".format(catalogItem))
             else:
                 raise vimconn.vimconnException("Fail to delete Catalog Item {}".format(catalogItem))
 
-        #Remove catalog
+        # Remove catalog
         url_list = [self.url, '/api/admin/catalog/', image_id]
         catalog_remove_herf = ''.join(url_list)
         response = self.perform_request(req_type='DELETE',
@@ -1030,7 +1030,6 @@ class vimconnector(vimconn.vimconnector):
             return image_id
         else:
             raise vimconn.vimconnException("Fail to delete Catalog {}".format(image_id))
-
 
     def catalog_exists(self, catalog_name, catalogs):
         """
@@ -1919,8 +1918,6 @@ class vimconnector(vimconn.vimconnector):
                 self.upload_iso_to_catalog(config_drive_catalog_id, iso_path)
                 # Attach the config-drive ISO to the VM
                 self.logger.info('new_vminstance(): Attaching the config-drive ISO to the VM')
-                # The ISO remains in INVALID_STATE right after the PUT request (its a blocking call though)
-                time.sleep(5)
                 self.insert_media_to_vm(vapp, config_drive_catalog_id)
                 shutil.rmtree(os.path.dirname(iso_path), ignore_errors=True)
 
@@ -2654,7 +2651,7 @@ class vimconnector(vimconn.vimconnector):
 
         self.logger.debug("Client requesting delete vm instance {} ".format(vm__vim_uuid))
 
-        org, vdc = self.get_vdc_details()
+        _, vdc = self.get_vdc_details()
         vdc_obj = VDC(self.client, href=vdc.get('href'))
         if vdc_obj is None:
             self.logger.debug("delete_vminstance(): Failed to get a reference of VDC for a tenant {}".format(
@@ -2676,7 +2673,7 @@ class vimconnector(vimconn.vimconnector):
             if vapp:
                 if vapp_resource.get('deployed') == 'true':
                     self.logger.info("Powering off vApp {}".format(vapp_name))
-                    #Power off vApp
+                    # Power off vApp
                     powered_off = False
                     wait_time = 0
                     while wait_time <= MAX_WAIT_TIME:
@@ -2690,20 +2687,22 @@ class vimconnector(vimconn.vimconnector):
                             self.logger.info("Wait for vApp {} to power off".format(vapp_name))
                             time.sleep(INTERVAL_TIME)
 
-                        wait_time +=INTERVAL_TIME
+                        wait_time += INTERVAL_TIME
                     if not powered_off:
-                        self.logger.debug("delete_vminstance(): Failed to power off VM instance {} ".format(vm__vim_uuid))
+                        self.logger.debug(
+                            "delete_vminstance(): Failed to power off VM instance {} ".format(vm__vim_uuid))
                     else:
                         self.logger.info("delete_vminstance(): Powered off VM instance {} ".format(vm__vim_uuid))
 
-                    #Undeploy vApp
+                    # Undeploy vApp
                     self.logger.info("Undeploy vApp {}".format(vapp_name))
                     wait_time = 0
                     undeployed = False
                     while wait_time <= MAX_WAIT_TIME:
                         vapp = VApp(self.client, resource=vapp_resource)
                         if not vapp:
-                            self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
+                            self.logger.debug(
+                                "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
                             return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
                         undeploy_task = vapp.undeploy()
 
@@ -2715,7 +2714,7 @@ class vimconnector(vimconn.vimconnector):
                             self.logger.debug("Wait for vApp {} to undeploy".format(vapp_name))
                             time.sleep(INTERVAL_TIME)
 
-                        wait_time +=INTERVAL_TIME
+                        wait_time += INTERVAL_TIME
 
                     if not undeployed:
                         self.logger.debug("delete_vminstance(): Failed to undeploy vApp {} ".format(vm__vim_uuid))
@@ -2730,7 +2729,8 @@ class vimconnector(vimconn.vimconnector):
                     while wait_time <= MAX_WAIT_TIME:
                         vapp = VApp(self.client, resource=vapp_resource)
                         if not vapp:
-                            self.logger.debug("delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
+                            self.logger.debug(
+                                "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid))
                             return -1, "delete_vminstance(): Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
 
                         delete_task = vdc_obj.delete_vapp(vapp.name, force=True)
@@ -2742,7 +2742,7 @@ class vimconnector(vimconn.vimconnector):
                             self.logger.debug("Wait for vApp {} to delete".format(vapp_name))
                             time.sleep(INTERVAL_TIME)
 
-                        wait_time +=INTERVAL_TIME
+                        wait_time += INTERVAL_TIME
 
                     if result is None:
                         self.logger.debug("delete_vminstance(): Failed delete uuid {} ".format(vm__vim_uuid))
@@ -2760,10 +2760,9 @@ class vimconnector(vimconn.vimconnector):
                                               'vapp_name"{}". Deleting it.'.format(config_drive_catalog_id, vapp_name))
                             self.delete_image(config_drive_catalog_id)
                         return vm__vim_uuid
-        except:
+        except Exception:
             self.logger.debug(traceback.format_exc())
             raise vimconn.vimconnException("delete_vminstance(): Failed delete vm instance {}".format(vm__vim_uuid))
-
 
     def refresh_vms_status(self, vm_list):
         """Get the status of the virtual machines and their interfaces/ports
@@ -4422,7 +4421,7 @@ class vimconnector(vimconn.vimconnector):
                                                                             response.status_code))
             return None
         try:
-            lxmlroot_respond = lxmlElementTree.fromstring(response.text)
+            lxmlroot_respond = lxmlElementTree.fromstring(response.content)
             namespaces = {prefix: uri for prefix, uri in lxmlroot_respond.nsmap.items() if prefix}
             namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
 
@@ -5594,7 +5593,7 @@ class vimconnector(vimconn.vimconnector):
             return status
         try:
             #Find but type & max of instance IDs assigned to disks
-            lxmlroot_respond = lxmlElementTree.fromstring(response.text)
+            lxmlroot_respond = lxmlElementTree.fromstring(response.content)
             namespaces = {prefix: uri for prefix, uri in lxmlroot_respond.nsmap.items() if prefix}
             namespaces["xmlns"]= "http://www.vmware.com/vcloud/v1.5"
             instance_id = 0
