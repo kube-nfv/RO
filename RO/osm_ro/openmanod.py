@@ -53,8 +53,8 @@ import osm_ro
 
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
-__version__ = "6.0.4.post6"
-version_date = "Oct 2019"
+__version__ = "7.0.0.post1"
+version_date = "Dec 2019"
 database_version = 40      # expected database schema version
 
 global global_config
@@ -157,6 +157,20 @@ def set_logging_file(log_file):
             "Cannot open logging file '{}': {}. Check folder exist and permissions".format(log_file, e))
 
 
+def _get_version():
+    """
+    Try to get version from package using pkg_resources (available with setuptools)
+    """
+    global __version__
+    ro_version = __version__
+    try:
+        from pkg_resources import get_distribution
+        ro_version = get_distribution("osm_ro").version
+    except Exception:
+        pass
+    return ro_version
+
+
 if __name__ == "__main__":
     # env2config contains environ variable names and the correspondence with configuration file openmanod.cfg keys.
     # If this environ is defined, this value is taken instead of the one at at configuration file
@@ -172,6 +186,7 @@ if __name__ == "__main__":
         'RO_LOG_LEVEL': 'log_level',
         'RO_LOG_FILE': 'log_file',
     }
+    ro_version = _get_version()
     # Configure logging step 1
     hostname = socket.gethostname()
     log_formatter_str = '%(asctime)s.%(msecs)03d00Z[{host}@openmanod] %(filename)s:%(lineno)s severity:%(levelname)s logger:%(name)s log:%(message)s'
@@ -200,7 +215,7 @@ if __name__ == "__main__":
 
         for o, a in opts:
             if o in ("-v", "--version"):
-                print ("openmanod version " + __version__ + ' ' + version_date)
+                print ("openmanod version {} {}".format(ro_version, version_date))
                 print ("(c) Copyright Telefonica")
                 sys.exit()
             elif o in ("-h", "--help"):
@@ -227,7 +242,7 @@ if __name__ == "__main__":
         if log_file:
             set_logging_file(log_file)
         global_config = load_configuration(config_file)
-        global_config["version"] = __version__
+        global_config["version"] = ro_version
         global_config["version_date"] = version_date
         # Override parameters obtained by command line on ENV
         if port:
@@ -275,7 +290,7 @@ if __name__ == "__main__":
 
         logger.setLevel(getattr(logging, global_config['log_level']))
         logger.critical("Starting openmano server version: '%s %s' command: '%s'",
-                        __version__, version_date, " ".join(sys.argv))
+                        ro_version, version_date, " ".join(sys.argv))
 
         for log_module in ("nfvo", "http", "vim", "wim", "db", "console", "ovim"):
             log_level_module = "log_level_" + log_module
