@@ -5905,6 +5905,10 @@ def create_RO_keypair(tenant_id):
         private_key = key.exportKey(passphrase=tenant_id, pkcs=8)
     except (ValueError, NameError) as e:
         raise NfvoException("Unable to create private key: {}".format(e), httperrors.Internal_Server_Error)
+    if isinstance(public_key, bytes):
+        public_key = public_key.decode(encoding='UTF-8')
+    if isinstance(private_key, bytes):
+        private_key = private_key.decode(encoding='UTF-8')
     return public_key, private_key
 
 def decrypt_key (key, tenant_id):
@@ -5921,6 +5925,8 @@ def decrypt_key (key, tenant_id):
         unencrypted_key = key.exportKey('PEM')
         if isinstance(unencrypted_key, ValueError):
             raise NfvoException("Unable to decrypt the private key: {}".format(unencrypted_key), httperrors.Internal_Server_Error)
+        if isinstance(unencrypted_key, bytes):
+            unencrypted_key = unencrypted_key.decode(encoding='UTF-8')
     except ValueError as e:
         raise NfvoException("Unable to decrypt the private key: {}".format(e), httperrors.Internal_Server_Error)
     return unencrypted_key
