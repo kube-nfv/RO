@@ -3666,7 +3666,8 @@ def create_instance(mydb, tenant_id, instance_dict):
                             "source_ip": match["source_ip"],
                             "destination_ip": match["destination_ip"],
                             "source_port": match["source_port"],
-                            "destination_port": match["destination_port"]
+                            "destination_port": match["destination_port"],
+                            "logical_source_port": classifier["interface_id"]
                         }
                         db_vim_action = {
                             "instance_action_id": instance_action_id,

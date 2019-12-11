@@ -1369,12 +1369,27 @@ class vim_thread(threading.Thread):
             task_id = task["instance_action_id"] + "." + str(task["task_index"])
             dep_id = "TASK-" + str(task["extra"]["depends_on"][0])
             error_text = ""
-            interfaces = task.get("depends").get(dep_id).get("extra").get("interfaces").keys()
+            interfaces = task.get("depends").get(dep_id).get("extra").get("interfaces")
             # Bear in mind that different VIM connectors might support Classifications differently.
             # In the case of OpenStack, only the first VNF attached to the classifier will be used
             # to create the Classification(s) (the "logical source port" of the "Flow Classifier").
             # Since the VNFFG classifier match lacks the ethertype, classification defaults to
             # using the IPv4 flow classifier.
+            logical_source_port_vim_id = None
+            logical_source_port_id = params.get("logical_source_port")
+            for vim_interface, interface_data in interfaces.items():
+                if interface_data.get("interface_id") == logical_source_port_id:
+                    logical_source_port_vim_id = vim_interface
+                    break
+            if not logical_source_port_vim_id:
+                error_text = "Error creating Flow Classifier, Logical Source Port id {}".format(
+                    logical_source_port_id)
+                self.logger.error(error_text)
+                task["error_msg"] = error_text
+                task["status"] = "FAILED"
+                task["vim_id"] = None
+                return None
+
             name = "c-{}".format(task["item_id"][:8])
             # if not CIDR is given for the IP addresses, add /32:
             ip_proto = int(params.get("ip_proto"))
@@ -1382,7 +1397,7 @@ class vim_thread(threading.Thread):
             destination_ip = params.get("destination_ip")
             source_port = params.get("source_port")
             destination_port = params.get("destination_port")
-            definition = {"logical_source_port": interfaces[0]}
+            definition = {"logical_source_port": logical_source_port_vim_id}
             if ip_proto:
                 if ip_proto == 1:
                     ip_proto = 'icmp'
