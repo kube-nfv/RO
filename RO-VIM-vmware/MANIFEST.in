@@ -12,5 +12,5 @@
 # under the License.
 ##
 
-recursive-include osm_rovim_vmware
+include osm_rovim_vmware/InstantiateVAppTemplateParams.xml
 
