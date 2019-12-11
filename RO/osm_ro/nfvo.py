@@ -5756,15 +5756,18 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
     return vim_action_get(mydb, tenant_id, datacenter, item, content)
 
 def sdn_controller_create(mydb, tenant_id, sdn_controller):
-    wim_id = ovim.new_of_controller(sdn_controller)
+    try:
+        wim_id = ovim.new_of_controller(sdn_controller)
 
-    thread_name = get_non_used_vim_name(sdn_controller['name'], wim_id, wim_id, None)
-    new_thread = vim_thread(task_lock, plugins, thread_name, wim_id, None, db=db)
-    new_thread.start()
-    thread_id = wim_id
-    vim_threads["running"][thread_id] = new_thread
-    logger.debug('New SDN controller created with uuid {}'.format(wim_id))
-    return wim_id
+        thread_name = get_non_used_vim_name(sdn_controller['name'], wim_id, wim_id, None)
+        new_thread = vim_thread(task_lock, plugins, thread_name, wim_id, None, db=db)
+        new_thread.start()
+        thread_id = wim_id
+        vim_threads["running"][thread_id] = new_thread
+        logger.debug('New SDN controller created with uuid {}'.format(wim_id))
+        return wim_id
+    except ovimException as e:
+        raise NfvoException(e) from e
 
 def sdn_controller_update(mydb, tenant_id, controller_id, sdn_controller):
     data = ovim.edit_of_controller(controller_id, sdn_controller)

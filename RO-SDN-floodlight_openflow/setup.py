@@ -18,19 +18,19 @@
 
 from setuptools import setup
 
-_name = "osm_rosdn_onosof"
+_name = "osm_rosdn_floodlightof"
 
 README = """
 ===========
-osm-rosdn_onosof
+osm-rosdn_floodlightof
 ===========
 
-osm-ro plugin for onos SDN using pre-computed openflow rules
+osm-ro plugin for floodlight SDN using pre-computed openflow rules
 """
 
 setup(
     name=_name,
-    description='OSM RO plugin for SDN with onos openflow rules',
+    description='OSM RO plugin for SDN with floodlight openflow rules',
     long_description=README,
     version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
     # version=VERSION,
@@ -44,10 +44,11 @@ setup(
 
     packages=[_name],
     include_package_data=True,
-    dependency_links=["git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"],
+    dependency_links=["git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro"],
     install_requires=["requests", "osm-ro"],
     setup_requires=['setuptools-version-command'],
     entry_points={
-        'osm_rosdn.plugins': ['rosdn_onosof = osm_rosdn_onosof.sdnconn_onosof:SdnConnectorOnosOf'],
+        'osm_rosdn.plugins': ['rosdn_floodlightof = osm_rosdn_floodlightof.sdnconn_floodlightof:'
+                              'SdnConnectorFloodLightOf'],
     },
 )

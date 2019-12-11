@@ -24,43 +24,19 @@ cp RO/deb_dist/python3-osm-ro_*.deb deb_dist/
 make -C RO-client clean package
 cp RO-client/deb_dist/python3-osm-roclient_*.deb deb_dist/
 
-# VIM vmware plugin
-make -C RO-VIM-vmware clean package
-cp RO-VIM-vmware/deb_dist/python3-osm-rovim-vmware_*.deb deb_dist/
+# VIM plugings:  vmware openstack AWS fos azure Opennebula 
+for vim_plugin in RO-VIM-*
+do
+    make -C $vim_plugin clean package
+    cp ${vim_plugin}/deb_dist/python3-osm-rovim*.deb deb_dist/
+done
 
-# VIM Openstack plugin
-make -C RO-VIM-openstack clean package
-cp RO-VIM-openstack/deb_dist/python3-osm-rovim-openstack_*.deb deb_dist/
+# SDN plugins
 
-# VIM Openvim plugin
-make -C RO-VIM-openvim clean package
-cp RO-VIM-openvim/deb_dist/python3-osm-rovim-openvim_*.deb deb_dist/
-
-# VIM AWS plugin
-make -C RO-VIM-aws clean package
-cp RO-VIM-aws/deb_dist/python3-osm-rovim-aws_*.deb deb_dist/
-
-# VIM fos plugin
-make -C RO-VIM-fos clean package
-cp RO-VIM-fos/deb_dist/python3-osm-rovim-fos_*.deb deb_dist/
-
-# VIM azure plugin
-make -C RO-VIM-azure clean package
-cp RO-VIM-azure/deb_dist/python3-osm-rovim-azure_*.deb deb_dist/
-
-# VIM Opennebula plugin
-make -C RO-VIM-opennebula clean package
-cp RO-VIM-opennebula/deb_dist/python3-osm-rovim-opennebula_*.deb deb_dist/
-
-# SDN Dynpack plugin
-make -C RO-SDN-dynpac clean package
-cp RO-SDN-dynpac/deb_dist/python3-osm-rosdn-dynpac_*.deb deb_dist/
-
-# SDN Tapi plugin
-make -C RO-SDN-tapi clean package
-cp RO-SDN-tapi/deb_dist/python3-osm-rosdn-tapi_*.deb deb_dist/
-
-# SDN Onos openflow
-make -C RO-SDN-onos_openflow clean package
-cp RO-SDN-onos_openflow/deb_dist/python3-osm-rosdn-onosof_*.deb deb_dist/
+# SDN plugins: Dynpack Tapi Onosof Floodlightof
+for sdn_plugin in RO-SDN-*
+do
+    make -C $sdn_plugin clean package
+    cp ${sdn_plugin}/deb_dist/python3-osm-rosdn*.deb deb_dist/
+done
 

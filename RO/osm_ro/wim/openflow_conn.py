@@ -308,7 +308,7 @@ class SdnConnectorOpenFlow(SdnConnectorBase):
                 except OpenflowConnNotFoundException:
                     pass
                 except OpenflowConnException as e:
-                    error_text = "Cannot remove rule '{}': {}".format(flow['name'], e)
+                    error_text = "Cannot remove rule '{}': {}".format(flow_id, e)
                     error_list.append(error_text)
                     self.logger.error(error_text)
             created_items["installed_rules_ids"] = new_installed_rules_ids
@@ -322,8 +322,9 @@ class SdnConnectorOpenFlow(SdnConnectorBase):
         except (SdnConnectorError, OpenflowConnException) as e:
             raise SdnConnectorError("Error while {}: {}".format(step, e)) from e
         except Exception as e:
+            error_text = "Error while {}: {}".format(step, e)
             self.logger.critical(error_text, exc_info=True)
-            raise SdnConnectorError("Error while {}: {}".format(step, e))
+            raise SdnConnectorError(error_text)
 
     def _compute_net_flows(self, net_id, ports):
         new_flows = []

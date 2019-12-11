@@ -606,9 +606,10 @@ class vim_thread(threading.Thread):
             elif not self.vim and not self.sdnconnector:
                 task["status"] = "FAILED"
                 task["error_msg"] = self.error_status
-                database_update = {"status": "VIM_ERROR", "error_msg": task["error_msg"]}
+                database_update = {"status": "VIM_ERROR" if self.datacenter_tenant_id else "WIM_ERROR",
+                                   "error_msg": task["error_msg"]}
             elif task["item_id"] != related_tasks[0]["item_id"] and task["action"] in ("FIND", "CREATE"):
-                # Do nothing, just copy values from one to another and updata database
+                # Do nothing, just copy values from one to another and update database
                 task["status"] = related_tasks[0]["status"]
                 task["error_msg"] = related_tasks[0]["error_msg"]
                 task["vim_id"] = related_tasks[0]["vim_id"]
@@ -712,7 +713,7 @@ class vim_thread(threading.Thread):
                     next_refresh = time.time()
                     if task["extra"].get("vim_status") == "BUILD":
                         next_refresh += self.REFRESH_BUILD
-                    elif task["extra"].get("vim_status") in ("ERROR", "VIM_ERROR"):
+                    elif task["extra"].get("vim_status") in ("ERROR", "VIM_ERROR", "WIM_ERROR"):
                         next_refresh += self.REFRESH_ERROR
                     elif task["extra"].get("vim_status") == "DELETED":
                         next_refresh += self.REFRESH_DELETE
@@ -1194,7 +1195,7 @@ class vim_thread(threading.Thread):
             task["status"] = "DONE"
             task["extra"]["vim_info"] = {}
             # task["extra"]["sdn_net_id"] = sdn_net_id
-            task["extra"]["vim_status"] = "BUILD"
+            task["extra"]["vim_status"] = sdn_status
             task["extra"]["created"] = True
             task["extra"]["created_items"] = created_items
             task["extra"]["connected_ports"] = connected_ports

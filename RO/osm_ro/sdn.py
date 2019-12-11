@@ -37,9 +37,7 @@ class SdnException(Exception):
         Exception.__init__(self, message)
 
 
-class Sdn():
-    running_info = {}  # TODO OVIM move the info of running threads from config_dic to this static variable
-    of_module = {}
+class Sdn:
 
     def __init__(self, db, plugins):
         self.db = db
@@ -81,7 +79,6 @@ class Sdn():
         return content
 
     def edit_openflow_rules(self, network_id=None):
-
         """
         To make actions over the net. The action is to reinstall the openflow rules
         network_id can be 'all'
@@ -160,15 +157,20 @@ class Sdn():
         """
         Create a new openflow controller into DB
         :param ofc_data: Dict openflow controller data
-        :return: openflow controller dpid
+        :return: openflow controller uuid
         """
         db_wim = {
             "uuid": str(uuid4()),
             "name": ofc_data["name"],
-            "description": "",
+            "description": ofc_data.get("description"),
             "type": ofc_data["type"],
-            "wim_url": "{}:{}".format(ofc_data["ip"], ofc_data["port"]),
+            "wim_url": ofc_data.get("url"),
         }
+        if not db_wim["wim_url"]:
+            if not ofc_data.get("ip") or not ofc_data.get("port"):
+                raise SdnException("Provide either 'url' or both 'ip' and 'port'")
+            db_wim["wim_url"] = "{}:{}".format(ofc_data["ip"], ofc_data["port"])
+
         db_wim_account = {
             "uuid": str(uuid4()),
             "name": ofc_data["name"],
@@ -176,9 +178,15 @@ class Sdn():
             "sdn": "true",
             "user": ofc_data.get("user"),
             "password": ofc_data.get("password"),
-            "config": yaml.safe_dump({"dpid": ofc_data["dpid"], "version": ofc_data.get("version")},
-                                     default_flow_style=True, width=256)
         }
+        db_wim_account_config = ofc_data.get("config", {})
+        if ofc_data.get("dpid"):
+            db_wim_account_config["dpid"] = ofc_data["dpid"]
+        if ofc_data.get("version"):
+            db_wim_account_config["version"] = ofc_data["version"]
+
+        db_wim_account["config"] = yaml.safe_dump(db_wim_account_config, default_flow_style=True, width=256)
+
         db_tables = [
             {"wims": db_wim},
             {"wim_accounts": db_wim_account},
@@ -196,18 +204,42 @@ class Sdn():
             raise SdnException("No data received during uptade OF contorller",
                                http_code=HTTPStatus.INTERNAL_SERVER_ERROR.value)
 
-        old_of_controller = self.show_of_controller(of_id)
+        # get database wim_accounts
+        wim_account = self._get_of_controller(of_id)
 
-        if old_of_controller:
-            result, content = self.db.update_rows('ofcs', ofc_data, WHERE={'uuid': of_id}, log=False)
-            if result >= 0:
-                return ofc_data
-            else:
-                raise SdnException("Error uptating OF contorller with uuid {}".format(of_id),
-                                   http_code=-result)
-        else:
-            raise SdnException("Error uptating OF contorller with uuid {}".format(of_id),
-                               http_code=HTTPStatus.INTERNAL_SERVER_ERROR.value)
+        db_wim_update = {x: ofc_data[x] for x in ("name", "description", "type", "wim_url")}
+        db_wim_account_update = {x: ofc_data[x] for x in ("name", "user", "password")}
+        db_wim_account_config = ofc_data.get("config", {})
+
+        if ofc_data.get("ip") or ofc_data.get("port"):
+            if not ofc_data.get("ip") or not ofc_data.get("port"):
+                raise SdnException("Provide or both 'ip' and 'port'")
+            db_wim_update["wim_url"] = "{}:{}".format(ofc_data["ip"], ofc_data["port"])
+
+        if ofc_data.get("dpid"):
+            db_wim_account_config["dpid"] = ofc_data["dpid"]
+        if ofc_data.get("version"):
+            db_wim_account_config["version"] = ofc_data["version"]
+
+        if db_wim_account_config:
+            db_wim_account_update["config"] = yaml.load(wim_account["config"]) or {}
+            db_wim_account_update["config"].update(db_wim_account_config)
+
+        if db_wim_account_update:
+            self.db.update_rows('wim_accounts', db_wim_account_update, WHERE={'uuid': of_id})
+        if db_wim_update:
+            self.db.update_rows('wims', db_wim_account_update, WHERE={'uuid': wim_account["wim_id"]})
+
+    def _get_of_controller(self, of_id):
+        wim_accounts = self.db.get_rows(FROM='wim_accounts', WHERE={"uuid": of_id, "sdn": "true"})
+
+        if not wim_accounts:
+            raise SdnException("Cannot find sdn controller with id='{}'".format(of_id),
+                               http_code=HTTPStatus.NOT_FOUND.value)
+        elif len(wim_accounts) > 1:
+            raise SdnException("Found more than one sdn controller with id='{}'".format(of_id),
+                               http_code=HTTPStatus.CONFLICT.value)
+        return wim_accounts[0]
 
     def delete_of_controller(self, of_id):
         """
@@ -215,27 +247,20 @@ class Sdn():
         :param of_id: openflow controller dpid
         :return:
         """
-        wim_accounts = self.db.get_rows(FROM='wim_accounts', WHERE={"uuid": of_id, "sdn": "true"})
-        if not wim_accounts:
-            raise SdnException("Cannot find sdn controller with id='{}'".format(of_id),
-                               http_code=HTTPStatus.NOT_FOUND.value)
-        elif len(wim_accounts) > 1:
-            raise SdnException("Found more than one sdn controller with id='{}'".format(of_id),
-                               http_code=HTTPStatus.CONFLICT.value)
+        wim_account = self._get_of_controller(of_id)
         self.db.delete_row(FROM='wim_accounts', WHERE={"uuid": of_id})
-        self.db.delete_row(FROM='wims', WHERE={"uuid": wim_accounts[0]["wim_id"]})
+        self.db.delete_row(FROM='wims', WHERE={"uuid": wim_account["wim_id"]})
         return of_id
 
-    def _format_of_controller(self, wim_account, wim=None):
+    @staticmethod
+    def _format_of_controller(wim_account, wim=None):
         of_data = {x: wim_account[x] for x in ("uuid", "name", "user")}
         if isinstance(wim_account["config"], str):
             config = yaml.load(wim_account["config"], Loader=yaml.Loader)
         of_data["dpid"] = config.get("dpid")
         of_data["version"] = config.get("version")
         if wim:
-            ip, port = wim["wim_url"].split(":")
-            of_data["ip"] = ip
-            of_data["port"] = port
+            of_data["url"] = wim["wim_url"]
             of_data["type"] = wim["type"]
         return of_data
 
@@ -245,15 +270,9 @@ class Sdn():
         :param db_filter: List with where query parameters
         :return:
         """
-        wim_accounts = self.db.get_rows(FROM='wim_accounts', WHERE={"uuid": of_id, "sdn": "true"})
-        if not wim_accounts:
-            raise SdnException("Cannot find sdn controller with id='{}'".format(of_id),
-                               http_code=HTTPStatus.NOT_FOUND.value)
-        elif len(wim_accounts) > 1:
-            raise SdnException("Found more than one sdn controller with id='{}'".format(of_id),
-                               http_code=HTTPStatus.CONFLICT.value)
-        wims = self.db.get_rows(FROM='wims', WHERE={"uuid": wim_accounts[0]["wim_id"]})
-        return self._format_of_controller(wim_accounts[0], wims[0])
+        wim_account = self._get_of_controller(of_id)
+        wims = self.db.get_rows(FROM='wims', WHERE={"uuid": wim_account["wim_id"]})
+        return self._format_of_controller(wim_account, wims[0])
 
     def get_of_controllers(self, filter=None):
         """
@@ -277,10 +296,8 @@ class Sdn():
         :return:
         """
         # get wim from wim_account
-        wim_accounts = self.db.get_rows(FROM='wim_accounts', WHERE={"uuid": sdn_id})
-        if not wim_accounts:
-            raise SdnException("Not found sdn id={}".format(sdn_id), http_code=HTTPStatus.NOT_FOUND.value)
-        wim_id = wim_accounts[0]["wim_id"]
+        wim_account = self._get_of_controller(sdn_id)
+        wim_id = wim_account["wim_id"]
         db_wim_port_mappings = []
         for map in maps:
             new_map = {

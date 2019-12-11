@@ -47,9 +47,9 @@ class OfConnOnos(OpenflowConn):
     """
     def __init__(self, params):
         """ Constructor.
-            Params: dictionary with the following keys:
+            :param params: dictionary with the following keys:
                 of_dpid:     DPID to use for this controller ?? Does a controller have a dpid?
-                url:         must be [http://HOST:PORT/
+                url:         must be [http://HOST:PORT/]
                 of_user:     user credentials, can be missing or None
                 of_password: password credentials
                 of_debug:    debug level for logging. Default to ERROR
@@ -69,7 +69,7 @@ class OfConnOnos(OpenflowConn):
             url = url + "/"
         self.url = url + "onos/v1/"
 
-        #internal variables
+        # internal variables
         self.name = "onosof"
         self.headers = {'content-type':'application/json','accept':'application/json',}
 
@@ -87,7 +87,7 @@ class OfConnOnos(OpenflowConn):
             self.auth = self.auth.decode()
             self.headers['authorization'] = 'Basic ' + self.auth
 
-        self.logger = logging.getLogger('vim.OF.onos')
+        self.logger = logging.getLogger('SDN.onosOF')
         self.logger.setLevel( getattr(logging, params.get("of_debug", "ERROR")) )
         self.ip_address = None
 

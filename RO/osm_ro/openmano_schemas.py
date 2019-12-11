@@ -1185,23 +1185,26 @@ instance_scenario_action_schema = {
 
 sdn_controller_properties={
     "name": name_schema,
-    "dpid": {"type":"string", "pattern":"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){7}$"},
+    "dpid": {"type": "string", "pattern": "^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){7}$"},
+    "description": name_schema,
     "ip": ip_schema,
     "port": port_schema,
-    "type": {"type": "string", "enum": ["opendaylight","floodlight","onos"]},
-    "version": {"type" : "string", "minLength":1, "maxLength":12},
+    "type": nameshort_schema,
+    "url": name_schema,
+    "version": {"type": "string", "minLength": 1, "maxLength": 12},
     "user": nameshort_schema,
-    "password": passwd_schema
+    "password": passwd_schema,
+    "config": object_schema,
 }
 sdn_controller_schema = {
-    "title":"sdn controller information schema",
+    "title": "sdn controller information schema",
     "$schema": "http://json-schema.org/draft-04/schema#",
-    "type":"object",
+    "type": "object",
     "properties":{
         "sdn_controller":{
-            "type":"object",
-            "properties":sdn_controller_properties,
-            "required": ["name", "port", 'ip', 'dpid', 'type'],
+            "type": "object",
+            "properties": sdn_controller_properties,
+            "required": ["name", 'type'],
             "additionalProperties": False
         }
     },
@@ -1210,13 +1213,13 @@ sdn_controller_schema = {
 }
 
 sdn_controller_edit_schema = {
-    "title":"sdn controller update information schema",
+    "title": "sdn controller update information schema",
     "$schema": "http://json-schema.org/draft-04/schema#",
-    "type":"object",
-    "properties":{
-        "sdn_controller":{
-            "type":"object",
-            "properties":sdn_controller_properties,
+    "type": "object",
+    "properties": {
+        "sdn_controller": {
+            "type": "object",
+            "properties": sdn_controller_properties,
             "additionalProperties": False
         }
     },
