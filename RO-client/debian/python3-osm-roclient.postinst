@@ -16,7 +16,8 @@
 
 
 #configure arg-autocomplete for RO-client
-su $SUDO_USER -c 'activate-global-python-argcomplete --user'
+[ -z "$SUDO_USER" ] && SUDO_USER="$USER"
+su $SUDO_USER -c 'activate-global-python-argcomplete3 --user'
 if ! su  $SUDO_USER -c 'grep -q bash_completion.d/python-argcomplete.sh ${HOME}/.bashrc'
 then
     echo "    inserting .bash_completion.d/python-argcomplete.sh execution at .bashrc"
