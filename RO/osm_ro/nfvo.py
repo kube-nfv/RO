@@ -4076,6 +4076,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             else:
                 netDict['net_id'] = "TASK-{}".format(net2task_id[sce_vnf['uuid']][iface['net_id']])
                 instance_net_id = vnf_net2instance[sce_vnf['uuid']][iface['net_id']]
+                instance_wim_net_id = None
                 task_depends_on.append(net2task_id[sce_vnf['uuid']][iface['net_id']])
             # skip bridge ifaces not connected to any net
             if 'net_id' not in netDict or netDict['net_id'] == None:
