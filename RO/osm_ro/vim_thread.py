@@ -293,9 +293,6 @@ class vim_thread(threading.Thread):
                                                        })
                         continue
 
-                    # task of creation must be the first in the list of related_task
-                    assert(related_tasks[0]["action"] in ("CREATE", "FIND"))
-
                     task["params"] = None
                     if task["extra"]:
                         extra = yaml.load(task["extra"], Loader=yaml.Loader)
@@ -330,11 +327,13 @@ class vim_thread(threading.Thread):
 
         task_create = None
         dependency_task = None
-        deletion_needed = False
+        deletion_needed = task["extra"].get("created", False)
         if task["status"] == "FAILED":
             return   # TODO need to be retry??
         try:
-            # get all related tasks
+            # get all related tasks. task of creation must be the first in the list of related_task,
+            # unless the deletion fails and it is pendingit fails
+            # TODO this should be removed, passing related_tasks
             related_tasks = self.db.get_rows(FROM="vim_wim_actions",
                                              WHERE={self.target_k: self.target_v,
                                                     "status": ['SCHEDULED', 'BUILD', 'DONE', 'FAILED'],
@@ -358,13 +357,14 @@ class vim_thread(threading.Thread):
                     break
 
             # mark task_create as FINISHED
-            self.db.update_rows("vim_wim_actions", UPDATE={"status": "FINISHED"},
-                                WHERE={self.target_k: self.target_v,
-                                       "instance_action_id": task_create["instance_action_id"],
-                                       "task_index": task_create["task_index"]
-                                       })
+            if task_create:
+                self.db.update_rows("vim_wim_actions", UPDATE={"status": "FINISHED"},
+                                    WHERE={self.target_k: self.target_v,
+                                           "instance_action_id": task_create["instance_action_id"],
+                                           "task_index": task_create["task_index"]
+                                           })
             if not deletion_needed:
-                return
+                return False
             elif dependency_task:
                 # move create information  from task_create to relate_task
                 extra_new_created = yaml.load(dependency_task["extra"], Loader=yaml.Loader) or {}
@@ -380,10 +380,19 @@ class vim_thread(threading.Thread):
                                            "task_index": dependency_task["task_index"]
                                            })
                 return False
-            else:
+            elif task_create:
                 task["vim_id"] = task_create["vim_id"]
                 copy_extra_created(copy_to=task["extra"], copy_from=task_create["extra"])
+                # Ensure this task extra information is stored at database
+                self.db.update_rows("vim_wim_actions",
+                                    UPDATE={"extra":  yaml.safe_dump(task["extra"], default_flow_style=True,
+                                                                     width=256)},
+                                    WHERE={self.target_k: self.target_v,
+                                           "instance_action_id": task["instance_action_id"],
+                                           "task_index": task["task_index"],
+                                           })
                 return True
+            return deletion_needed
 
         except Exception as e:
             self.logger.critical("Unexpected exception at _delete_task: " + str(e), exc_info=True)
@@ -548,6 +557,7 @@ class vim_thread(threading.Thread):
         old_task_status = task["status"]
         create_or_find = False   # if as result of processing this task something is created or found
         next_refresh = 0
+        task_id = task["instance_action_id"] + "." + str(task["task_index"])
 
         try:
             if task["status"] == "SCHEDULED":
@@ -706,16 +716,17 @@ class vim_thread(threading.Thread):
             else:
                 raise vimconn.vimconnException(self.name + "unknown task item {}".format(task["item"]))
                 # TODO
-        except VimThreadException as e:
+        except Exception as e:
+            if not isinstance(e, VimThreadException):
+                self.logger.error("Error executing task={}: {}".format(task_id, e), exc_info=True)
             task["error_msg"] = str(e)
             task["status"] = "FAILED"
             database_update = {"status": "VIM_ERROR", "error_msg": task["error_msg"]}
-            if task["item"] == 'instance_vms':
-                database_update["vim_vm_id"] = None
-            elif task["item"] == 'instance_nets':
-                database_update["vim_net_id"] = None
+            # if task["item"] == 'instance_vms':
+            #     database_update["vim_vm_id"] = None
+            # elif task["item"] == 'instance_nets':
+            #     database_update["vim_net_id"] = None
 
-        task_id = task["instance_action_id"] + "." + str(task["task_index"])
         self.logger.debug("task={} item={} action={} result={}:'{}' params={}".format(
             task_id, task["item"], task["action"], task["status"],
             task["vim_id"] if task["status"] == "DONE" else task.get("error_msg"), task["params"]))
