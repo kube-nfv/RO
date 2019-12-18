@@ -2433,7 +2433,6 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                 elif vld.get("vim-network-name"):
                     db_sce_net["vim_network_name"] = get_str(vld, "vim-network-name", 255)
 
-                
                 # table sce_interfaces (vld:vnfd-connection-point-ref)
                 for iface in vld.get("vnfd-connection-point-ref").values():
                     # Check if there are VDUs in the descriptor
@@ -2447,7 +2446,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                                               "'nsd':'constituent-vnfd'".format(
                                                   str(nsd["id"]), str(vld["id"]), str(iface["member-vnf-index-ref"])),
                                               httperrors.Bad_Request)
-  
+
                         existing_ifaces = mydb.get_rows(SELECT=('i.uuid as uuid', 'i.type as iface_type'),
                                                       FROM="interfaces as i join vms on i.vm_id=vms.uuid",
                                                       WHERE={'vnf_id': vnf_index2vnf_uuid[vnf_index],
@@ -2474,7 +2473,7 @@ def new_nsd_v3(mydb, tenant_id, nsd_descriptor):
                             "sce_net_id": sce_net_uuid,
                             "interface_id": interface_uuid,
                             "ip_address": iface_ip_address,
-                        }    
+                        }
                         db_sce_interfaces.append(db_sce_interface)
                         if not db_sce_net["type"]:
                             db_sce_net["type"] = "bridge"

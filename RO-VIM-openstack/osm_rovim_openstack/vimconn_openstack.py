@@ -826,7 +826,7 @@ class vimconnector(vimconn.vimconnector):
     def process_resource_quota(self, quota, prefix, extra_specs):
         """
         :param prefix:
-        :param extra_specs: 
+        :param extra_specs:
         :return:
         """
         if 'limit' in quota:
@@ -2228,3 +2228,180 @@ class vimconnector(vimconn.vimconnector):
                 ksExceptions.ClientException, neExceptions.NeutronException,
                 ConnectionError) as e:
             self._format_exception(e)
+
+
+    def refresh_sfps_status(self, sfp_list):
+        '''Get the status of the service function path
+           Params: the list of sfp identifiers
+           Returns a dictionary with:
+                vm_id:          #VIM id of this service function path
+                    status:     #Mandatory. Text with one of:
+                                #  DELETED (not found at vim)
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                                #  OTHER (Vim reported other status not understood)
+                                #  ERROR (VIM indicates an ERROR status)
+                                #  ACTIVE,
+                                #  CREATING (on building process)
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                    vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)F
+        '''
+        sfp_dict={}
+        self.logger.debug("refresh_sfps status: Getting tenant SFP information from VIM")
+        for sfp_id in sfp_list:
+            sfp={}
+            try:
+                sfp_vim = self.get_sfp(sfp_id)
+                if sfp_vim['spi']:
+                    sfp['status']    =  vmStatus2manoFormat[ 'ACTIVE' ]
+                else:
+                    sfp['status']    = "OTHER"
+                    sfp['error_msg'] = "VIM status reported " + vm_vim['status']
+
+                sfp['vim_info'] = self.serialize(sfp_vim)
+
+                if sfp_vim.get('fault'):
+                    sfp['error_msg'] = str(sfp_vim['fault'])
+
+            except vimconn.vimconnNotFoundException as e:
+                self.logger.error("Exception getting sfp status: %s", str(e))
+                sfp['status'] = "DELETED"
+                sfp['error_msg'] = str(e)
+            except vimconn.vimconnException as e:
+                self.logger.error("Exception getting sfp status: %s", str(e))
+                sfp['status'] = "VIM_ERROR"
+                sfp['error_msg'] = str(e)
+            sfp_dict[sfp_id] = sfp
+        return sfp_dict
+
+
+    def refresh_sfis_status(self, sfi_list):
+        '''Get the status of the service function instances
+           Params: the list of sfi identifiers
+           Returns a dictionary with:
+                vm_id:          #VIM id of this service function instance
+                    status:     #Mandatory. Text with one of:
+                                #  DELETED (not found at vim)
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                                #  OTHER (Vim reported other status not understood)
+                                #  ERROR (VIM indicates an ERROR status)
+                                #  ACTIVE,
+                                #  CREATING (on building process)
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                    vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
+        '''
+        sfi_dict={}
+        self.logger.debug("refresh_sfis status: Getting tenant sfi information from VIM")
+        for sfi_id in sfi_list:
+            sfi={}
+            try:
+                sfi_vim = self.get_sfi(sfi_id)
+                if sfi_vim:
+                    sfi['status']    =  vmStatus2manoFormat[ 'ACTIVE' ]
+                else:
+                    sfi['status']    = "OTHER"
+                    sfi['error_msg'] = "VIM status reported " + vm_vim['status']
+
+                sfi['vim_info'] = self.serialize(sfi_vim)
+
+                if sfi_vim.get('fault'):
+                    sfi['error_msg'] = str(sfi_vim['fault'])
+
+            except vimconn.vimconnNotFoundException as e:
+                self.logger.error("Exception getting sfi status: %s", str(e))
+                sfi['status'] = "DELETED"
+                sfi['error_msg'] = str(e)
+            except vimconn.vimconnException as e:
+                self.logger.error("Exception getting sfi status: %s", str(e))
+                sfi['status'] = "VIM_ERROR"
+                sfi['error_msg'] = str(e)
+            sfi_dict[sfi_id] = sfi
+        return sfi_dict
+
+
+    def refresh_sfs_status(self, sf_list):
+        '''Get the status of the service functions
+           Params: the list of sf identifiers
+           Returns a dictionary with:
+                vm_id:          #VIM id of this service function
+                    status:     #Mandatory. Text with one of:
+                                #  DELETED (not found at vim)
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                                #  OTHER (Vim reported other status not understood)
+                                #  ERROR (VIM indicates an ERROR status)
+                                #  ACTIVE,
+                                #  CREATING (on building process)
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                    vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
+        '''
+        sf_dict={}
+        self.logger.debug("refresh_sfs status: Getting tenant sf information from VIM")
+        for sf_id in sf_list:
+            sf={}
+            try:
+                sf_vim = self.get_sf(sf_id)
+                if sf_vim:
+                    sf['status']    =  vmStatus2manoFormat[ 'ACTIVE' ]
+                else:
+                    sf['status']    = "OTHER"
+                    sf['error_msg'] = "VIM status reported " + vm_vim['status']
+
+                sf['vim_info'] = self.serialize(sf_vim)
+
+                if sf_vim.get('fault'):
+                    sf['error_msg'] = str(sf_vim['fault'])
+
+            except vimconn.vimconnNotFoundException as e:
+                self.logger.error("Exception getting sf status: %s", str(e))
+                sf['status'] = "DELETED"
+                sf['error_msg'] = str(e)
+            except vimconn.vimconnException as e:
+                self.logger.error("Exception getting sf status: %s", str(e))
+                sf['status'] = "VIM_ERROR"
+                sf['error_msg'] = str(e)
+            sf_dict[sf_id] = sf
+        return sf_dict
+
+
+
+    def refresh_classifications_status(self, classification_list):
+        '''Get the status of the classifications
+           Params: the list of classification identifiers
+           Returns a dictionary with:
+                vm_id:          #VIM id of this classifier
+                    status:     #Mandatory. Text with one of:
+                                #  DELETED (not found at vim)
+                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                                #  OTHER (Vim reported other status not understood)
+                                #  ERROR (VIM indicates an ERROR status)
+                                #  ACTIVE,
+                                #  CREATING (on building process)
+                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                    vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
+        '''
+        classification_dict={}
+        self.logger.debug("refresh_classifications status: Getting tenant classification information from VIM")
+        for classification_id in classification_list:
+            classification={}
+            try:
+                classification_vim = self.get_classification(classification_id)
+                if classification_vim:
+                    classification['status']    =  vmStatus2manoFormat[ 'ACTIVE' ]
+                else:
+                    classification['status']    = "OTHER"
+                    classification['error_msg'] = "VIM status reported " + vm_vim['status']
+
+                classification['vim_info'] = self.serialize(classification_vim)
+
+                if classification_vim.get('fault'):
+                    classification['error_msg'] = str(classification_vim['fault'])
+
+            except vimconn.vimconnNotFoundException as e:
+                self.logger.error("Exception getting classification status: %s", str(e))
+                classification['status'] = "DELETED"
+                classification['error_msg'] = str(e)
+            except vimconn.vimconnException as e:
+                self.logger.error("Exception getting classification status: %s", str(e))
+                classification['status'] = "VIM_ERROR"
+                classification['error_msg'] = str(e)
+            classification_dict[classification_id] = classification
+        return classification_dict

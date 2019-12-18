@@ -660,7 +660,10 @@ class vim_thread(threading.Thread):
                 else:
                     raise vimconn.vimconnException(self.name + "unknown task action {}".format(task["action"]))
             elif task["item"] == 'instance_sfis':
-                if task["action"] == "CREATE":
+                if task["status"] in ('BUILD', 'DONE') and task["action"] in ("FIND", "CREATE"):
+                    database_update = self._refres_sfis(task)
+                    create_or_find = True
+                elif task["action"] == "CREATE":
                     create_or_find = True
                     database_update = self.new_sfi(task)
                 elif task["action"] == "DELETE":
@@ -668,7 +671,10 @@ class vim_thread(threading.Thread):
                 else:
                     raise vimconn.vimconnException(self.name + "unknown task action {}".format(task["action"]))
             elif task["item"] == 'instance_sfs':
-                if task["action"] == "CREATE":
+                if task["status"] in ('BUILD', 'DONE') and task["action"] in ("FIND", "CREATE"):
+                    database_update = self._refres_sfs(task)
+                    create_or_find = True
+                elif task["action"] == "CREATE":
                     create_or_find = True
                     database_update = self.new_sf(task)
                 elif task["action"] == "DELETE":
@@ -676,7 +682,10 @@ class vim_thread(threading.Thread):
                 else:
                     raise vimconn.vimconnException(self.name + "unknown task action {}".format(task["action"]))
             elif task["item"] == 'instance_classifications':
-                if task["action"] == "CREATE":
+                if task["status"] in ('BUILD', 'DONE') and task["action"] in ("FIND", "CREATE"):
+                    database_update = self._refres_classifications(task)
+                    create_or_find = True
+                elif task["action"] == "CREATE":
                     create_or_find = True
                     database_update = self.new_classification(task)
                 elif task["action"] == "DELETE":
@@ -684,7 +693,10 @@ class vim_thread(threading.Thread):
                 else:
                     raise vimconn.vimconnException(self.name + "unknown task action {}".format(task["action"]))
             elif task["item"] == 'instance_sfps':
-                if task["action"] == "CREATE":
+                if task["status"] in ('BUILD', 'DONE') and task["action"] in ("FIND", "CREATE"):
+                    database_update = self._refres_sfps(task)
+                    create_or_find = True
+                elif task["action"] == "CREATE":
                     create_or_find = True
                     database_update = self.new_sfp(task)
                 elif task["action"] == "DELETE":
@@ -761,7 +773,7 @@ class vim_thread(threading.Thread):
             if database_update:
                 where_filter = {"related": task["related"]}
                 if task["item"] == "instance_nets" and task["datacenter_vim_id"]:
-                    where_filter["datacenter_tenant_id"] = task["datacenter_vim_id"] 
+                    where_filter["datacenter_tenant_id"] = task["datacenter_vim_id"]
                 self.db.update_rows(table=task["item"],
                                     UPDATE=database_update,
                                     WHERE=where_filter)
@@ -1107,7 +1119,7 @@ class vim_thread(threading.Thread):
                 except Exception as e:
                     if isinstance(e, SdnConnectorError) and e.http_error == HTTPStatus.NOT_FOUND.value:
                         pass
-                    else: 
+                    else:
                         self._proccess_sdn_exception(e)
 
             params = task["params"]
@@ -1181,7 +1193,7 @@ class vim_thread(threading.Thread):
                 last_update = time.time()
                 connected_ports = new_connected_ports
             elif wimconn_net_id:
-                try: 
+                try:
                     wim_status_dict = self.sdnconnector.get_connectivity_service_status(wimconn_net_id,
                                                                                         conn_info=created_items)
                     sdn_status = wim_status_dict["sdn_status"]
@@ -1283,7 +1295,7 @@ class vim_thread(threading.Thread):
             task["extra"]["created"] = True
             task["extra"]["vim_status"] = "ACTIVE"
             task["error_msg"] = None
-            task["status"] = "FINISHED"  # with FINISHED instead of DONE it will not be refreshing
+            task["status"] = "DONE"
             task["vim_id"] = vim_sfi_id
             instance_element_update = {"status": "ACTIVE", "vim_sfi_id": vim_sfi_id, "error_msg": None}
             return instance_element_update
@@ -1332,7 +1344,7 @@ class vim_thread(threading.Thread):
             task["extra"]["created"] = True
             task["extra"]["vim_status"] = "ACTIVE"
             task["error_msg"] = None
-            task["status"] = "FINISHED"  # with FINISHED instead of DONE it will not be refreshing
+            task["status"] = "DONE"
             task["vim_id"] = vim_sf_id
             instance_element_update = {"status": "ACTIVE", "vim_sf_id": vim_sf_id, "error_msg": None}
             return instance_element_update
@@ -1428,7 +1440,7 @@ class vim_thread(threading.Thread):
             task["extra"]["created"] = True
             task["extra"]["vim_status"] = "ACTIVE"
             task["error_msg"] = None
-            task["status"] = "FINISHED"  # with FINISHED instead of DONE it will not be refreshing
+            task["status"] = "DONE"
             task["vim_id"] = vim_classification_id
             instance_element_update = {"status": "ACTIVE", "vim_classification_id": vim_classification_id,
                                        "error_msg": None}
@@ -1484,7 +1496,7 @@ class vim_thread(threading.Thread):
             task["extra"]["created"] = True
             task["extra"]["vim_status"] = "ACTIVE"
             task["error_msg"] = None
-            task["status"] = "FINISHED"  # with FINISHED instead of DONE it will not be refreshing
+            task["status"] = "DONE"
             task["vim_id"] = vim_sfp_id
             instance_element_update = {"status": "ACTIVE", "vim_sfp_id": vim_sfp_id, "error_msg": None}
             return instance_element_update
@@ -1514,3 +1526,149 @@ class vim_thread(threading.Thread):
                 return None
             task["status"] = "FAILED"
             return None
+
+    def _refres_sfps(self, task):
+        """Call VIM to get SFPs status"""
+        database_update = None
+
+        vim_id = task["vim_id"]
+        sfp_to_refresh_list = [vim_id]
+        task_id = task["instance_action_id"] + "." + str(task["task_index"])
+        try:
+            vim_dict = self.vim.refresh_sfps_status(sfp_to_refresh_list)
+            vim_info = vim_dict[vim_id]
+        except vimconn.vimconnException as e:
+            # Mark all tasks at VIM_ERROR status
+            self.logger.error("task={} get-sfp: vimconnException when trying to refresh sfps {}".format(task_id, e))
+            vim_info = {"status": "VIM_ERROR", "error_msg": str(e)}
+
+        self.logger.debug("task={} get-sfp: vim_sfp_id={} result={}".format(task_id, task["vim_id"], vim_info))
+        #TODO: Revise this part
+        vim_info_error_msg = None
+        if vim_info.get("error_msg"):
+            vim_info_error_msg = self._format_vim_error_msg(vim_info["error_msg"])
+        task_vim_info = task["extra"].get("vim_info")
+        task_error_msg = task.get("error_msg")
+        task_vim_status = task["extra"].get("vim_status")
+        if task_vim_status != vim_info["status"] or task_error_msg != vim_info_error_msg or \
+                (vim_info.get("vim_info") and task_vim_info != vim_info["vim_info"]):
+            database_update = {"status": vim_info["status"], "error_msg": vim_info_error_msg}
+            if vim_info.get("vim_info"):
+                database_update["vim_info"] = vim_info["vim_info"]
+
+            task["extra"]["vim_status"] = vim_info["status"]
+            task["error_msg"] = vim_info_error_msg
+            if vim_info.get("vim_info"):
+                task["extra"]["vim_info"] = vim_info["vim_info"]
+
+        return database_update
+
+    def _refres_sfis(self, task):
+        """Call VIM to get sfis status"""
+        database_update = None
+
+        vim_id = task["vim_id"]
+        sfi_to_refresh_list = [vim_id]
+        task_id = task["instance_action_id"] + "." + str(task["task_index"])
+        try:
+            vim_dict = self.vim.refresh_sfis_status(sfi_to_refresh_list)
+            vim_info = vim_dict[vim_id]
+        except vimconn.vimconnException as e:
+            # Mark all tasks at VIM_ERROR status
+            self.logger.error("task={} get-sfi: vimconnException when trying to refresh sfis {}".format(task_id, e))
+            vim_info = {"status": "VIM_ERROR", "error_msg": str(e)}
+
+        self.logger.debug("task={} get-sfi: vim_sfi_id={} result={}".format(task_id, task["vim_id"], vim_info))
+        #TODO: Revise this part
+        vim_info_error_msg = None
+        if vim_info.get("error_msg"):
+            vim_info_error_msg = self._format_vim_error_msg(vim_info["error_msg"])
+        task_vim_info = task["extra"].get("vim_info")
+        task_error_msg = task.get("error_msg")
+        task_vim_status = task["extra"].get("vim_status")
+        if task_vim_status != vim_info["status"] or task_error_msg != vim_info_error_msg or \
+                (vim_info.get("vim_info") and task_vim_info != vim_info["vim_info"]):
+            database_update = {"status": vim_info["status"], "error_msg": vim_info_error_msg}
+            if vim_info.get("vim_info"):
+                database_update["vim_info"] = vim_info["vim_info"]
+
+            task["extra"]["vim_status"] = vim_info["status"]
+            task["error_msg"] = vim_info_error_msg
+            if vim_info.get("vim_info"):
+                task["extra"]["vim_info"] = vim_info["vim_info"]
+
+        return database_update
+
+    def _refres_sfs(self, task):
+        """Call VIM to get sfs status"""
+        database_update = None
+
+        vim_id = task["vim_id"]
+        sf_to_refresh_list = [vim_id]
+        task_id = task["instance_action_id"] + "." + str(task["task_index"])
+        try:
+            vim_dict = self.vim.refresh_sfs_status(sf_to_refresh_list)
+            vim_info = vim_dict[vim_id]
+        except vimconn.vimconnException as e:
+            # Mark all tasks at VIM_ERROR status
+            self.logger.error("task={} get-sf: vimconnException when trying to refresh sfs {}".format(task_id, e))
+            vim_info = {"status": "VIM_ERROR", "error_msg": str(e)}
+
+        self.logger.debug("task={} get-sf: vim_sf_id={} result={}".format(task_id, task["vim_id"], vim_info))
+        #TODO: Revise this part
+        vim_info_error_msg = None
+        if vim_info.get("error_msg"):
+            vim_info_error_msg = self._format_vim_error_msg(vim_info["error_msg"])
+        task_vim_info = task["extra"].get("vim_info")
+        task_error_msg = task.get("error_msg")
+        task_vim_status = task["extra"].get("vim_status")
+        if task_vim_status != vim_info["status"] or task_error_msg != vim_info_error_msg or \
+                (vim_info.get("vim_info") and task_vim_info != vim_info["vim_info"]):
+            database_update = {"status": vim_info["status"], "error_msg": vim_info_error_msg}
+            if vim_info.get("vim_info"):
+                database_update["vim_info"] = vim_info["vim_info"]
+
+            task["extra"]["vim_status"] = vim_info["status"]
+            task["error_msg"] = vim_info_error_msg
+            if vim_info.get("vim_info"):
+                task["extra"]["vim_info"] = vim_info["vim_info"]
+
+        return database_update
+
+    def _refres_classifications(self, task):
+        """Call VIM to get classifications status"""
+        database_update = None
+
+        vim_id = task["vim_id"]
+        classification_to_refresh_list = [vim_id]
+        task_id = task["instance_action_id"] + "." + str(task["task_index"])
+        try:
+            vim_dict = self.vim.refresh_classifications_status(classification_to_refresh_list)
+            vim_info = vim_dict[vim_id]
+        except vimconn.vimconnException as e:
+            # Mark all tasks at VIM_ERROR status
+            self.logger.error("task={} get-classification: vimconnException when trying to refresh classifications {}"
+                .format(task_id, e))
+            vim_info = {"status": "VIM_ERROR", "error_msg": str(e)}
+
+        self.logger.debug("task={} get-classification: vim_classification_id={} result={}".format(task_id,
+            task["vim_id"], vim_info))
+        #TODO: Revise this part
+        vim_info_error_msg = None
+        if vim_info.get("error_msg"):
+            vim_info_error_msg = self._format_vim_error_msg(vim_info["error_msg"])
+        task_vim_info = task["extra"].get("vim_info")
+        task_error_msg = task.get("error_msg")
+        task_vim_status = task["extra"].get("vim_status")
+        if task_vim_status != vim_info["status"] or task_error_msg != vim_info_error_msg or \
+                (vim_info.get("vim_info") and task_vim_info != vim_info["vim_info"]):
+            database_update = {"status": vim_info["status"], "error_msg": vim_info_error_msg}
+            if vim_info.get("vim_info"):
+                database_update["vim_info"] = vim_info["vim_info"]
+
+            task["extra"]["vim_status"] = vim_info["status"]
+            task["error_msg"] = vim_info_error_msg
+            if vim_info.get("vim_info"):
+                task["extra"]["vim_info"] = vim_info["vim_info"]
+
+        return database_update
