@@ -143,6 +143,9 @@ class vimconnector(vimconn.vimconnector):
         else:
             self.endpoint_type = None
 
+        logging.getLogger('urllib3').setLevel(logging.WARNING)
+        logging.getLogger('keystoneauth').setLevel(logging.WARNING)
+        logging.getLogger('novaclient').setLevel(logging.WARNING)
         self.logger = logging.getLogger('openmano.vim.openstack')
 
         # allow security_groups to be a list or a single string
