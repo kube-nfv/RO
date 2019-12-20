@@ -18,19 +18,19 @@
 
 from setuptools import setup
 
-_name = "osm_rosdn_arista"
+_name = "osm_rosdn_arista_cloudvision"
 
 README = """
 ===========
-osm-rosdn_arista
+osm-rosdn_arista_cloudvision
 ===========
 
-osm-ro pluging for arista SDN
+osm-ro pluging for arista_cloudvision SDN
 """
 
 setup(
     name=_name,
-    description='OSM ro sdn plugin for arista',
+    description='OSM ro sdn plugin for arista with CloudVision',
     long_description=README,
     version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
     # version=VERSION,
@@ -50,6 +50,7 @@ setup(
                       "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"],
     setup_requires=['setuptools-version-command'],
     entry_points={
-        'osm_rosdn.plugins': ['rosdn_arista = osm_rosdn_arista.wimconn_arista:AristaSdnConnector']
+        'osm_rosdn.plugins': ['rosdn_arista_cloudvision = osm_rosdn_arista_cloudvision.'
+                              'wimconn_arista:AristaSdnConnector']
     },
 )

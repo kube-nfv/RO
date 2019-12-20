@@ -16,9 +16,11 @@
 all: clean package
 
 clean:
-	rm -rf dist deb_dist osm_rosdn_tapi-*.tar.gz osm_rosdn_tapi.egg-info .eggs
+	rm -rf dist deb_dist osm_rosdn_ietfl2vpn-*.tar.gz osm_rosdn_ietfl2vpn.egg-info .eggs
+	rm -rf osm_rosdn_tapi-*.tar.gz osm_rosdn_tapi.egg-info
 
 package:
 	python3 setup.py --command-packages=stdeb.command sdist_dsc
-	cd deb_dist/osm-rosdn-tapi*/ && dpkg-buildpackage -rfakeroot -uc -us
+	cd deb_dist/osm-rosdn-ietfl2vpn*/ && dpkg-buildpackage -rfakeroot -uc -us
+	for pkg in deb_dist/python3-osm-rosdn-ietfl2vpn*.deb; do cp $$pkg deb_dist/python3-osm-rosdn-tapi$${pkg#*-osm-rosdn-ietfl2vpn} ; done
 

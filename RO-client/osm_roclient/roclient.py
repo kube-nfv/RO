@@ -2263,7 +2263,7 @@ def main():
     wim_create_parser.add_argument("url", action="store",
                                    help="url for the wim")
     wim_create_parser.add_argument("--type", action="store",
-                                   help="wim type: tapi, onos, dynpac or odl (default)")
+                                   help="wim type: ietfl2vpn, dynpac, ...")
     wim_create_parser.add_argument("--config", action="store",
                                    help="additional configuration in json/yaml format")
     wim_create_parser.add_argument("--description", action="store",

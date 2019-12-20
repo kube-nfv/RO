@@ -39,7 +39,7 @@ from ..openmano_schemas import (
 )
 
 # WIM -------------------------------------------------------------------------
-wim_types = ["tapi", "onos", "onos_vpls", "odl", "dynpac", "dummy"]
+wim_types = ["ietfl2vpn", "dynpac", "arista_cloudvision", "floodlightof", "onosof", "onos_vpls", "odlof", "dummy"]
 
 dpid_type = {
     "type": "string",
@@ -96,7 +96,7 @@ wim_schema_properties = {
     "description": description_schema,
     "type": {
         "type": "string",
-        # "enum": ["tapi", "onos", "odl", "dynpac", "dummy"]
+        # "enum": ["ietfl2vpn", "onos", "odl", "dynpac", "dummy", ...]
     },
     "wim_url": description_schema,
     "config": {

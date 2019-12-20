@@ -53,7 +53,7 @@ def wim(identifier=0):
     return {'name': 'wim%d' % identifier,
             'uuid': uuid('wim%d' % identifier),
             'wim_url': 'localhost',
-            'type': 'tapi'}
+            'type': 'ietfl2vpn'}
 
 
 def tenant(identifier=0):

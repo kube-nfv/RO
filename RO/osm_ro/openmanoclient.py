@@ -602,7 +602,7 @@ class openmanoclient():
                 must be a dictionary or a json/yaml text.
             name: the wim name. Overwrite descriptor name if any
             wim_url: the wim URL. Overwrite descriptor vim_url if any
-            wim_type: the WIM type, can be tapi, odl, onos. Overwrite descriptor type if any
+            wim_type: the WIM type, can be ietfl2vpn, odl, onos. Overwrite descriptor type if any
             public: boolean, by default not public
             description: wim description. Overwrite descriptor description if any
             config: dictionary with extra configuration for the concrete wim
@@ -639,7 +639,7 @@ class openmanoclient():
             parameters to change can be supplied by the descriptor or as parameters:
                 new_name: the wim name
                 wim_url: the wim URL
-                wim_type: the wim type, can be tapi, onos, odl
+                wim_type: the wim type, can be ietfl2vpn, onos, odl
                 public: boolean, available to other tenants
                 description: wim description
         Return: Raises an exception on error, not found or found several

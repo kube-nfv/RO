@@ -57,12 +57,12 @@ RUN /root/RO/RO/osm_ro/scripts/install-osm-im.sh --develop && \
     python3 -m pip install -e /root/RO/RO-VIM-azure && \
     python3 -m pip install -e /root/RO/RO-VIM-fos && \
     python3 -m pip install -e /root/RO/RO-SDN-dynpac && \
-    python3 -m pip install -e /root/RO/RO-SDN-tapi && \
+    python3 -m pip install -e /root/RO/RO-SDN-ietfl2vpn && \
     python3 -m pip install -e /root/RO/RO-SDN-onos_vpls && \
     python3 -m pip install -e /root/RO/RO-SDN-onos_openflow && \
     python3 -m pip install -e /root/RO/RO-SDN-odl_openflow && \
     python3 -m pip install -e /root/RO/RO-SDN-floodlight_openflow && \
-    python3 -m pip install -e /root/RO/RO-SDN-arista && \
+    python3 -m pip install -e /root/RO/RO-SDN-arista_cloudvision && \
     python3 -m pip install -e /root/RO/RO-SDN-juniper_contrail && \
     rm -rf /root/.cache && \
     apt-get clean && \

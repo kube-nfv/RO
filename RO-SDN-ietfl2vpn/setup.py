@@ -18,19 +18,19 @@
 
 from setuptools import setup
 
-_name = "osm_rosdn_tapi"
+_name = "osm_rosdn_ietfl2vpn"
 
 README = """
 ===========
-osm-rosdn_tapi
+osm-rosdn_ietfl2vpn
 ===========
 
-osm-ro pluging for tapi (ietfl2vpn) SDN
+osm-ro pluging for ietfl2vpn SDN
 """
 
 setup(
     name=_name,
-    description='OSM ro sdn plugin for tapi (ietfl2vpn)',
+    description='OSM ro sdn plugin for ietfl2vpn',
     long_description=README,
     version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
     # version=VERSION,
@@ -51,6 +51,6 @@ setup(
     ],
     setup_requires=['setuptools-version-command'],
     entry_points={
-        'osm_rosdn.plugins': ['rosdn_tapi = osm_rosdn_tapi.wimconn_ietfl2vpn:WimconnectorIETFL2VPN'],
+        'osm_rosdn.plugins': ['rosdn_ietfl2vpn = osm_rosdn_ietfl2vpn.wimconn_ietfl2vpn:WimconnectorIETFL2VPN'],
     },
 )

@@ -24,18 +24,18 @@ cp RO/deb_dist/python3-osm-ro_*.deb deb_dist/
 make -C RO-client clean package
 cp RO-client/deb_dist/python3-osm-roclient_*.deb deb_dist/
 
-# VIM plugings:  vmware openstack AWS fos azure Opennebula 
+# VIM plugings:  vmware, openstack, AWS, fos, azure, Opennebula, 
 for vim_plugin in RO-VIM-*
 do
     make -C $vim_plugin clean package
     cp ${vim_plugin}/deb_dist/python3-osm-rovim*.deb deb_dist/
 done
 
-# SDN plugins
-
-# SDN plugins: Dynpack Tapi Onosof Floodlightof
+# SDN plugins: DynPac, Ietfl2vpn, Onosof Floodlightof
 for sdn_plugin in RO-SDN-*
 do
+    [[ "$sdn_plugin" == RO-SDN-tapi ]] && continue  # tapi folder appears at Jenkins due to container reuse
+    [[ "$sdn_plugin" == RO-SDN-arista ]] && continue  # arista folder appears at Jenkins due to container reuse
     make -C $sdn_plugin clean package
     cp ${sdn_plugin}/deb_dist/python3-osm-rosdn*.deb deb_dist/
 done

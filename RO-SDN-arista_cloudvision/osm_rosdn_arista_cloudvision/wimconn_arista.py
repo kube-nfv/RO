@@ -45,8 +45,8 @@ from cvprac.cvp_api import CvpApi
 from cvprac.cvp_client_errors import CvpLoginError,  CvpSessionLogOutError, CvpApiError
 from cvprac import __version__ as cvprac_version
 
-from osm_rosdn_arista.aristaConfigLet import AristaSDNConfigLet
-from osm_rosdn_arista.aristaTask import AristaCVPTask
+from osm_rosdn_arista_cloudvision.aristaConfigLet import AristaSDNConfigLet
+from osm_rosdn_arista_cloudvision.aristaTask import AristaCVPTask
 
 
 class SdnError(Enum):
