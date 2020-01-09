@@ -494,10 +494,10 @@ class vimconnector(vimconn.vimconnector):
             else:
                 self.keystone.tenants.delete(tenant_id)
             return tenant_id
-        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ksExceptions.NotFound, ConnectionError)  as e:
+        except (ksExceptions.ConnectionError, ksExceptions.ClientException, ksExceptions.NotFound, ConnectionError) as e:
             self._format_exception(e)
 
-    def new_network(self,net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
+    def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
         """Adds a tenant network to VIM
         Params:
             'net_name': name of the network
@@ -532,26 +532,49 @@ class vimconnector(vimconn.vimconnector):
             created_items = {}
             self._reload_connection()
             network_dict = {'name': net_name, 'admin_state_up': True}
-            if net_type=="data" or net_type=="ptp":
-                if self.config.get('dataplane_physical_net') == None:
-                    raise vimconn.vimconnConflictException("You must provide a 'dataplane_physical_net' at config value before creating sriov network")
+            if net_type in ("data", "ptp"):
+                provider_physical_network = None
+                if provider_network_profile and provider_network_profile.get("physical-network"):
+                    provider_physical_network = provider_network_profile.get("physical-network")
+                    # provider-network must be one of the dataplane_physcial_netowrk if this is a list. If it is string
+                    # or not declared, just ignore the checking
+                    if isinstance(self.config.get('dataplane_physical_net'), (tuple, list)) and \
+                            provider_physical_network not in self.config['dataplane_physical_net']:
+                        raise vimconn.vimconnConflictException(
+                            "Invalid parameter 'provider-network:physical-network' for network creation. '{}' is not "
+                            "one of the declared list at VIM_config:dataplane_physical_net".format(
+                                provider_physical_network))
+                if not provider_physical_network:  # use the default dataplane_physical_net
+                    provider_physical_network = self.config.get('dataplane_physical_net')
+                    # if it is non empty list, use the first value. If it is a string use the value directly
+                    if isinstance(provider_physical_network, (tuple, list)) and provider_physical_network:
+                        provider_physical_network = provider_physical_network[0]
+
+                if not provider_physical_network:
+                    raise vimconn.vimconnConflictException("You must provide a 'dataplane_physical_net' at VIM_config "
+                                                           "for creating underlay networks. or use the NS instantiation"
+                                                           " parameter provider-network:physical-network for the VLD")
+
                 if not self.config.get('multisegment_support'):
-                    network_dict["provider:physical_network"] = self.config[
-                        'dataplane_physical_net']  # "physnet_sriov" #TODO physical
+                    network_dict["provider:physical_network"] = provider_physical_network
                     network_dict["provider:network_type"] = "vlan"
-                    if vlan!=None:
-                        network_dict["provider:network_type"] = vlan
+                    if vlan:
+                        network_dict["provider:segmentation_id"] = vlan
                 else:
-                    ###### Multi-segment case ######
+                    # Multi-segment case
                     segment_list = []
-                    segment1_dict = {}
-                    segment1_dict["provider:physical_network"] = ''
-                    segment1_dict["provider:network_type"]     = 'vxlan'
+                    segment1_dict = {
+                        "provider:physical_network": '',
+                        "provider:network_type": 'vxlan'
+                    }
                     segment_list.append(segment1_dict)
-                    segment2_dict = {}
-                    segment2_dict["provider:physical_network"] = self.config['dataplane_physical_net']
-                    segment2_dict["provider:network_type"]     = "vlan"
-                    if self.config.get('multisegment_vlan_range'):
+                    segment2_dict = {
+                        "provider:physical_network": provider_physical_network,
+                        "provider:network_type": "vlan"
+                    }
+                    if vlan:
+                        segment2_dict["provider:segmentation_id"] = vlan
+                    elif self.config.get('multisegment_vlan_range'):
                         vlanID = self._generate_multisegment_vlanID()
                         segment2_dict["provider:segmentation_id"] = vlanID
                     # else
@@ -560,17 +583,13 @@ class vimconnector(vimconn.vimconnector):
                     segment_list.append(segment2_dict)
                     network_dict["segments"] = segment_list
 
-                ####### VIO Specific Changes #########
-                if self.vim_type == "VIO":
-                    if vlan is not None:
-                        network_dict["provider:segmentation_id"] = vlan
-                    else:
-                        if self.config.get('dataplane_net_vlan_range') is None:
-                            raise vimconn.vimconnConflictException("You must provide "\
-                                "'dataplane_net_vlan_range' in format [start_ID - end_ID]"\
-                                "at config value before creating sriov network with vlan tag")
-
-                        network_dict["provider:segmentation_id"] = self._generate_vlanID()
+                # VIO Specific Changes. It needs a concrete VLAN
+                if self.vim_type == "VIO" and vlan is None:
+                    if self.config.get('dataplane_net_vlan_range') is None:
+                        raise vimconn.vimconnConflictException(
+                            "You must provide 'dataplane_net_vlan_range' in format [start_ID - end_ID] at VIM_config "
+                            "for creating underlay networks")
+                    network_dict["provider:segmentation_id"] = self._generate_vlanID()
 
             network_dict["shared"] = shared
             if self.config.get("disable_network_port_security"):
@@ -1784,7 +1803,7 @@ class vimconnector(vimconn.vimconnector):
             Returns:
                 vlanID
         """
-        #Get used VLAN IDs
+        # Get used VLAN IDs
         usedVlanIDs = []
         networks = self.get_network_list()
         for net in networks:
@@ -1796,17 +1815,17 @@ class vimconnector(vimconn.vimconnector):
                         usedVlanIDs.append(segment.get('provider:segmentation_id'))
         used_vlanIDs = set(usedVlanIDs)
 
-        #find unused VLAN ID
+        # find unused VLAN ID
         for vlanID_range in self.config.get('multisegment_vlan_range'):
             try:
-                start_vlanid , end_vlanid = map(int, vlanID_range.replace(" ", "").split("-"))
+                start_vlanid, end_vlanid = map(int, vlanID_range.replace(" ", "").split("-"))
                 for vlanID in range(start_vlanid, end_vlanid + 1):
                     if vlanID not in used_vlanIDs:
                         return vlanID
             except Exception as exp:
                 raise vimconn.vimconnException("Exception {} occurred while generating VLAN ID.".format(exp))
         else:
-            raise vimconn.vimconnConflictException("Unable to create the VLAN segment."\
+            raise vimconn.vimconnConflictException("Unable to create the VLAN segment."
                 " All VLAN IDs {} are in use.".format(self.config.get('multisegment_vlan_range')))
 
 
