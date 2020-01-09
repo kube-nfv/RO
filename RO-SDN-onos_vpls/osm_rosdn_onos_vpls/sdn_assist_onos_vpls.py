@@ -65,7 +65,6 @@ class OnosVpls(SdnConnectorBase):
 
     def get_connectivity_service_status(self, service_uuid, conn_info=None):
         try:
-            result = None
             onos_config = self._get_onos_netconfig()
             vpls_config = onos_config.get('apps', {}).get('org.onosproject.vpls')
             if vpls_config:
@@ -111,7 +110,7 @@ class OnosVpls(SdnConnectorBase):
             self.logger.info('Exception posting onos network config: %s', e)
             raise SdnConnectorError("Exception posting onos network config: {}".format(e))
 
-    def create_connectivity_service(self, service_type, connection_points):
+    def create_connectivity_service(self, service_type, connection_points, **kwargs):
         self.logger.debug("create_connectivity_service, service_type: {}, connection_points: {}".
                           format(service_type, connection_points))
         if service_type.lower() != 'elan':
@@ -126,12 +125,17 @@ class OnosVpls(SdnConnectorBase):
         onos_config = copy.deepcopy(onos_config_orig)
 
         try:
-            # Create missing interfaces
-            created_ifs = self._create_missing_interfaces(connection_points, onos_config)
+            # Create missing interfaces, append to created_items if returned, append_port_to_onos_config
+            # returns null if it was already created
+            created_items = []
+            for port in connection_points:
+                created_ifz = self._append_port_to_onos_config(port, onos_config)
+                if created_ifz:
+                    created_items.append(created_ifz[1])
             self._post_onos_netconfig(onos_config)
-            created_items = created_ifs
 
             # Add vpls service to config
+            encapsulation = self._get_encapsulation(connection_points)
             interfaces = [port.get("service_endpoint_id") for port in connection_points]
             if 'org.onosproject.vpls' in onos_config['apps']:
                 if 'vpls' not in onos_config['apps']['org.onosproject.vpls']:
@@ -143,7 +147,8 @@ class OnosVpls(SdnConnectorBase):
                         raise SdnConnectorError('Network {} already exists.'.format(service_uuid))
                 onos_config['apps']['org.onosproject.vpls']['vpls']['vplsList'].append({
                     'name': service_uuid,
-                    'interfaces': interfaces
+                    'interfaces': interfaces,
+                    'encapsulation': encapsulation
                 })
                 self._pop_last_update_time(onos_config)
             else:
@@ -153,13 +158,13 @@ class OnosVpls(SdnConnectorBase):
                             "vplsList": [
                                 {
                                     'name': service_uuid,
-                                    'interfaces': interfaces
+                                    'interfaces': interfaces,
+                                    'encapsulation': encapsulation
                                 }
                             ]
                         }
                     }
                 }
-            self._set_encapsulation(service_uuid, connection_points, onos_config)
             #self.logger.debug("original config: %s", onos_config_orig)
             #self.logger.debug("original config: %s", onos_config)
             self._post_onos_netconfig(onos_config)
@@ -180,25 +185,114 @@ class OnosVpls(SdnConnectorBase):
             else:
                 raise SdnConnectorError("Exception create_connectivity_service: {}".format(e))
 
-    def _set_encapsulation(self, service_uuid, connection_points, onos_config):
-
+    def _get_encapsulation(self, connection_points):
+        """
+        Obtains encapsulation for the vpls service from the connection_points
+        FIXME: Encapsulation is defined for the connection points but for the VPLS service the encapsulation is
+        defined at the service level so only one can be assigned
+        """
         # check if encapsulation is vlan, check just one connection point
-        encapsulation = None
+        encapsulation = "NONE"
         for connection_point in connection_points:
             if connection_point.get("service_endpoint_encapsulation_type") == "dot1q":
                 encapsulation = "VLAN"
                 break
-        # if encapsulation is defined, assign
-        if encapsulation:
-            #self.logger.debug("assign encapsulation")
-            for vpls in onos_config['apps']['org.onosproject.vpls']['vpls']['vplsList']:
-                if vpls['name'] == service_uuid:
-                    vpls['encapsulation'] = encapsulation
+        return encapsulation
 
-    def edit_connectivity_service(self, service_uuid,
-                                  conn_info, connection_points,
-                                  **kwargs):
-        raise SdnConnectorError('Not supported', http_code=501)
+    def edit_connectivity_service(self, service_uuid, conn_info = None, connection_points = None, **kwargs):
+        self.logger.debug("edit connectivity service, service_uuid: {}, conn_info: {}, "
+                          "connection points: {} ".format(service_uuid, conn_info, connection_points))
+
+        conn_info = conn_info or []
+        # Obtain current configuration
+        onos_config_orig = self._get_onos_netconfig()
+        onos_config = copy.deepcopy(onos_config_orig)
+
+        # get current service data and check if it does not exists
+        for vpls in onos_config.get('apps', {}).get('org.onosproject.vpls', {}).get('vpls', {}).get('vplsList', {}):
+            if vpls['name'] == service_uuid:
+                self.logger.debug("service exists")
+                curr_interfaces = vpls.get("interfaces", [])
+                curr_encapsulation = vpls.get("encapsulation")
+                break
+        else:
+            raise SdnConnectorError("service uuid: {} does not exist".format(service_uuid))
+        
+        self.logger.debug("current interfaces: {}".format(curr_interfaces))
+        self.logger.debug("current encapsulation: {}".format(curr_encapsulation))
+
+        # new interfaces names
+        new_interfaces = [port['service_endpoint_id'] for port in new_connection_points]
+
+        # obtain interfaces to delete, list will contain port
+        ifs_delete = list(set(curr_interfaces) - set(new_interfaces))
+        ifs_add = list(set(new_interfaces) - set(curr_interfaces))
+        self.logger.debug("interfaces to delete: {}".format(ifs_delete))
+        self.logger.debug("interfaces to add: {}".format(ifs_add))
+
+        # check if some data of the interfaces that already existed has changed
+        # in that case delete it and add it again
+        ifs_remain = list(set(new_interfaces) & set(curr_interfaces))
+        for port in connection_points:
+            if port['service_endpoint_id'] in ifs_remain:
+                # check if there are some changes
+                curr_port_name, curr_vlan = self._get_current_port_data(onos_config, port['service_endpoint_id'])
+                new_port_name = 'of:{}/{}'.format(port['service_endpoint_encapsulation_info']['switch_dpid'],
+                                        port['service_endpoint_encapsulation_info']['switch_port'])
+                new_vlan = port['service_endpoint_encapsulation_info']['vlan']
+                if (curr_port_name != new_port_name or curr_vlan != new_vlan):
+                    self.logger.debug("TODO: must update data interface: {}".format(port['service_endpoint_id']))
+                    ifs_delete.append(port['service_endpoint_id'])
+                    ifs_add.append(port['service_endpoint_id'])
+
+        new_encapsulation = self._get_encapsulation(connection_points)
+
+        try:
+            # Delete interfaces, only will delete interfaces that are in provided conn_info
+            # because these are the ones that have been created for this service
+            if ifs_delete:
+                for port in onos_config['ports'].values():
+                    for port_interface in port['interfaces']:
+                        interface_name = port_interface['name']
+                        self.logger.debug("interface name: {}".format(port_interface['name']))
+                        if interface_name in ifs_delete and interface_name in conn_info:
+                            self.logger.debug("delete interface name: {}".format(interface_name))
+                            port['interfaces'].remove(port_interface)
+                            conn_info.remove(interface_name)
+
+            # Add new interfaces
+            for port in connection_points:
+                if port['service_endpoint_id'] in ifs_add:
+                    created_ifz = self._append_port_to_onos_config(port, onos_config)
+                    if created_ifz:
+                        conn_info.append(created_ifz[1])
+            self._pop_last_update_time(onos_config)
+            self._post_onos_netconfig(onos_config)
+
+            self.logger.debug("onos config after updating interfaces: {}".format(onos_config))
+            self.logger.debug("conn_info after updating interfaces: {}".format(conn_info))
+
+            # Update interfaces list in vpls service
+            for vpls in onos_config.get('apps', {}).get('org.onosproject.vpls', {}).get('vpls', {}).get('vplsList', {}):
+                if vpls['name'] == service_uuid:
+                    vpls['interfaces'] = new_interfaces
+                    vpls['encapsulation'] = new_encapsulation
+
+            self._pop_last_update_time(onos_config)
+            self._post_onos_netconfig(onos_config)
+            return conn_info
+        except Exception as e:
+            self.logger.error('Exception add connection_service: %s', e)
+            # try to rollback push original config
+            try:
+                self._post_onos_netconfig(onos_config_orig)
+            except Exception as e2:
+                self.logger.error('Exception rolling back to original config: %s', e2)
+            # raise exception
+            if isinstance(e, SdnConnectorError):
+                raise
+            else:
+                raise SdnConnectorError("Exception create_connectivity_service: {}".format(e))
 
     def delete_connectivity_service(self, service_uuid, conn_info=None):
         self.logger.debug("delete_connectivity_service uuid: {}".format(service_uuid))
@@ -208,11 +302,8 @@ class OnosVpls(SdnConnectorBase):
         onos_config = self._get_onos_netconfig()
 
         try:
-            # created_interfaces
-            created_ifs = [item[1] for item in conn_info]
-
             # Removes ports used by network from onos config
-            for vpls in onos_config['apps']['org.onosproject.vpls']['vpls']['vplsList']:
+            for vpls in onos_config.get('apps', {}).get('org.onosproject.vpls', {}).get('vpls', {}).get('vplsList', {}):
                 if vpls['name'] == service_uuid:
                     # iterate interfaces to check if must delete them
                     for interface in vpls['interfaces']:
@@ -220,7 +311,7 @@ class OnosVpls(SdnConnectorBase):
                             for port_interface in port['interfaces']:
                                 if port_interface['name'] == interface:
                                     # Delete only created ifzs
-                                    if port_interface['name'] in created_ifs:
+                                    if port_interface['name'] in conn_info:
                                         self.logger.debug("Delete ifz: {}".format(port_interface['name']))
                                         port['interfaces'].remove(port_interface)
                     onos_config['apps']['org.onosproject.vpls']['vpls']['vplsList'].remove(vpls)
@@ -228,44 +319,26 @@ class OnosVpls(SdnConnectorBase):
             else:
                 raise SdnConnectorError("service uuid: {} does not exist".format(service_uuid))
 
+            self._pop_last_update_time(onos_config)
             self._post_onos_netconfig(onos_config)
             self.logger.debug("deleted connectivity service uuid: {}".format(service_uuid))
+        except SdnConnectorError:
+            raise
         except Exception as e:
-            if isinstance(e, SdnConnectorError):
-                raise
-            else:
-                self.logger.error('Exception delete connection_service: %s', e, exc_info=True)
-                raise SdnConnectorError("Exception create_connectivity_service: {}".format(str(e)))
-
-    def _delete_network_port(self, net_id, port):
-        onos_config_req = requests.get(self.url, auth=HTTPBasicAuth(self.user, self.password))
-        onos_config_req.raise_for_status()
-        onos_config = onos_config_req.json()
-        for vpls in onos_config['apps']['org.onosproject.vpls']['vpls']['vplsList']:
-            if vpls['name'] == net_id:
-                for interface in vpls['interfaces']:
-                    if interface == port['service_endpoint_id']:
-                        vpls['interfaces'].remove(interface)
-                        break
-        for onos_port in onos_config['ports'].values():
-            for port_interface in onos_port['interfaces']:
-                if port_interface['name'] == port['service_endpoint_id']:
-                    onos_port['interfaces'].remove(port_interface)
-                    break
-        self._pop_last_update_time(onos_config)
-        response = requests.post(self.url, json=onos_config, auth=HTTPBasicAuth(self.user, self.password))
-        response.raise_for_status()
+            self.logger.error('Exception delete connection_service: %s', e, exc_info=True)
+            raise SdnConnectorError("Exception delete connectivity service: {}".format(str(e)))
 
     def _pop_last_update_time(self, onos_config):
+        """
+        Needed before post when there are already configured vpls services to apply changes
+        """
         onos_config['apps']['org.onosproject.vpls']['vpls'].pop('lastUpdateTime', None)
 
-    def _create_missing_interfaces(self,connection_points, onos_config):
-        created_ifs = []
-        for port in connection_points:
-            created_ifz = self._append_port_to_onos_config(port, onos_config)
-            if created_ifz:
-                created_ifs.append(created_ifz)
-        return created_ifs
+    def _get_current_port_data(self, onos_config, interface_name):
+        for port_name, port in onos_config['ports'].items():
+            for port_interface in port['interfaces']:
+                if port_interface['name'] == interface_name:
+                    return port_name, port_interface['vlan']
 
     def _append_port_to_onos_config(self, port, onos_config):
         created_item = None
@@ -307,11 +380,11 @@ if __name__ == '__main__':
     wim = {'wim_url': wim_url}
     wim_account = {'user': user, 'password': password}
     onos_vpls = OnosVpls(wim=wim, wim_account=wim_account, logger=logger)
-    conn_service = onos_vpls.get_connectivity_service_status("4e1f4c8a-a874-425d-a9b5-955cb77178f8")
-    print(conn_service)
+    #conn_service = onos_vpls.get_connectivity_service_status("4e1f4c8a-a874-425d-a9b5-955cb77178f8")
+    #print(conn_service)
     service_type = 'ELAN'
     conn_point_0 = {
-        "service_endpoint_id": "switch1_ifz2",
+        "service_endpoint_id": "switch1:ifz1",
         "service_endpoint_encapsulation_type": "dot1q",
         "service_endpoint_encapsulation_info": {
             "switch_dpid": "0000000000000011",
@@ -320,7 +393,7 @@ if __name__ == '__main__':
         }
     }
     conn_point_1 = {
-        "service_endpoint_id": "switch3_ifz2",
+        "service_endpoint_id": "switch3:ifz1",
         "service_endpoint_encapsulation_type": "dot1q",
         "service_endpoint_encapsulation_info": {
             "switch_dpid": "0000000000000031",
@@ -333,6 +406,37 @@ if __name__ == '__main__':
     #print(service_uuid)
     #print(created_items)
 
-    #conn_info = None
-    conn_info = [('of:0000000000000011/1', 'switch1_ifz2'), ('of:0000000000000031/3', 'switch3_ifz2')]
-    onos_vpls.delete_connectivity_service("3a6a752e-8153-4b89-8b43-a7cebe0f0628", conn_info)
+    conn_info = None
+    conn_info = ['switch1:ifz1', 'switch3_ifz3']
+    onos_vpls.delete_connectivity_service("f7afc4de-556d-4b5a-8a12-12b5ef97d269", conn_info)
+
+    conn_point_0 = {
+        "service_endpoint_id": "switch1:ifz1",
+        "service_endpoint_encapsulation_type": "dot1q",
+        "service_endpoint_encapsulation_info": {
+            "switch_dpid": "0000000000000011",
+            "switch_port": "1",
+            "vlan": "500"
+        }
+    }
+    conn_point_2 = {
+        "service_endpoint_id": "switch1:ifz3",
+        "service_endpoint_encapsulation_type": "dot1q",
+        "service_endpoint_encapsulation_info": {
+            "switch_dpid": "0000000000000011",
+            "switch_port": "3",
+            "vlan": "500"
+        }
+    }
+    conn_point_3 = {
+        "service_endpoint_id": "switch3_ifz3",
+        "service_endpoint_encapsulation_type": "dot1q",
+        "service_endpoint_encapsulation_info": {
+            "switch_dpid": "0000000000000033",
+            "switch_port": "3",
+            "vlan": "500"
+        }
+    }
+    new_connection_points = [conn_point_0, conn_point_3]
+    #conn_info = onos_vpls.edit_connectivity_service("f7afc4de-556d-4b5a-8a12-12b5ef97d269", conn_info, new_connection_points)
+    #print(conn_info)
