@@ -5758,6 +5758,12 @@ def sdn_controller_create(mydb, tenant_id, sdn_controller):
     try:
         wim_id = ovim.new_of_controller(sdn_controller)
 
+        # Load plugin if not previously loaded
+        controller_type = sdn_controller.get("type")
+        plugin_name = "rosdn_" + controller_type
+        if plugin_name not in plugins:
+            _load_plugin(plugin_name, type="sdn")
+
         thread_name = get_non_used_vim_name(sdn_controller['name'], wim_id, wim_id, None)
         new_thread = vim_thread(task_lock, plugins, thread_name, wim_id, None, db=db)
         new_thread.start()
