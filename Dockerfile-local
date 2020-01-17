@@ -58,6 +58,7 @@ RUN /root/RO/RO/osm_ro/scripts/install-osm-im.sh --develop && \
     python3 -m pip install -e /root/RO/RO-SDN-onos_vpls && \
     python3 -m pip install -e /root/RO/RO-SDN-onos_openflow && \
     python3 -m pip install -e /root/RO/RO-SDN-floodlight_openflow && \
+    python3 -m pip install -e /root/RO/RO-SDN-arista && \
     rm -rf /root/.cache && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
