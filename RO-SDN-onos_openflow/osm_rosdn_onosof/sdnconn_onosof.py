@@ -29,7 +29,7 @@ class SdnConnectorOnosOf(SdnConnectorOpenFlow):
     def __init__(self, wim, wim_account, config=None, logger=None):
         """Creates a connectivity based on pro-active openflow rules
         """
-        self.logger = logging.getLogger('openmano.sdnconn.onosof')
+        self.logger = logging.getLogger('openmano.sdn.onosof')
         super().__init__(wim, wim_account, config, logger)
         of_params = {
             "of_url": wim["wim_url"],

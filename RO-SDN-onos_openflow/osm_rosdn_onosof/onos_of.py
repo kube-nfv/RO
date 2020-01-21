@@ -87,8 +87,9 @@ class OfConnOnos(OpenflowConn):
             self.auth = self.auth.decode()
             self.headers['authorization'] = 'Basic ' + self.auth
 
-        self.logger = logging.getLogger('SDN.onosOF')
-        self.logger.setLevel( getattr(logging, params.get("of_debug", "ERROR")) )
+        self.logger = logging.getLogger('openmano.sdn.onosof')
+        #self.logger.setLevel( getattr(logging, params.get("of_debug", "ERROR")) )
+        self.logger.debug("onosof plugin initialized")
         self.ip_address = None
 
     def get_of_switches(self):
@@ -332,15 +333,16 @@ class OfConnOnos(OpenflowConn):
         """
 
         try:
+            self.logger.debug("del_flow: delete flow name {}".format(flow_name))
             self.headers['content-type'] = None
             of_response = requests.delete(self.url + "flows/" + self.id + "/" + flow_name, headers=self.headers)
-            error_text = "Openflow response %d: %s" % (of_response.status_code, of_response.text)
+            error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
 
             if of_response.status_code != 204:
                 self.logger.warning("del_flow " + error_text)
                 raise OpenflowConnUnexpectedResponse(error_text)
 
-            self.logger.debug("del_flow OK " + error_text)
+            self.logger.debug("del_flow: {} OK,: {} ".format(flow_name, error_text))
             return None
 
         except requests.exceptions.RequestException as e:
@@ -363,6 +365,7 @@ class OfConnOnos(OpenflowConn):
         :return: Raise a openflowconnUnexpectedResponse expection in case of failure
         """
         try:
+            self.logger.debug("new_flow data: {}".format(data))
 
             if len(self.pp2ofi) == 0:
                 self.obtain_port_correspondence()
@@ -430,9 +433,10 @@ class OfConnOnos(OpenflowConn):
 
             self.headers['content-type'] = 'application/json'
             path = self.url + "flows/" + self.id
+            self.logger.debug("new_flow post: {}".format(flow))
             of_response = requests.post(path, headers=self.headers, data=json.dumps(flow) )
 
-            error_text = "Openflow response %d: %s" % (of_response.status_code, of_response.text)
+            error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
             if of_response.status_code != 201:
                 self.logger.warning("new_flow " + error_text)
                 raise OpenflowConnUnexpectedResponse(error_text)
@@ -441,7 +445,7 @@ class OfConnOnos(OpenflowConn):
 
             data['name'] = flowId
 
-            self.logger.debug("new_flow OK " + error_text)
+            self.logger.debug("new_flow id: {},: {} ".format(flowId, error_text))
             return None
 
         except requests.exceptions.RequestException as e:
