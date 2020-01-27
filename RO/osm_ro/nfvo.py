@@ -30,6 +30,7 @@ __date__ ="$16-sep-2014 22:05:01$"
 # import imp
 import json
 import yaml
+from random import choice as random_choice
 from osm_ro import utils
 from osm_ro.utils import deprecated
 from osm_ro.vim_thread import vim_thread
@@ -100,6 +101,7 @@ last_task_id = 0.0
 db = None
 db_lock = Lock()
 
+worker_id = None
 
 class NfvoException(httperrors.HttpMappedError):
     """Common Class for NFVO errors"""
@@ -144,20 +146,29 @@ def new_task(name, params, depends=None):
 def is_task_id(id):
     return True if id[:5] == "TASK-" else False
 
+def get_process_id():
+    """
+    Obtain a unique ID for this process. If running from inside docker, it will get docker ID. If not it
+    will provide a random one
+    :return: Obtained ID
+    """
+    # Try getting docker id. If fails, get pid
+    try:
+        with open("/proc/self/cgroup", "r") as f:
+            text_id_ = f.readline()
+            _, _, text_id = text_id_.rpartition("/")
+            text_id = text_id.replace("\n", "")[:12]
+            if text_id:
+                return text_id
+    except Exception:
+        pass
+    # Return a random id
+    return "".join(random_choice("0123456789abcdef") for _ in range(12))
 
-def get_non_used_vim_name(datacenter_name, datacenter_id, tenant_name, tenant_id):
-    name = datacenter_name[:16]
-    if name not in vim_threads["names"]:
-        vim_threads["names"].append(name)
-        return name
-    if tenant_name:
-        name = datacenter_name[:16] + "." + tenant_name[:16]
-        if name not in vim_threads["names"]:
-            vim_threads["names"].append(name)
-            return name
-    name = datacenter_id
-    vim_threads["names"].append(name)
-    return name
+def get_non_used_vim_name(datacenter_name, datacenter_id):
+    return "{}:{}:{}".format(
+        worker_id[:12], datacenter_id.replace("-", "")[:32], datacenter_name[:16]
+    )
 
 # -- Move
 def get_non_used_wim_name(wim_name, wim_id, tenant_name, tenant_id):
@@ -175,7 +186,7 @@ def get_non_used_wim_name(wim_name, wim_id, tenant_name, tenant_id):
 
 
 def start_service(mydb, persistence=None, wim=None):
-    global db, global_config, plugins, ovim
+    global db, global_config, plugins, ovim, worker_id
     db = nfvo_db.nfvo_db(lock=db_lock)
     mydb.lock = db_lock
     db.connect(global_config['db_host'], global_config['db_user'], global_config['db_passwd'], global_config['db_name'])
@@ -183,6 +194,7 @@ def start_service(mydb, persistence=None, wim=None):
     persistence = persistence or  WimPersistence(db)
 
     try:
+        worker_id = get_process_id()
         if "rosdn_fake" not in plugins:
             plugins["rosdn_fake"] = FakeConnector
         # starts ovim library
@@ -237,8 +249,7 @@ def start_service(mydb, persistence=None, wim=None):
                                                                                   vim['datacenter_id'], e))
                 # raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, e),
                 #                     httperrors.Internal_Server_Error)
-            thread_name = get_non_used_vim_name(vim['datacenter_name'], vim['datacenter_id'], vim['vim_tenant_name'],
-                                                vim['vim_tenant_id'])
+            thread_name = get_non_used_vim_name(vim['datacenter_name'], vim['datacenter_id'])
             new_thread = vim_thread(task_lock, plugins, thread_name, None,
                                     vim['datacenter_tenant_id'], db=db)
             new_thread.start()
@@ -252,7 +263,7 @@ def start_service(mydb, persistence=None, wim=None):
                 _load_plugin(plugin_name, type="sdn")
 
             thread_id = wim['uuid']
-            thread_name = get_non_used_vim_name(wim['name'], wim['uuid'], wim['uuid'], None)
+            thread_name = get_non_used_vim_name(wim['name'], wim['uuid'])
             new_thread = vim_thread(task_lock, plugins, thread_name, wim['uuid'], None, db=db)
             new_thread.start()
             vim_threads["running"][thread_id] = new_thread
@@ -2962,7 +2973,7 @@ def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_i
         if datacenter_tenant_id:
             thread_id = datacenter_tenant_id
             thread = vim_threads["running"].get(datacenter_tenant_id)
-        else:
+        if not thread:
             where_={"td.nfvo_tenant_id": tenant_id}
             if datacenter_id_name:
                 if utils.check_valid_uuid(datacenter_id_name):
@@ -2974,7 +2985,7 @@ def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_i
             if datacenter_tenant_id:
                 where_["dt.uuid"] = datacenter_tenant_id
             datacenters = mydb.get_rows(
-                SELECT=("dt.uuid as datacenter_tenant_id",),
+                SELECT=("dt.uuid as datacenter_tenant_id, d.name as datacenter_name",),
                 FROM="datacenter_tenants as dt join tenants_datacenters as td on dt.uuid=td.datacenter_tenant_id "
                      "join datacenters as d on d.uuid=dt.datacenter_id",
                 WHERE=where_)
@@ -2982,7 +2993,14 @@ def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_i
                 raise NfvoException("More than one datacenters found, try to identify with uuid", httperrors.Conflict)
             elif datacenters:
                 thread_id = datacenters[0]["datacenter_tenant_id"]
+                datacenter_name = datacenters[0]["datacenter_name"]
                 thread = vim_threads["running"].get(thread_id)
+                if not thread:
+                    thread_name = get_non_used_vim_name(datacenter_name, datacenter_id)
+                    thread = vim_thread(task_lock, plugins, thread_name, None,
+                                        thread_id, db=mydb)
+                    thread.start()
+                    vim_threads["running"][thread_id] = thread
         if not thread:
             raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), httperrors.Not_Found)
         return thread_id, thread
@@ -5238,7 +5256,7 @@ def create_vim_account(mydb, nfvo_tenant, datacenter_id, name=None, vim_id=None,
         mydb.new_row('tenants_datacenters', tenants_datacenter_dict)
 
         # create thread
-        thread_name = get_non_used_vim_name(datacenter_name, datacenter_id, tenant_dict['name'], tenant_dict['uuid'])
+        thread_name = get_non_used_vim_name(datacenter_name, datacenter_id)
         new_thread = vim_thread(task_lock, plugins, thread_name, None, datacenter_tenant_id, db=db)
         new_thread.start()
         thread_id = datacenter_tenants_dict["uuid"]
@@ -5764,7 +5782,7 @@ def sdn_controller_create(mydb, tenant_id, sdn_controller):
         if plugin_name not in plugins:
             _load_plugin(plugin_name, type="sdn")
 
-        thread_name = get_non_used_vim_name(sdn_controller['name'], wim_id, wim_id, None)
+        thread_name = get_non_used_vim_name(sdn_controller['name'], wim_id)
         new_thread = vim_thread(task_lock, plugins, thread_name, wim_id, None, db=db)
         new_thread.start()
         thread_id = wim_id
