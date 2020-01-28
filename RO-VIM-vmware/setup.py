@@ -45,11 +45,10 @@ setup(
 
     packages=[_name],
     include_package_data=True,
-    dependency_links=["git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro"],
     install_requires=[
         "pyvcloud==19.1.1", "progressbar", "prettytable", "pyvmomi",
         "requests", "netaddr", "PyYAML",
-        "osm-ro",
+        "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"
     ],
     setup_requires=['setuptools-version-command'],
     entry_points={

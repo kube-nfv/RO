@@ -29,7 +29,7 @@ _license = 'Apache 2.0'
 _url = 'https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary'
 _requirements = [
     # TODO py3 revise
-    "osm-im",
+    "osm-im @ git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm-im",
     "PyYAML",
     "bottle",
     "logutils",
@@ -67,7 +67,7 @@ setup(
     scripts=['osm_ro/scripts/RO-start.sh'
       #'openmanod', 'openmano', 'osm_ro/scripts/service-openmano', 'osm_ro/scripts/openmano-report',
       ],
-    dependency_links=["git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm-im"],
+    # dependency_links=["git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm_im"],
     install_requires=_requirements,
     include_package_data=True,
     setup_requires=['setuptools-version-command'],
