@@ -864,9 +864,7 @@ def _preprocess_wim_account(wim_account):
     """
     wim_account = preprocess_record(wim_account)
 
-    created = wim_account.get('created')
-    wim_account['created'] = (
-        'true' if created is True or created == 'true' else 'false')
+    wim_account['sdn'] = False
 
     return wim_account
 
