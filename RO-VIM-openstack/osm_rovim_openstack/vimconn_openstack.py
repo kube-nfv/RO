@@ -514,7 +514,8 @@ class vimconnector(vimconn.vimconnector):
                 'dhcp_start_address': ip_schema, first IP to grant
                 'dhcp_count': number of IPs to grant.
             'shared': if this network can be seen/use by other tenants/organization
-            'provider_network_profile': (optional) contains {segmentation-id: vlan, provider-network: vim_netowrk}
+            'provider_network_profile': (optional) contains {segmentation-id: vlan, network-type: vlan|vxlan,
+                                                             physical-network: physnet-label}
         Returns a tuple with the network identifier and created_items, or raises an exception on error
             created_items can be None or a dictionary where this method can include key-values that will be passed to
             the method delete_network. Can be used to store created segments, created l2gw connections, etc.
@@ -557,7 +558,10 @@ class vimconnector(vimconn.vimconnector):
 
                 if not self.config.get('multisegment_support'):
                     network_dict["provider:physical_network"] = provider_physical_network
-                    network_dict["provider:network_type"] = "vlan"
+                    if provider_network_profile and "network-type" in provider_network_profile:
+                        network_dict["provider:network_type"] = provider_network_profile["network-type"]
+                    else:
+                        network_dict["provider:network_type"] = self.config.get('dataplane_network_type','vlan')
                     if vlan:
                         network_dict["provider:segmentation_id"] = vlan
                 else:
