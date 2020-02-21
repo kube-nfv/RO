@@ -64,7 +64,7 @@ from pkg_resources import iter_entry_points
 
 # WIM
 from .wim import sdnconn
-from .wim.wimconn_fake import FakeConnector
+from .wim.wimconn_dummy import DummyConnector
 from .wim.failing_connector import FailingConnector
 from .http_tools import errors as httperrors
 from .wim.engine import WimEngine
@@ -195,8 +195,8 @@ def start_service(mydb, persistence=None, wim=None):
 
     try:
         worker_id = get_process_id()
-        if "rosdn_fake" not in plugins:
-            plugins["rosdn_fake"] = FakeConnector
+        if "rosdn_dummy" not in plugins:
+            plugins["rosdn_dummy"] = DummyConnector
         # starts ovim library
         ovim = Sdn(db, plugins)
 

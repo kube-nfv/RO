@@ -27,7 +27,7 @@ from http import HTTPStatus
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 
 
-class FakeConnector(SdnConnectorBase):
+class DummyConnector(SdnConnectorBase):
     """Abstract base class for all the WIM connectors
 
     Arguments:
@@ -44,8 +44,8 @@ class FakeConnector(SdnConnectorBase):
     An extra property, ``service_endpoint_mapping`` is created from ``config``.
     """
     def __init__(self, wim, wim_account, config=None, logger=None):
-        self.logger = logger or logging.getLogger('openmano.sdnconn.fake')
-        super(FakeConnector, self).__init__(wim, wim_account, config, self.logger)
+        self.logger = logger or logging.getLogger('openmano.sdnconn.dummy')
+        super(DummyConnector, self).__init__(wim, wim_account, config, self.logger)
         self.logger.debug("__init: wim='{}' wim_account='{}'".format(wim, wim_account))
         self.connections = {}
         self.counter = 0
