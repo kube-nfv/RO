@@ -988,6 +988,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
             # table nets (internal-vld)
             net_id2uuid = {}  # for mapping interface with network
+            net_id2index = {}  # for mapping interface with network
             for vld in vnfd.get("internal-vld").values():
                 net_uuid = str(uuid4())
                 uuid_list.append(net_uuid)
@@ -1000,6 +1001,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     "type": "bridge",   # TODO adjust depending on connection point type
                 }
                 net_id2uuid[vld.get("id")] = net_uuid
+                net_id2index[vld.get("id")] = len(db_nets)
                 db_nets.append(db_net)
                 # ip-profile, link db_ip_profile with db_sce_net
                 if vld.get("ip-profile-ref"):
@@ -1192,7 +1194,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                 raise KeyError()
 
                             if vdu_id in vdu_id2cp_name:
-                                vdu_id2cp_name[vdu_id] = None  # more than two connecdtion point for this VDU
+                                vdu_id2cp_name[vdu_id] = None  # more than two connection point for this VDU
                             else:
                                 vdu_id2cp_name[vdu_id] = db_interface["external_name"]
 
@@ -1227,6 +1229,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             if not icp:
                                 raise KeyError("is not referenced by any 'internal-vld'")
 
+                            # set network type as data
+                            if iface.get("virtual-interface") and iface["virtual-interface"].get("type") in \
+                                    ("SR-IOV", "PCI-PASSTHROUGH"):
+                                db_nets[net_id2index[icp_vld.get("id")]]["type"] = "data"
                             db_interface["net_id"] = net_id2uuid[icp_vld.get("id")]
                             if str(icp_descriptor.get("port-security-enabled")).lower() == "false":
                                 db_interface["port_security"] = 0
@@ -3810,6 +3816,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     sce_net2wim_instance = params_out["sce_net2wim_instance"]
 
     vnf_net2instance = {}
+    vnf_net2wim_instance = {}
 
     # 2. Creating new nets (vnf internal nets) in the VIM"
     # For each vnf net, we create it and we add it to instanceNetlist.
@@ -3857,6 +3864,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 "created": True,  # TODO py3
                 "sdn": True,
             })
+            vnf_net2wim_instance[net_uuid] = sdn_net_id
 
         db_net = {
             "uuid": net_uuid,
@@ -4093,7 +4101,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             else:
                 netDict['net_id'] = "TASK-{}".format(net2task_id[sce_vnf['uuid']][iface['net_id']])
                 instance_net_id = vnf_net2instance[sce_vnf['uuid']][iface['net_id']]
-                instance_wim_net_id = None
+                instance_wim_net_id = vnf_net2wim_instance.get(instance_net_id)
                 task_depends_on.append(net2task_id[sce_vnf['uuid']][iface['net_id']])
             # skip bridge ifaces not connected to any net
             if 'net_id' not in netDict or netDict['net_id'] == None:
@@ -4870,8 +4878,10 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                             "uuid": iface_uuid,
                             'instance_vm_id': vm_uuid,
                             "instance_net_id": vm_iface["instance_net_id"],
+                            "instance_wim_net_id": vm_iface["instance_wim_net_id"],
                             'interface_id': vm_iface['interface_id'],
                             'type': vm_iface['type'],
+                            'model': vm_iface['model'],
                             'floating_ip': vm_iface['floating_ip'],
                             'port_security': vm_iface['port_security']
                         }
@@ -5846,6 +5856,8 @@ def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_map
                 pci = port.get("pci")
                 element["switch_port"] = port.get("switch_port")
                 element["switch_mac"] = port.get("switch_mac")
+                element["switch_dpid"] = port.get("switch_dpid")
+                element["switch_id"] = port.get("switch_id")
                 if not element["switch_port"] and not element["switch_mac"]:
                     raise NfvoException ("The mapping must contain 'switch_port' or 'switch_mac'", httperrors.Bad_Request)
                 for pci_expanded in utils.expand_brackets(pci):
