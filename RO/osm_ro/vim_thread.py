@@ -1141,6 +1141,8 @@ class vim_thread(threading.Thread):
 
             ports = self.db.get_rows(FROM='instance_interfaces', WHERE={'instance_wim_net_id': task["item_id"]})
             sdn_need_update = False
+            if len(ports) != len(connected_ports):
+                sdn_need_update = True
             for port in ports:
                 # TODO. Do not connect if already done
                 if port.get("compute_node") and port.get("pci"):

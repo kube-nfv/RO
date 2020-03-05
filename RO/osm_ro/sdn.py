@@ -257,7 +257,7 @@ class Sdn:
         of_data = {x: wim_account[x] for x in ("uuid", "name", "user")}
         if isinstance(wim_account["config"], str):
             config = yaml.load(wim_account["config"], Loader=yaml.Loader)
-        of_data["dpid"] = config.get("dpid")
+        of_data["dpid"] = config.get("switch_id") or config.get("dpid")
         of_data["version"] = config.get("version")
         if wim:
             of_data["url"] = wim["wim_url"]
@@ -300,13 +300,14 @@ class Sdn:
         wim_id = wim_account["wim_id"]
         db_wim_port_mappings = []
         for map in maps:
+            _switch_dpid = map.get("switch_id") or map.get("switch_dpid") or switch_dpid
             new_map = {
                 'wim_id': wim_id,
-                'switch_dpid': switch_dpid,
+                'switch_dpid': _switch_dpid,
                 "switch_port": map.get("switch_port"),
                 'datacenter_id': vim_id,
                 "device_id": map.get("compute_node"),
-                "service_endpoint_id": switch_dpid + "-" + str(uuid4())
+                "service_endpoint_id": _switch_dpid + "-" + str(uuid4())
             }
             if map.get("pci"):
                 new_map["device_interface_id"] = map["pci"].lower()

@@ -395,17 +395,17 @@ class vimconnector(vimconn.vimconnector):
         # method before the implemented VIM connectors are called.
 
     def _format_exception(self, exception):
-        '''Transform a keystone, nova, neutron  exception into a vimconn exception'''
+        """Transform a keystone, nova, neutron  exception into a vimconn exception discovering the cause"""
 
-        message_error = exception.message
+        message_error = str(exception)
 
         if isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound, ksExceptions.NotFound,
                                   gl1Exceptions.HTTPNotFound)):
             raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
-                               ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed)):
+                                    ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed)):
             raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + message_error)
-        elif isinstance(exception,  (KeyError, nvExceptions.BadRequest, ksExceptions.BadRequest)):
+        elif isinstance(exception, (KeyError, nvExceptions.BadRequest, ksExceptions.BadRequest)):
             raise vimconn.vimconnException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
                                     neExceptions.NeutronException)):

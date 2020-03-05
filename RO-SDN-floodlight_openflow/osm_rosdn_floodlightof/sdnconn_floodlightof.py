@@ -33,7 +33,7 @@ class SdnConnectorFloodLightOf(SdnConnectorOpenFlow):
         super().__init__(wim, wim_account, config, logger)
         of_params = {
             "of_url": wim["wim_url"],
-            "of_dpid": config.get("dpid"),
+            "of_dpid": config.get("dpid") or config.get("switch_id"),
             "of_user": wim_account["user"],
             "of_password": wim_account["password"],
         }

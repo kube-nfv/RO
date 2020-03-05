@@ -121,6 +121,7 @@ config_schema = {
         "log_level_console": log_level_schema,
         "log_level_ovim": log_level_schema,
         "log_level_sdn": log_level_schema,
+        "log_level_sdnconn": log_level_schema,
         "log_file_db": path_schema,
         "log_file_vim": path_schema,
         "log_file_wim": path_schema,
@@ -129,6 +130,7 @@ config_schema = {
         "log_file_console": path_schema,
         "log_file_ovim": path_schema,
         "log_file_sdn": path_schema,
+        "log_file_sdnconn": path_schema,
         "log_socket_host": nameshort_schema,
         "log_socket_port": port_schema,
         "log_file": path_schema,
@@ -1229,7 +1231,7 @@ sdn_controller_edit_schema = {
     "additionalProperties": False
 }
 
-sdn_port_mapping_schema  = {
+sdn_port_mapping_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "title":"sdn port mapping information schema",
     "type": "object",
@@ -1247,6 +1249,8 @@ sdn_port_mapping_schema  = {
                             "properties": {
                                 "pci": {"OneOf": [null_schema, pci_extended_schema]},       # pci_schema,
                                 "switch_port": nameshort_schema,
+                                "switch_id": nameshort_schema,
+                                "switch_dpid": nameshort_schema,
                                 "switch_mac": mac_schema
                             },
                             "required": ["pci"]
