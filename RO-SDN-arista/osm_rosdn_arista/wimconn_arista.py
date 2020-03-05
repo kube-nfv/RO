@@ -38,6 +38,7 @@ import difflib
 import logging
 import uuid
 from enum import Enum
+from requests import RequestException
 
 from cvprac.cvp_client import CvpClient
 from cvprac.cvp_client_errors import CvpLoginError,  CvpSessionLogOutError, CvpApiError
@@ -497,6 +498,8 @@ class AristaSdnConnector(SdnConnectorBase):
             Provide the parameter http_code
         """
         try:
+            self.logger.debug("invoked create_connectivity_service '{}' ports: {}".
+                              format(service_type, connection_points))
             self.__get_Connection()
             self.__check_service(service_type,
                                  connection_points,
@@ -1200,7 +1203,8 @@ class AristaSdnConnector(SdnConnectorBase):
             SdnConnectorError: In case of error.
         """
         try:
-            self.logger.debug('invoked edit_connectivity_service for service {}'.format(service_uuid))
+            self.logger.debug('invoked edit_connectivity_service for service {}. ports: {}'.format(service_uuid,
+                                                                                                   connection_points))
 
             if not service_uuid:
                 raise SdnConnectorError(message='Unable to perform operation, missing or empty uuid',
@@ -1408,7 +1412,8 @@ class AristaSdnConnector(SdnConnectorBase):
             if self.client is None:
                 self.client = self.__connect()
             self.client.api.get_cvp_info()
-        except CvpSessionLogOutError:
+        except (CvpSessionLogOutError, RequestException) as e:
+            self.logger.debug("Connection error '{}'. Reconnencting".format(e))
             self.client = self.__connect()
             self.client.api.get_cvp_info()
 
