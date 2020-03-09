@@ -561,6 +561,7 @@ class AristaSdnConnector(SdnConnectorBase):
             vlan_processed = False
             vlan_id = ''
             i = 0
+            processed_connection_points = []
             for cp in connection_points:
                 i += 1
                 encap_info = cp.get(self.__ENCAPSULATION_INFO_PARAM)
@@ -606,6 +607,12 @@ class AristaSdnConnector(SdnConnectorBase):
                     if not interface:
                         raise SdnConnectorError(message="Connection point switch port empty for switch_dpid {}".format(switch_id),
                                                 http_code=406)
+                # remove those connections that are equal. This happens when several sriovs are located in the same
+                # compute node interface, that is, in the same switch and interface
+                switches = [x for x in switches if x not in processed_connection_points]
+                if not switches:
+                    continue
+                processed_connection_points += switches
                 for switch in switches:
                     # it should be only one switch where the mac is attached
                     if encap_type == 'dot1q':
