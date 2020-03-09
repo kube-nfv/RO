@@ -525,8 +525,8 @@ class db_base():
         # gettting uuid
         values = ",".join(map(self.__tuple2db_format_set, UPDATE.items() ))
         if modified_time:
-            values += ",modified_at={:f}".format(modified_time)
-        cmd= "UPDATE " + table + " SET " + values + " WHERE " + self.__create_where(WHERE)
+            values += "{}modified_at={:f}".format("," if values else "", modified_time)
+        cmd = "UPDATE " + table + " SET " + values + " WHERE " + self.__create_where(WHERE)
         self.logger.debug(cmd)
         self.cur.execute(cmd)
         return self.cur.rowcount

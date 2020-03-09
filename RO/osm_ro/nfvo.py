@@ -3229,12 +3229,12 @@ def create_instance(mydb, tenant_id, instance_dict):
                     else:
                         update(scenario_net['ip_profile'], ipprofile_db)
 
-                if 'provider-network' in net_instance_desc:
-                        provider_network_db = net_instance_desc['provider-network']
-                        if 'provider-network' not in scenario_net:
-                            scenario_net['provider-network'] = provider_network_db
-                        else:
-                            update(scenario_net['provider-network'], provider_network_db)
+                if net_instance_desc.get('provider-network'):
+                    provider_network_db = net_instance_desc['provider-network']
+                    if 'provider_network' not in scenario_net:
+                        scenario_net['provider_network'] = provider_network_db
+                    else:
+                        update(scenario_net['provider_network'], provider_network_db)
 
             for vdu_id, vdu_instance_desc in vnf_instance_desc.get("vdus", {}).items():
                 for scenario_vm in scenario_vnf['vms']:
@@ -3481,7 +3481,11 @@ def create_instance(mydb, tenant_id, instance_dict):
                         "created": create_network, # TODO py3
                         "sdn": True,
                     })
+
                     task_wim_extra = {"params": [net_type, wim_account_name]}
+                    # add sdn interfaces
+                    if sce_net.get('provider_network') and sce_net['provider_network'].get("sdn-ports"):
+                        task_wim_extra["sdn-ports"] = sce_net['provider_network'].get("sdn-ports")
                     db_vim_action = {
                         "instance_action_id": instance_action_id,
                         "status": "SCHEDULED",
@@ -4821,6 +4825,16 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                         "extra": yaml.safe_dump({"params": vm_interfaces},
                                                 default_flow_style=True, width=256)
                     }
+                    # get affected instance_interfaces (deleted on cascade) to check if a wim_network must be updated
+                    deleted_interfaces = mydb.get_rows(
+                        SELECT=("instance_wim_net_id", ),
+                        FROM="instance_interfaces",
+                        WHERE={"instance_vm_id": vdu_id, "instance_wim_net_id<>": None},
+                    )
+                    for deleted_interface in deleted_interfaces:
+                        db_vim_actions.append({"TO-UPDATE": {}, "WHERE": {
+                            "item": "instance_wim_nets", "item_id": deleted_interface["instance_wim_net_id"]}})
+
                     task_index += 1
                     db_vim_actions.append(db_vim_action)
                     vm_result["deleted"].append(vdu_id)
@@ -4887,6 +4901,9 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                             'port_security': vm_iface['port_security']
                         }
                         db_instance_interfaces.append(db_vm_iface)
+                        if db_vm_iface["instance_wim_net_id"]:
+                            db_vim_actions.append({"TO-UPDATE": {}, "WHERE": {
+                                "item": "instance_wim_nets", "item_id": db_vm_iface["instance_wim_net_id"]}})
                     task_params_copy = deepcopy(task_params)
                     for iface in task_params_copy[5]:
                         iface["uuid"] = iface2iface[iface["uuid"]]
