@@ -345,3 +345,21 @@ class Sdn:
             else:
                 map["service_mapping_info"] = {}
         return maps
+
+    def get_ports(self, instance_wim_net_id):
+        # get wim_id
+        instance_wim_net = self.db.get_rows(FROM='instance_wim_nets', WHERE={"uuid": instance_wim_net_id})
+        wim_id = instance_wim_net[0]["wim_id"]
+        switch_ports = []
+        ports = self.db.get_rows(FROM='instance_interfaces', WHERE={"instance_wim_net_id": instance_wim_net_id})
+        maps = self.get_of_port_mappings(db_filter={"wim_id": wim_id})
+        for port in ports:
+            map_ = next((x for x in maps if x.get("device_id") == port["compute_node"] and
+                         x.get("device_interface_id") == port["pci"]), None)
+            if map_:
+                switch_port = {'switch_dpid': map_.get('switch_dpid') or map_.get('switch_id'),
+                               'switch_port': map_.get('switch_port')}
+                if switch_port not in switch_ports:
+                    switch_ports.append(switch_port)
+        return switch_ports
+

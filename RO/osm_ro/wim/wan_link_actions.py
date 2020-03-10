@@ -207,9 +207,8 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         return merge_dicts(wan_port_mapping, service_mapping_info=mapping)
 
     def _get_port_sdn(self, ovim, instance_net):
-        criteria = {'net_id': instance_net['sdn_net_id']}
         try:
-            local_port_mapping = ovim.get_ports(filter=criteria)
+            local_port_mapping = ovim.get_ports(instance_net['sdn_net_id'])
 
             if local_port_mapping:
                 return (local_port_mapping[0]['switch_dpid'],
@@ -217,7 +216,7 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         except:  # noqa
             self.logger.exception('Problems when calling OpenVIM')
 
-        self.logger.debug('No ports found using criteria:\n%r\n.', criteria)
+        self.logger.debug("No ports found for sdn_net_id='{}'", instance_net['sdn_net_id'])
         return None
 
     def _evaluate_rules(self, rules, vim_info):
