@@ -29,6 +29,7 @@ __date__ ="$16-sep-2014 22:05:01$"
 
 # import imp
 import json
+import string
 import yaml
 from random import choice as random_choice
 from osm_ro import utils
@@ -5111,6 +5112,15 @@ def new_datacenter(mydb, datacenter_descriptor):
     # Check that datacenter-type is correct
     datacenter_type = datacenter_descriptor.get("type", "openvim");
     # module_info = None
+
+    for url_field in ('vim_url', 'vim_url_admin'):
+        # It is common that users copy and paste the URL from the VIM website
+        # (example OpenStack), therefore a common mistake is to include blank
+        # characters at the end of the URL. Let's remove it and just in case,
+        # lets remove trailing slash as well.
+        url = datacenter_descriptor.get(url_field)
+        if url:
+            datacenter_descriptor[url_field] = url.strip(string.whitespace + '/')
 
     # load plugin
     plugin_name = "rovim_" + datacenter_type

@@ -40,6 +40,7 @@ No domain logic/architectural concern should be present in this file.
 """
 import json
 import logging
+import string
 from contextlib import contextmanager
 from hashlib import sha1
 from itertools import groupby
@@ -306,6 +307,11 @@ class WimPersistence(object):
         """
         if "config" in wim_descriptor:
             wim_descriptor["config"] = _serialize(wim_descriptor["config"])
+
+        url = wim_descriptor["wim_url"]
+        wim_descriptor["wim_url"] = url.strip(string.whitespace + "/")
+        # ^  This avoid the common problem caused by trailing spaces/slashes in
+        #    the URL (due to CTRL+C/CTRL+V)
 
         return self.db.new_row(
             "wims", wim_descriptor, add_uuid=True, confidential_data=True)
