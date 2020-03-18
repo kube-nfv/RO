@@ -118,6 +118,7 @@ class AristaSdnConnector(SdnConnectorBase):
     __VLAN_PARAM = "vlan"
     __VNI_PARAM = "vni"
     __SEPARATOR = '_'
+    __MANAGED_BY_OSM = '## Managed by OSM '
     __OSM_PREFIX = "osm_"
     __OSM_METADATA = "OSM_metadata"
     __METADATA_PREFIX = '!## Service'
@@ -406,7 +407,12 @@ class AristaSdnConnector(SdnConnectorBase):
             for s in self.s_api:
                 if (len(cls_perSw[s]) > 0):
                     for cl in cls_perSw[s]:
-                        if len(cls_perSw[s][0]['config']) == 0:
+                        # Fix 1030 SDN-ARISTA Key error note when deploy a NS
+                        # Added protection to check that 'note' exists and additionally
+                        # verify that it is managed by OSM
+                        if (not cls_perSw[s][0]['config'] or
+                                not cl.get('note') or
+                                self.__MANAGED_BY_OSM not in cl['note']):
                             continue
                         note = cl['note']
                         t_id = note.split(self.__SEPARATOR)[1]
@@ -588,25 +594,16 @@ class AristaSdnConnector(SdnConnectorBase):
                 if not switch_id:
                     point_mac = encap_info.get(self.__MAC_PARAM)
                     switches = self.__lldp_find_neighbor("chassisId", point_mac)
-
-                    if len(switches) == 0:
-                        raise SdnConnectorError(message="Connection point MAC address {} not found in the switches".format(point_mac),
-                                                http_code=406)
                     self.logger.debug("Found connection point for MAC {}: {}".
                                       format(point_mac, switches))
-                    port_channel = self.__get_switch_po(switch['name'],
-                                                        switch['interface'])
-                    if len(port_channel) > 0:
-                        interface = port_channel[0]
-                    else:
-                        interface = switch['interface']
                 else:
                     interface = encap_info.get(self.__SW_PORT_PARAM)
                     switches = [{'name': switch_id, 'interface': interface}]
 
-                    if not interface:
-                        raise SdnConnectorError(message="Connection point switch port empty for switch_dpid {}".format(switch_id),
-                                                http_code=406)
+                if len(switches) == 0:
+                    raise SdnConnectorError(message="Connection point MAC address {} not found in the switches".format(point_mac),
+                                            http_code=406)
+
                 # remove those connections that are equal. This happens when several sriovs are located in the same
                 # compute node interface, that is, in the same switch and interface
                 switches = [x for x in switches if x not in processed_connection_points]
@@ -614,6 +611,16 @@ class AristaSdnConnector(SdnConnectorBase):
                     continue
                 processed_connection_points += switches
                 for switch in switches:
+                    if not switch_id:
+                        port_channel = self.__get_switch_po(switch['name'],
+                                                            switch['interface'])
+                        if len(port_channel) > 0:
+                            interface = port_channel[0]
+                        else:
+                            interface = switch['interface']
+                    if not interface:
+                        raise SdnConnectorError(message="Connection point switch port empty for switch_dpid {}".format(switch_id),
+                                                http_code=406)
                     # it should be only one switch where the mac is attached
                     if encap_type == 'dot1q':
                         # SRIOV configLet for Leaf switch mac's attached to
@@ -746,9 +753,10 @@ class AristaSdnConnector(SdnConnectorBase):
                 for t_id in res[1]['tasks']:
                     tasks[t_id] = {'workOrderId': t_id}
                     if not toDelete_in_cvp:
-                        note_msg = "## Managed by OSM {}{}{}##".format(self.__SEPARATOR,
-                                                                       t_id,
-                                                                       self.__SEPARATOR)
+                        note_msg = "{}{}{}{}##".format(self.__MANAGED_BY_OSM,
+                                                       self.__SEPARATOR,
+                                                       t_id,
+                                                       self.__SEPARATOR)
                         self.client.api.add_note_to_configlet(
                                 cls_perSw[s][0]['key'],
                                 note_msg)
@@ -907,6 +915,10 @@ class AristaSdnConnector(SdnConnectorBase):
             else:
                 changed = True
                 if 'taskIds' in str(dev_action):
+                    # Fix 1030 SDN-ARISTA Key error note when deploy a NS
+                    if not dev_action['data']['taskIds']:
+                        raise Exception("No taskIds found: Device {} Configlets couldnot be updated".format(
+                                        up_device['hostname']))
                     for taskId in dev_action['data']['taskIds']:
                         updated.append({up_device['hostname']:
                                         "Configlets-{}".format(
@@ -1420,7 +1432,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 self.client = self.__connect()
             self.client.api.get_cvp_info()
         except (CvpSessionLogOutError, RequestException) as e:
-            self.logger.debug("Connection error '{}'. Reconnencting".format(e))
+            self.logger.debug("Connection error '{}'. Reconnecting".format(e))
             self.client = self.__connect()
             self.client.api.get_cvp_info()
 
@@ -1438,7 +1450,7 @@ class AristaSdnConnector(SdnConnectorBase):
         else:
             port = 443
 
-        client.connect([host],        
+        client.connect([host],
                        self.__user,
                        self.__passwd,
                        protocol=protocol or "https",
