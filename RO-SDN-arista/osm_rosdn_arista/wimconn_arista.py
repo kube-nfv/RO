@@ -122,8 +122,8 @@ class AristaSdnConnector(SdnConnectorBase):
     __OSM_PREFIX = "osm_"
     __OSM_METADATA = "OSM_metadata"
     __METADATA_PREFIX = '!## Service'
-    __EXC_TASK_EXEC_WAIT = 1
-    __ROLLB_TASK_EXEC_WAIT = 5
+    __EXC_TASK_EXEC_WAIT = 10
+    __ROLLB_TASK_EXEC_WAIT = 10
 
     def __init__(self, wim, wim_account, config=None, logger=None):
         """
@@ -777,8 +777,8 @@ class AristaSdnConnector(SdnConnectorBase):
         except Exception as ex:
             try:
                 self.__rollbackConnection(cls_perSw,
-                                          allLeafConfigured=True,
-                                          allLeafModified=True)
+                                          allLeafConfigured,
+                                          allLeafModified)
             except Exception as e:
                 self.logger.info("Exception rolling back in updating  connection: {}".
                                  format(e))
@@ -1000,7 +1000,8 @@ class AristaSdnConnector(SdnConnectorBase):
                     resp = self.client.api.update_configlet(
                                     configlet['config'],
                                     configlet['data']['key'],
-                                    configlet['data']['name'])
+                                    configlet['data']['name'],
+                                    wait_task_ids=True)
                 elif to_create:
                     operation = 'create'
                     resp = self.client.api.add_configlet(

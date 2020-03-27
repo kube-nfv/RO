@@ -30,16 +30,16 @@
 
 class AristaSDNConfigLet:
     _configLet_SRIOV = """
-!# service: {}
-interface {}
+interface {interface}
+   !! service: {uuid}
    switchport
    switchport mode trunk
-   switchport trunk group {}{}
+   switchport trunk group {service}{vlan_id}
 !
 """
 
     def _get_sriov(self, uuid, interface, vlan_id, s_type, index):
-        return self._configLet_SRIOV.format(uuid, interface, s_type, vlan_id)
+        return self._configLet_SRIOV.format(uuid=uuid, interface=interface, service=s_type, vlan_id=vlan_id)
 
     def getElan_sriov(self, uuid, interface, vlan_id, index):
         return self._get_sriov(uuid, interface, vlan_id, "ELAN", index)
@@ -48,16 +48,16 @@ interface {}
         return self._get_sriov(uuid, interface, vlan_id, "ELINE", index)
 
     _configLet_PASSTROUGH = """
-!# service: {}
-interface {}
+interface {interface}
+   !! service: {uuid}
    switchport
    switchport mode access
-   switchport access vlan {}
+   switchport access vlan {vlan_id}
 !
 """
 
     def _get_passthrough(self, uuid, interface, vlan_id, s_type, index):
-        return self._configLet_PASSTROUGH.format(uuid, interface, vlan_id)
+        return self._configLet_PASSTROUGH.format(uuid=uuid, interface=interface, vlan_id=vlan_id)
 
     def getElan_passthrough(self, uuid, interface, vlan_id, index):
         return self._get_passthrough(uuid, interface, vlan_id, "ELAN", index)
@@ -66,8 +66,8 @@ interface {}
         return self._get_passthrough(uuid, interface, vlan_id, "ELINE", index)
 
     _configLet_VLAN = """
-!## service: {service} {vlan} {uuid}
 vlan {vlan}
+   !! service: {service} {vlan} {uuid}
    name {service}{vlan}
    trunk group {service}{vlan}
    trunk group MLAGPEER
@@ -87,9 +87,9 @@ interface VXLAN1
         return self._get_vlan(uuid, vlan_id, vni_id, "ELINE")
 
     _configLet_BGP = """
-!# service: {uuid}
 router bgp {bgp}
     vlan {vlan}
+    !! service: {uuid}
         rd {loopback}:{vni}
         route-target both {vni}:{vni}
         redistribute learned
