@@ -4188,14 +4188,14 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 db_vm_iface_instance.update(db_vm_iface)
                 if db_vm_iface_instance.get("ip_address"):  # increment ip_address
                     ip = db_vm_iface_instance.get("ip_address")
-                    i = ip.rfind(".")
-                    if i > 0:
-                        try:
+                    try:
+                        i = ip.rfind(".")
+                        if i > 0:
                             i += 1
                             ip = ip[i:] + str(int(ip[:i]) + 1)
                             db_vm_iface_instance["ip_address"] = ip
-                        except:
-                            db_vm_iface_instance["ip_address"] = None
+                    except:
+                        db_vm_iface_instance["ip_address"] = None
                 db_instance_interfaces.append(db_vm_iface_instance)
                 myVMDict['networks'][iface_index]["uuid"] = iface_uuid
                 iface_index += 1
@@ -4908,16 +4908,16 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                     for iface in task_params_copy[5]:
                         iface["uuid"] = iface2iface[iface["uuid"]]
                         # increment ip_address
-                        if "ip_address" in iface:
-                            ip = iface.get("ip_address")
-                            i = ip.rfind(".")
-                            if i > 0:
-                                try:
+                        if iface.get("ip_address"):
+                            try:
+                                ip = iface["ip_address"]
+                                i = ip.rfind(".")
+                                if i > 0:
                                     i += 1
                                     ip = ip[i:] + str(int(ip[:i]) + 1)
                                     iface["ip_address"] = ip
-                                except:
-                                    iface["ip_address"] = None
+                            except:
+                                iface["ip_address"] = None
                     if vm_name:
                         task_params_copy[0] = vm_name
                     db_vim_action = {
