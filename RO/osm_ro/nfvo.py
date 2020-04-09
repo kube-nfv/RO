@@ -3315,7 +3315,10 @@ def create_instance(mydb, tenant_id, instance_dict):
             # TODO: use this information during network creation
             wim_account_id = wim_account_name = None
             if len(involved_datacenters) > 1 and 'uuid' in sce_net:
-                if target_wim_account is None or target_wim_account is True:  # automatic selection of WIM
+                urls = [myvims[v].url for v in involved_datacenters]
+                if len(set(urls)) < 2:
+                    wim_usage[sce_net['uuid']] = False
+                elif target_wim_account is None or target_wim_account is True:  # automatic selection of WIM
                     # OBS: sce_net without uuid are used internally to VNFs
                     # and the assumption is that VNFs will not be split among
                     # different datacenters
