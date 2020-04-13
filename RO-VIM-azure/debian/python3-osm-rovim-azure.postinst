@@ -20,5 +20,5 @@
 echo "POST INSTALL OSM-ROVIM-AZURE"
 
 #Pip packages required for azure connector
-python3 -m pip install azure
+python3 -m pip install azure==4.0.0
 
