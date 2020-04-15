@@ -51,7 +51,7 @@ interface {interface}
 interface {interface}
    !! service: {uuid}
    switchport
-   switchport mode access
+   switchport mode dot1q-tunnel
    switchport access vlan {vlan_id}
 !
 """
