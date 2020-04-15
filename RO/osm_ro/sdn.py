@@ -207,8 +207,8 @@ class Sdn:
         # get database wim_accounts
         wim_account = self._get_of_controller(of_id)
 
-        db_wim_update = {x: ofc_data[x] for x in ("name", "description", "type", "wim_url")}
-        db_wim_account_update = {x: ofc_data[x] for x in ("name", "user", "password")}
+        db_wim_update = {x: ofc_data[x] for x in ("name", "description", "type", "wim_url") if x in ofc_data}
+        db_wim_account_update = {x: ofc_data[x] for x in ("name", "user", "password") if x in ofc_data}
         db_wim_account_config = ofc_data.get("config", {})
 
         if ofc_data.get("ip") or ofc_data.get("port"):
@@ -222,13 +222,15 @@ class Sdn:
             db_wim_account_config["version"] = ofc_data["version"]
 
         if db_wim_account_config:
-            db_wim_account_update["config"] = yaml.load(wim_account["config"]) or {}
+            db_wim_account_update["config"] = yaml.load(wim_account["config"], Loader=yaml.Loader) or {}
             db_wim_account_update["config"].update(db_wim_account_config)
+            db_wim_account_update["config"] = yaml.safe_dump(db_wim_account_update["config"], default_flow_style=True,
+                                                             width=256)
 
         if db_wim_account_update:
             self.db.update_rows('wim_accounts', db_wim_account_update, WHERE={'uuid': of_id})
         if db_wim_update:
-            self.db.update_rows('wims', db_wim_account_update, WHERE={'uuid': wim_account["wim_id"]})
+            self.db.update_rows('wims', db_wim_update, WHERE={'uuid': wim_account["wim_id"]})
 
     def _get_of_controller(self, of_id):
         wim_accounts = self.db.get_rows(FROM='wim_accounts', WHERE={"uuid": of_id, "sdn": "true"})
