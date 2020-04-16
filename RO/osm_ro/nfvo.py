@@ -5325,7 +5325,7 @@ def edit_vim_account(mydb, nfvo_tenant, datacenter_tenant_id, datacenter_id=None
     if config:
         original_config_dict = yaml.load(original_config, Loader=yaml.Loader)
         original_config_dict.update(config)
-        update["config"] = yaml.safe_dump(original_config_dict, default_flow_style=True, width=256)
+        update_["config"] = yaml.safe_dump(original_config_dict, default_flow_style=True, width=256)
     if name:
         update_['name'] = name
     if vim_tenant:
