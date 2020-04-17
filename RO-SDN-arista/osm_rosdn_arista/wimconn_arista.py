@@ -178,7 +178,8 @@ class AristaSdnConnector(SdnConnectorBase):
         self.cvp_inventory = None
         self.cvp_tags = None
         self.logger.debug("Arista SDN plugin {}, cvprac version {}, user:{} and config:{}".
-                          format(wim,  cvprac_version, self.__user, config))
+                          format(wim, cvprac_version, self.__user,
+                                 self.delete_keys_from_dict(config, ('passwd',))))
         self.allDeviceFacts = []
         self.clC = AristaSDNConfigLet()
         self.taskC = None
@@ -265,7 +266,8 @@ class AristaSdnConnector(SdnConnectorBase):
                 self.switches[s]["lo0"] = inf.split('/')[0]
             if not self.switches[s].get('AS'):
                 self.switches[s]["AS"] = self.__get_switch_asn(s)
-        self.logger.debug("Using Arista Leaf switches: {}".format(self.switches))
+        self.logger.debug("Using Arista Leaf switches: {}".format(
+                self.delete_keys_from_dict(self.switches, ('passwd',))))
 
     def __lldp_find_neighbor(self, tlv_name=None, tlv_value=None):
         """Returns a list of dicts where a mathing LLDP neighbor has been found
@@ -798,8 +800,8 @@ class AristaSdnConnector(SdnConnectorBase):
                     raise Exception(str(res))
                 self.logger.info("Device {} modify result {}".format(s, res))
                 for t_id in res[1]['tasks']:
-                    tasks[t_id] = {'workOrderId': t_id}
                     if not toDelete_in_cvp:
+                        tasks[t_id] = {'workOrderId': t_id}
                         note_msg = "{}{}{}{}##".format(self.__MANAGED_BY_OSM,
                                                        self.__SEPARATOR,
                                                        t_id,
@@ -808,18 +810,18 @@ class AristaSdnConnector(SdnConnectorBase):
                                 cls_perSw[s][0]['key'],
                                 note_msg)
                         cls_perSw[s][0]['note'] = note_msg
+                    else:
+                        delete_tasks = { t_id : {'workOrderId': t_id} }
+                        self.__exec_task(delete_tasks)
                 # with just one configLet assigned to a device,
                 # delete all if there are errors in next loops
                 if not toDelete_in_cvp:
                     allLeafModified[s] = True
-            if self.taskC is None:
-                self.__connect()
-            data = self.taskC.update_all_tasks(tasks).values()
-            self.taskC.task_action(data,
-                                   self.__EXC_TASK_EXEC_WAIT,
-                                   'executed')
+            if len(tasks) > 0:
+                self.__exec_task(tasks, self.__EXC_TASK_EXEC_WAIT)
             if len(cl_toDelete) > 0:
                 self.__configlet_modify(cl_toDelete, delete=True)
+
             return allLeafConfigured, allLeafModified
         except Exception as ex:
             try:
@@ -837,7 +839,6 @@ class AristaSdnConnector(SdnConnectorBase):
                              allLeafModified):
         """ Removes the given configLet from the devices and then remove the configLets
         """
-        tasks = dict()
         for s in self.s_api:
             if allLeafModified[s]:
                 try:
@@ -847,21 +848,23 @@ class AristaSdnConnector(SdnConnectorBase):
                         delete=True)
                     if "errorMessage" in str(res):
                         raise Exception(str(res))
+                    tasks = dict()
                     for t_id in res[1]['tasks']:
                         tasks[t_id] = {'workOrderId': t_id}
+                    self.__exec_task(tasks)
                     self.logger.info("Device {} modify result {}".format(s, res))
                 except Exception as e:
                     self.logger.error('Error removing configlets from device {}: {}'.format(s, e))
                     pass
-        if self.taskC is None:
-            self.__connect()
-        data = self.taskC.update_all_tasks(tasks).values()
-        self.taskC.task_action(data,
-                               self.__ROLLB_TASK_EXEC_WAIT,
-                               'executed')
         for s in self.s_api:
             if allLeafConfigured[s]:
                 self.__configlet_modify(cls_perSw[s], delete=True)
+
+    def __exec_task(self, tasks, tout=10):
+        if self.taskC is None:
+            self.__connect()
+        data = self.taskC.update_all_tasks(tasks).values()
+        self.taskC.task_action(data, tout, 'executed')
 
     def __device_modify(self, device_to_update, new_configlets, delete):
         """ Updates the devices (switches) adding or removing the configLet,
@@ -1582,3 +1585,10 @@ class AristaSdnConnector(SdnConnectorBase):
         except socket.error:  # not a valid address
             return False
         return True
+
+    def delete_keys_from_dict(self, dict_del, lst_keys):
+        dict_copy = {k: v for k, v in dict_del.items() if k not in lst_keys}
+        for k, v in dict_copy.items():
+            if isinstance(v, dict):
+                dict_copy[k] = self.delete_keys_from_dict(v, lst_keys)
+        return dict_copy
