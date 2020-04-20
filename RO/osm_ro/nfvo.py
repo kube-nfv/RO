@@ -36,7 +36,7 @@ from osm_ro import utils
 from osm_ro.utils import deprecated
 from osm_ro.vim_thread import vim_thread
 import osm_ro.console_proxy_thread as cli
-from osm_ro import vimconn
+from osm_ro import vimconn, vim_dummy
 import logging
 import collections
 import math
@@ -46,13 +46,7 @@ from osm_ro.db_base import db_base_Exception
 from osm_ro import nfvo_db
 from threading import Lock
 import time as t
-# TODO py3 BEGIN
 from osm_ro.sdn import Sdn, SdnException as ovimException
-# from lib_osm_openvim.ovim import ovimException
-# from unittest.mock  import MagicMock
-# class ovimException(Exception):
-#    pass
-# TODO py3 END
 
 from Crypto.PublicKey import RSA
 
@@ -198,6 +192,8 @@ def start_service(mydb, persistence=None, wim=None):
         worker_id = get_process_id()
         if "rosdn_dummy" not in plugins:
             plugins["rosdn_dummy"] = DummyConnector
+        if "rovim_dummy" not in plugins:
+            plugins["rovim_dummy"] = vim_dummy
         # starts ovim library
         ovim = Sdn(db, plugins)
 
