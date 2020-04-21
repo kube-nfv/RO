@@ -763,7 +763,6 @@ class AristaSdnConnector(SdnConnectorBase):
             for s in self.s_api:
                 allLeafConfigured[s] = False
                 allLeafModified[s] = False
-            tasks = dict()
             cl_toDelete = []
             for s in self.s_api:
                 toDelete_in_cvp = False
@@ -801,7 +800,6 @@ class AristaSdnConnector(SdnConnectorBase):
                 self.logger.info("Device {} modify result {}".format(s, res))
                 for t_id in res[1]['tasks']:
                     if not toDelete_in_cvp:
-                        tasks[t_id] = {'workOrderId': t_id}
                         note_msg = "{}{}{}{}##".format(self.__MANAGED_BY_OSM,
                                                        self.__SEPARATOR,
                                                        t_id,
@@ -810,15 +808,12 @@ class AristaSdnConnector(SdnConnectorBase):
                                 cls_perSw[s][0]['key'],
                                 note_msg)
                         cls_perSw[s][0]['note'] = note_msg
-                    else:
-                        delete_tasks = { t_id : {'workOrderId': t_id} }
-                        self.__exec_task(delete_tasks)
+                    tasks = { t_id : {'workOrderId': t_id} }
+                    self.__exec_task(tasks, self.__EXC_TASK_EXEC_WAIT)
                 # with just one configLet assigned to a device,
                 # delete all if there are errors in next loops
                 if not toDelete_in_cvp:
                     allLeafModified[s] = True
-            if len(tasks) > 0:
-                self.__exec_task(tasks, self.__EXC_TASK_EXEC_WAIT)
             if len(cl_toDelete) > 0:
                 self.__configlet_modify(cl_toDelete, delete=True)
 
