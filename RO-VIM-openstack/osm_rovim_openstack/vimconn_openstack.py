@@ -1222,19 +1222,19 @@ class vimconnector(vimconn.VimConnector):
                 vim_id: filled/added by this function
                 floating_ip: True/False (or it can be None)
             'cloud_config': (optional) dictionary with:
-            'key-pairs': (optional) list of strings with the public key to be inserted to the default user
-            'users': (optional) list of users to be inserted, each item is a dict with:
-                'name': (mandatory) user name,
-                'key-pairs': (optional) list of strings with the public key to be inserted to the user
-            'user-data': (optional) string is a text script to be passed directly to cloud-init
-            'config-files': (optional). List of files to be transferred. Each item is a dict with:
-                'dest': (mandatory) string with the destination absolute path
-                'encoding': (optional, by default text). Can be one of:
-                    'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
-                'content' (mandatory): string with the content of the file
-                'permissions': (optional) string with file permissions, typically octal notation '0644'
-                'owner': (optional) file owner, string with the format 'owner:group'
-            'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk)
+                'key-pairs': (optional) list of strings with the public key to be inserted to the default user
+                'users': (optional) list of users to be inserted, each item is a dict with:
+                    'name': (mandatory) user name,
+                    'key-pairs': (optional) list of strings with the public key to be inserted to the user
+                'user-data': (optional) string is a text script to be passed directly to cloud-init
+                'config-files': (optional). List of files to be transferred. Each item is a dict with:
+                    'dest': (mandatory) string with the destination absolute path
+                    'encoding': (optional, by default text). Can be one of:
+                        'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
+                    'content' (mandatory): string with the content of the file
+                    'permissions': (optional) string with file permissions, typically octal notation '0644'
+                    'owner': (optional) file owner, string with the format 'owner:group'
+                'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk)
             'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
                 'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
                 'size': (mandatory) string with the size of the disk in GB

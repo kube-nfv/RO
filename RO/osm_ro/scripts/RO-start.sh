@@ -22,6 +22,10 @@
 [ -z "$RO_DB_OVIM_HOST" ] && export RO_DB_OVIM_HOST="$RO_DB_HOST"
 [ -z "$RO_DB_OVIM_ROOT_PASSWORD" ] && export RO_DB_OVIM_ROOT_PASSWORD="$RO_DB_ROOT_PASSWORD"
 
+# IF OSMRO_SERVER_NG use new server that not need any database init
+[ -n "$OSMRO_SERVER_NG" ] && python3 -m osm_ng_ro.ro_main
+
+
 function is_db_created() {
     db_host=$1
     db_port=$2
