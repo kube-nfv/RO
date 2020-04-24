@@ -3311,31 +3311,6 @@ def create_instance(mydb, tenant_id, instance_dict):
                 involved_datacenters.append(default_datacenter_id)
             target_wim_account = sce_net.get("wim_account", default_wim_account)
 
-            # --> WIM
-            # TODO: use this information during network creation
-            wim_account_id = wim_account_name = None
-            if len(involved_datacenters) > 1 and 'uuid' in sce_net:
-                urls = [myvims[v].url for v in involved_datacenters]
-                if len(set(urls)) < 2:
-                    wim_usage[sce_net['uuid']] = False
-                elif target_wim_account is None or target_wim_account is True:  # automatic selection of WIM
-                    # OBS: sce_net without uuid are used internally to VNFs
-                    # and the assumption is that VNFs will not be split among
-                    # different datacenters
-                    wim_account = wim_engine.find_suitable_wim_account(
-                        involved_datacenters, tenant_id)
-                    wim_account_id = wim_account['uuid']
-                    wim_account_name = wim_account['name']
-                    wim_usage[sce_net['uuid']] = wim_account_id
-                elif isinstance(target_wim_account, str):     # manual selection of WIM
-                    wim_account.persist.get_wim_account_by(target_wim_account, tenant_id)
-                    wim_account_id = wim_account['uuid']
-                    wim_account_name = wim_account['name']
-                    wim_usage[sce_net['uuid']] = wim_account_id
-                else:  # not WIM usage
-                    wim_usage[sce_net['uuid']] = False
-            # <-- WIM
-
             descriptor_net = {}
             if instance_dict.get("networks"):
                 if sce_net.get("uuid") in instance_dict["networks"]:
@@ -3368,13 +3343,38 @@ def create_instance(mydb, tenant_id, instance_dict):
                 )
                 if not target_instance_nets:
                     raise NfvoException(
-                        "Cannot find the target network at instance:networks[{}]:use-network".format(descriptor_net_name),
-                        httperrors.Bad_Request)
+                        "Cannot find the target network at instance:networks[{}]:use-network".format(
+                            descriptor_net_name), httperrors.Bad_Request)
                 else:
                     use_network = target_instance_nets[0]["related"]
 
             if sce_net["external"]:
                 number_mgmt_networks += 1
+
+            # --> WIM
+            # TODO: use this information during network creation
+            wim_account_id = wim_account_name = None
+            if len(involved_datacenters) > 1 and 'uuid' in sce_net:
+                urls = [myvims[v].url for v in involved_datacenters]
+                if len(set(urls)) < 2:
+                    wim_usage[sce_net['uuid']] = False
+                elif target_wim_account is None or target_wim_account is True:  # automatic selection of WIM
+                    # OBS: sce_net without uuid are used internally to VNFs
+                    # and the assumption is that VNFs will not be split among
+                    # different datacenters
+                    wim_account = wim_engine.find_suitable_wim_account(
+                        involved_datacenters, tenant_id)
+                    wim_account_id = wim_account['uuid']
+                    wim_account_name = wim_account['name']
+                    wim_usage[sce_net['uuid']] = wim_account_id
+                elif isinstance(target_wim_account, str):     # manual selection of WIM
+                    wim_account.persist.get_wim_account_by(target_wim_account, tenant_id)
+                    wim_account_id = wim_account['uuid']
+                    wim_account_name = wim_account['name']
+                    wim_usage[sce_net['uuid']] = wim_account_id
+                else:  # not WIM usage
+                    wim_usage[sce_net['uuid']] = False
+            # <-- WIM
 
             for datacenter_id in involved_datacenters:
                 netmap_use = None
@@ -5265,12 +5265,13 @@ def create_vim_account(mydb, nfvo_tenant, datacenter_id, name=None, vim_id=None,
         else: #if vim_tenant==None:
             #create tenant at VIM if not provided
             try:
-                _, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter, vim_user=vim_username,
-                                                                   vim_passwd=vim_password)
+                _, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter_id, vim_user=vim_username,
+                                                       vim_passwd=vim_password)
                 datacenter_name = myvim["name"]
                 vim_tenant = myvim.new_tenant(vim_tenant_name, "created by openmano for datacenter "+datacenter_name)
             except vimconn.vimconnException as e:
-                raise NfvoException("Not possible to create vim_tenant {} at VIM: {}".format(vim_tenant_id, str(e)), httperrors.Internal_Server_Error)
+                raise NfvoException("Not possible to create vim_tenant {} at VIM: {}".format(vim_tenant_name, e),
+                                    httperrors.Internal_Server_Error)
             datacenter_tenants_dict = {}
             datacenter_tenants_dict["created"]="true"
 
