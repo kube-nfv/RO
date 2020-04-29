@@ -110,8 +110,9 @@ class JuniperContrail(SdnConnectorBase):
             self.domain = 'default'
             self.logger.info("No domain was provided. Using 'default'")
         if not self.vni_range:
-            self.vni_range = '1000001-2000000'
-            self.logger.info("No vni_range was provided. Using '1000001-2000000'")
+            self.vni_range = ['1000001-2000000']
+            self.logger.info("No vni_range was provided. Using ['1000001-2000000']")
+        self.used_vni = set()
 
         if overlay_url:
             if not overlay_url.startswith("http"):
@@ -154,6 +155,28 @@ class JuniperContrail(SdnConnectorBase):
         self.token = None
 
         self.logger.info("Juniper Contrail Connector Initialized.")
+
+
+    def _generate_vni(self):
+        """
+         Method to get unused VxLAN Network Identifier (VNI)
+            Args:
+                None
+            Returns:
+                VNI
+        """
+        #find unused VLAN ID
+        for vlanID_range in self.vni_range:
+            try:
+                start_vni , end_vni = map(int, vlanID_range.replace(" ", "").split("-"))
+                for vni in range(start_vni, end_vni + 1):
+                    if vni not in self.used_vni:
+                        return vni
+            except Exception as exp:
+                raise SdnConnectorError("Exception {} occurred while searching a free VNI.".format(exp))
+        else:
+            raise SdnConnectorError("Unable to create the virtual network."\
+                " All VNI in VNI range {} are in use.".format(self.vni_range))
 
 
     def _get_token(self):
@@ -605,6 +628,17 @@ if __name__ == '__main__':
     juniper_contrail = JuniperContrail(wim=wim, wim_account=wim_account, config=config, logger=logger)
 
     # Tests
+    # Generate VNI
+    for i in range(5):
+        vni = juniper_contrail._generate_vni()
+        juniper_contrail.used_vni.add(vni)
+    print(juniper_contrail.used_vni)
+    juniper_contrail.used_vni.remove(1000003)
+    print(juniper_contrail.used_vni)
+    for i in range(2):
+        vni = juniper_contrail._generate_vni()
+        juniper_contrail.used_vni.add(vni)
+    print(juniper_contrail.used_vni)
     # 0. Check credentials
     print('0. Check credentials')
     juniper_contrail.check_credentials()
