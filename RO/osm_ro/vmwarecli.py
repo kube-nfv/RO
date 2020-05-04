@@ -67,7 +67,7 @@ import sys
 from pyvcloud import Http
 
 import logging
-from osm_ro import vimconn
+from osm_ro_plugin import vimconn
 import time
 import uuid
 import urllib3
@@ -521,7 +521,7 @@ def upload_image(vim=None, image_file=None):
         if catalog_uuid is not None and validate_uuid4(catalog_uuid):
             print("Image uploaded and uuid {}".format(catalog_uuid))
             return True
-    except vimconn.vimconnException as upload_exception:
+    except vimconn.VimConnException as upload_exception:
         print("Failed uploaded {} image".format(image_file))
         print("Error Reason: {}".format(upload_exception.message))
     return False
@@ -561,10 +561,10 @@ def boot_image(vim=None, image_name=None, vm_name=None):
             if vapp_dict is not None:
                 print_vapp(vapp_dict=vapp_dict)
         return True
-    except vimconn.vimconnNotFoundException as notFound:
+    except vimconn.VimConnNotFoundException as notFound:
         print("Failed boot {} image".format(image_name))
         print(notFound.message)
-    except vimconn.vimconnException as vimconError:
+    except vimconn.VimConnException as vimconError:
         print("Failed boot {} image".format(image_name))
         print(vimconError.message)
     except:
@@ -651,7 +651,7 @@ def vmwarecli(command=None, action=None, namespace=None):
                            config={'admin_username': namespace.vcdamdin, 'admin_password': namespace.vcdadminpassword})
         vim.vca = vim.connect()
 
-    except vimconn.vimconnConnectionException:
+    except vimconn.VimConnConnectionException:
         print("Failed connect to vcloud director. Please check credential and hostname.")
         return
 

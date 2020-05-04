@@ -17,7 +17,7 @@
 import logging
 import json
 
-from osm_ro.wim.sdnconn import SdnConnectorError
+from osm_ro_plugin.sdnconn import SdnConnectorError
 from osm_rosdn_juniper_contrail.rest_lib import ContrailHttp
 from osm_rosdn_juniper_contrail.rest_lib import NotFound
 # from osm_rosdn_juniper_contrail.rest_lib import DuplicateFound

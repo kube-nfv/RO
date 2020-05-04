@@ -31,7 +31,7 @@ import paramiko
 import requests
 import struct
 import sys
-from osm_ro.wim.sdnconn import SdnConnectorBase, SdnConnectorError
+from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 
 
 class DpbSshInterface():

@@ -21,7 +21,7 @@ Implements a Dummy vim plugin.
 """
 
 import yaml
-from osm_ro import vimconn
+from osm_ro_plugin import vimconn
 from uuid import uuid4
 from copy import deepcopy
 
@@ -29,7 +29,7 @@ __author__ = "Alfonso Tierno"
 __date__  = "2020-04-20"
 
 
-class vimconnector(vimconn.vimconnector):
+class VimDummyConnector(vimconn.VimConnector):
     """Dummy vim connector that does nothing
     Provide config with:
         vm_ip: ip address to provide at VM creation. For some tests must be a valid reachable VM
@@ -114,12 +114,12 @@ class vimconnector(vimconn.vimconnector):
 
     def get_network(self, net_id):
         if net_id not in self.nets:
-            raise vimconn.vimconnNotFoundException("network with id {} not found".format(net_id))
+            raise vimconn.VimConnNotFoundException("network with id {} not found".format(net_id))
         return self.nets[net_id]
 
     def delete_network(self, net_id, created_items=None):
         if net_id not in self.nets:
-            raise vimconn.vimconnNotFoundException("network with id {} not found".format(net_id))
+            raise vimconn.VimConnNotFoundException("network with id {} not found".format(net_id))
         return net_id
         self.nets.pop(net_id)
 
@@ -138,7 +138,7 @@ class vimconnector(vimconn.vimconnector):
 
     def get_flavor(self, flavor_id):
         if flavor_id not in self.flavors:
-            raise vimconn.vimconnNotFoundException("flavor with id {} not found".format(flavor_id))
+            raise vimconn.VimConnNotFoundException("flavor with id {} not found".format(flavor_id))
         return self.flavors[flavor_id]
 
     def new_flavor(self, flavor_data):
@@ -152,7 +152,7 @@ class vimconnector(vimconn.vimconnector):
 
     def delete_flavor(self, flavor_id):
         if flavor_id not in self.flavors:
-            raise vimconn.vimconnNotFoundException("flavor with id {} not found".format(flavor_id))
+            raise vimconn.VimConnNotFoundException("flavor with id {} not found".format(flavor_id))
         return flavor_id
         self.flavors.pop(flavor_id)
 
@@ -163,7 +163,7 @@ class vimconnector(vimconn.vimconnector):
                     break
             else:
                 return flavor_id
-        raise vimconn.vimconnNotFoundException("flavor with ram={}  cpu={} disk={} {} not found".format(
+        raise vimconn.VimConnNotFoundException("flavor with ram={}  cpu={} disk={} {} not found".format(
             flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"],
             "and extended" if flavor_dict.get("extended") else ""))
 
@@ -175,7 +175,7 @@ class vimconnector(vimconn.vimconnector):
 
     def delete_tenant(self, tenant_id):
         if tenant_id not in self.tenants:
-            raise vimconn.vimconnNotFoundException("tenant with id {} not found".format(tenant_id))
+            raise vimconn.VimConnNotFoundException("tenant with id {} not found".format(tenant_id))
         return tenant_id
         self.tenants.pop(tenant_id)
 
@@ -202,7 +202,7 @@ class vimconnector(vimconn.vimconnector):
 
     def delete_image(self, image_id):
         if image_id not in self.images:
-            raise vimconn.vimconnNotFoundException("image with id {} not found".format(image_id))
+            raise vimconn.VimConnNotFoundException("image with id {} not found".format(image_id))
         return image_id
         self.images.pop(image_id)
 
@@ -251,12 +251,12 @@ class vimconnector(vimconn.vimconnector):
 
     def get_vminstance(self, vm_id):
         if vm_id not in self.vms:
-            raise vimconn.vimconnNotFoundException("vm with id {} not found".format(vm_id))
+            raise vimconn.VimConnNotFoundException("vm with id {} not found".format(vm_id))
         return self.vms[vm_id]
 
     def delete_vminstance(self, vm_id, created_items=None):
         if vm_id not in self.vms:
-            raise vimconn.vimconnNotFoundException("vm with id {} not found".format(vm_id))
+            raise vimconn.VimConnNotFoundException("vm with id {} not found".format(vm_id))
         return vm_id
         self.vms.pop(vm_id)
 

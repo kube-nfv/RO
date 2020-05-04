@@ -34,75 +34,89 @@ import yaml
 import sys
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from osm_ro.utils import deprecated
+from http import HTTPStatus
+import warnings
 
 __author__ = "Alfonso Tierno, Igor D.C."
-__date__  = "$14-aug-2017 23:59:59$"
-
-#Error variables
-HTTP_Bad_Request = 400
-HTTP_Unauthorized = 401
-HTTP_Not_Found = 404
-HTTP_Method_Not_Allowed = 405
-HTTP_Request_Timeout = 408
-HTTP_Conflict = 409
-HTTP_Not_Implemented = 501
-HTTP_Service_Unavailable = 503
-HTTP_Internal_Server_Error = 500
+__date__ = "$14-aug-2017 23:59:59$"
 
 
-class vimconnException(Exception):
-    """Common and base class Exception for all vimconnector exceptions"""
+def deprecated(message):
+    def deprecated_decorator(func):
+        def deprecated_func(*args, **kwargs):
+            warnings.warn("{} is a deprecated function. {}".format(func.__name__, message),
+                          category=DeprecationWarning,
+                          stacklevel=2)
+            warnings.simplefilter('default', DeprecationWarning)
+            return func(*args, **kwargs)
+        return deprecated_func
+    return deprecated_decorator
+
+
+# Error variables
+HTTP_Bad_Request = HTTPStatus.BAD_REQUEST.value
+HTTP_Unauthorized = HTTPStatus.UNAUTHORIZED.value
+HTTP_Not_Found = HTTPStatus.NOT_FOUND.value
+HTTP_Method_Not_Allowed = HTTPStatus.METHOD_NOT_ALLOWED.value
+HTTP_Request_Timeout = HTTPStatus.REQUEST_TIMEOUT.value
+HTTP_Conflict = HTTPStatus.CONFLICT.value
+HTTP_Not_Implemented = HTTPStatus.NOT_IMPLEMENTED.value
+HTTP_Service_Unavailable = HTTPStatus.SERVICE_UNAVAILABLE.value
+HTTP_Internal_Server_Error = HTTPStatus.INTERNAL_SERVER_ERROR.value
+
+
+class VimConnException(Exception):
+    """Common and base class Exception for all VimConnector exceptions"""
     def __init__(self, message, http_code=HTTP_Bad_Request):
         Exception.__init__(self, message)
         self.http_code = http_code
 
 
-class vimconnConnectionException(vimconnException):
+class VimConnConnectionException(VimConnException):
     """Connectivity error with the VIM"""
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
-        vimconnException.__init__(self, message, http_code)
+        VimConnException.__init__(self, message, http_code)
 
 
-class vimconnUnexpectedResponse(vimconnException):
+class VimConnUnexpectedResponse(VimConnException):
     """Get an wrong response from VIM"""
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
-        vimconnException.__init__(self, message, http_code)
+        VimConnException.__init__(self, message, http_code)
 
 
-class vimconnAuthException(vimconnException):
+class VimConnAuthException(VimConnException):
     """Invalid credentials or authorization to perform this action over the VIM"""
     def __init__(self, message, http_code=HTTP_Unauthorized):
-        vimconnException.__init__(self, message, http_code)
+        VimConnException.__init__(self, message, http_code)
 
 
-class vimconnNotFoundException(vimconnException):
+class VimConnNotFoundException(VimConnException):
     """The item is not found at VIM"""
     def __init__(self, message, http_code=HTTP_Not_Found):
-        vimconnException.__init__(self, message, http_code)
+        VimConnException.__init__(self, message, http_code)
 
 
-class vimconnConflictException(vimconnException):
+class VimConnConflictException(VimConnException):
     """There is a conflict, e.g. more item found than one"""
     def __init__(self, message, http_code=HTTP_Conflict):
-        vimconnException.__init__(self, message, http_code)
+        VimConnException.__init__(self, message, http_code)
 
 
-class vimconnNotSupportedException(vimconnException):
+class VimConnNotSupportedException(VimConnException):
     """The request is not supported by connector"""
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
-        vimconnException.__init__(self, message, http_code)
+        VimConnException.__init__(self, message, http_code)
 
 
-class vimconnNotImplemented(vimconnException):
+class VimConnNotImplemented(VimConnException):
     """The method is not implemented by the connected"""
     def __init__(self, message, http_code=HTTP_Not_Implemented):
-        vimconnException.__init__(self, message, http_code)
+        VimConnException.__init__(self, message, http_code)
 
 
-class vimconnector():
+class VimConnector():
     """Abstract base class for all the VIM connector plugins
-    These plugins must implement a vimconnector class derived from this
+    These plugins must implement a VimConnector class derived from this
     and all these privated methods
     """
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
@@ -295,25 +309,10 @@ class vimconnector():
 
     def check_vim_connectivity(self):
         """Checks VIM can be reached and user credentials are ok.
-        Returns None if success or raises vimconnConnectionException, vimconnAuthException, ...
+        Returns None if success or raises VimConnConnectionException, VimConnAuthException, ...
         """
         # by default no checking until each connector implements it
         return None
-
-    def new_tenant(self, tenant_name, tenant_description):
-        """Adds a new tenant to VIM with this name and description, this is done using admin_url if provided
-        "tenant_name": string max lenght 64
-        "tenant_description": string max length 256
-        returns the tenant identifier or raise exception
-        """
-        raise vimconnNotImplemented("Should have implemented this")
-
-    def delete_tenant(self, tenant_id):
-        """Delete a tenant from VIM
-        tenant_id: returned VIM tenant_id on "new_tenant"
-        Returns None on success. Raises and exception of failure. If tenant is not found raises vimconnNotFoundException
-        """
-        raise vimconnNotImplemented("Should have implemented this")
 
     def get_tenant_list(self, filter_dict={}):
         """Obtain tenants of VIM
@@ -324,7 +323,7 @@ class vimconnector():
         Returns the tenant list of dictionaries, and empty list if no tenant match all the filers:
             [{'name':'<name>, 'id':'<id>, ...}, ...]
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
         """Adds a tenant network to VIM
@@ -347,10 +346,10 @@ class vimconnector():
         Returns a tuple with the network identifier and created_items, or raises an exception on error
             created_items can be None or a dictionary where this method can include key-values that will be passed to
             the method delete_network. Can be used to store created segments, created l2gw connections, etc.
-            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            Format is VimConnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def get_network_list(self, filter_dict={}):
         """Obtain tenant networks of VIM
@@ -360,7 +359,8 @@ class vimconnector():
                 id:   string  => returns networks with this VIM id, this imply returns one network at most
                 shared: boolean >= returns only networks that are (or are not) shared
                 tenant_id: sting => returns only networks that belong to this tenant/project
-                ,#(not used yet) admin_state_up: boolean => returns only networks that are (or are not) in admin state active
+                ,#(not used yet) admin_state_up: boolean => returns only networks that are (or are not) in admin state
+                    active
                 #(not used yet) status: 'ACTIVE','ERROR',... => filter networks that are on this status
         Returns the network list of dictionaries. each dictionary contains:
             'id': (mandatory) VIM network id
@@ -373,7 +373,7 @@ class vimconnector():
         List can be empty if no network map the filter_dict. Raise an exception only upon VIM connectivity,
             authorization, or some other unspecific error
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def get_network(self, net_id):
         """Obtain network details from the 'net_id' VIM network
@@ -385,7 +385,7 @@ class vimconnector():
             other VIM specific fields: (optional) whenever possible using the same naming of filter_dict param
         Raises an exception upon error or when network is not found
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def delete_network(self, net_id, created_items=None):
         """
@@ -394,7 +394,7 @@ class vimconnector():
         :param created_items: dictionary with extra items to be deleted. provided by method new_network
         Returns the network identifier or raises an exception upon error or when network is not found
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def refresh_nets_status(self, net_list):
         """Get the status of the networks
@@ -413,14 +413,14 @@ class vimconnector():
                 vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
             'net_id2': ...
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def get_flavor(self, flavor_id):
         """Obtain flavor details from the VIM
         Returns the flavor dict details {'id':<>, 'name':<>, other vim specific }
         Raises an exception upon error or if not found
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def get_flavor_id_from_data(self, flavor_dict):
         """Obtain flavor id that match the flavor description
@@ -430,9 +430,9 @@ class vimconnector():
                 'ram': meomry in MB
                 'vcpus': number of virtual cpus
                 #TODO: complete parameters for EPA
-        Returns the flavor_id or raises a vimconnNotFoundException
+        Returns the flavor_id or raises a VimConnNotFoundException
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def new_flavor(self, flavor_data):
         """Adds a tenant flavor to VIM
@@ -443,7 +443,8 @@ class vimconnector():
                 extended: EPA parameters
                   - numas: #items requested in same NUMA
                         memory: number of 1G huge pages memory
-                        paired-threads|cores|threads: number of paired hyperthreads, complete cores OR individual threads
+                        paired-threads|cores|threads: number of paired hyperthreads, complete cores OR individual
+                            threads
                         interfaces: # passthrough(PT) or SRIOV interfaces attached to this numa
                           - name: interface name
                             dedicated: yes|no|yes:sriov;  for PT, SRIOV or only one SRIOV for the physical NIC
@@ -453,29 +454,29 @@ class vimconnector():
                 is_public:
                  #TODO to concrete
         Returns the flavor identifier"""
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def delete_flavor(self, flavor_id):
         """Deletes a tenant flavor from VIM identify by its id
         Returns the used id or raise an exception"""
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def new_image(self, image_dict):
         """ Adds a tenant image to VIM
         Returns the image id or raises an exception if failed
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def delete_image(self, image_id):
         """Deletes a tenant image from VIM
         Returns the image_id if image is deleted or raises an exception on error"""
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def get_image_id_from_path(self, path):
         """Get the image id from image path in the VIM database.
-           Returns the image_id or raises a vimconnNotFoundException
+           Returns the image_id or raises a VimConnNotFoundException
         """
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def get_image_list(self, filter_dict={}):
         """Obtain tenant images from VIM
@@ -488,10 +489,10 @@ class vimconnector():
             [{<the fields at Filter_dict plus some VIM specific>}, ...]
             List can be empty
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
-        availability_zone_index=None, availability_zone_list=None):
+                       availability_zone_index=None, availability_zone_list=None):
         """Adds a VM instance to VIM
         Params:
             'start': (boolean) indicates if VM must start or created in pause mode.
@@ -499,15 +500,18 @@ class vimconnector():
             'net_list': list of interfaces, each one is a dictionary with:
                 'name': (optional) name for the interface.
                 'net_id': VIM network id where this interface must be connect to. Mandatory for type==virtual
-                'vpci': (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM capabilities
+                'vpci': (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM 
+                    capabilities
                 'model': (optional and only have sense for type==virtual) interface model: virtio, e1000, ...
                 'mac_address': (optional) mac address to assign to this interface
                 'ip_address': (optional) IP address to assign to this interface
-                #TODO: CHECK if an optional 'vlan' parameter is needed for VIMs when type if VF and net_id is not provided,
-                    the VLAN tag to be used. In case net_id is provided, the internal network vlan is used for tagging VF
+                #TODO: CHECK if an optional 'vlan' parameter is needed for VIMs when type if VF and net_id is not
+                    provided, the VLAN tag to be used. In case net_id is provided, the internal network vlan is used 
+                    for tagging VF
                 'type': (mandatory) can be one of:
                     'virtual', in this case always connected to a network of type 'net_type=bridge'
-                     'PCI-PASSTHROUGH' or 'PF' (passthrough): depending on VIM capabilities it can be connected to a data/ptp network ot it
+                     'PCI-PASSTHROUGH' or 'PF' (passthrough): depending on VIM capabilities it can be connected to a
+                        data/ptp network ot it
                            can created unconnected
                      'SR-IOV' or 'VF' (SRIOV with VLAN tag): same as PF for network connectivity.
                      'VFnotShared'(SRIOV without VLAN tag) same as PF for network connectivity. VF where no other VFs
@@ -542,14 +546,14 @@ class vimconnector():
         Returns a tuple with the instance identifier and created_items or raises an exception on error
             created_items can be None or a dictionary where this method can include key-values that will be passed to
             the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
-            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            Format is VimConnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
-    def get_vminstance(self,vm_id):
+    def get_vminstance(self, vm_id):
         """Returns the VM instance information from VIM"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     def delete_vminstance(self, vm_id, created_items=None):
         """
@@ -559,7 +563,7 @@ class vimconnector():
             action_vminstance
         :return: None or the same vm_id. Raises an exception on fail
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     def refresh_vms_status(self, vm_list):
         """Get the status of the virtual machines and their interfaces/ports
@@ -587,7 +591,7 @@ class vimconnector():
                         pci:              #PCI address of the NIC that hosts the PF,VF
                         vlan:             #physical VLAN used for VF
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     def action_vminstance(self, vm_id, action_dict, created_items={}):
         """
@@ -596,12 +600,12 @@ class vimconnector():
         :param vm_id: VIM identifier of the VM, provided by method new_vminstance
         :param action_dict: dictionary with the action to perform
         :param created_items: provided by method new_vminstance is a dictionary with key-values that will be passed to
-            the method delete_vminstance. Can be used to store created ports, volumes, etc. Format is vimconnector
+            the method delete_vminstance. Can be used to store created ports, volumes, etc. Format is VimConnector
             dependent, but do not use nested dictionaries and a value of None should be the same as not present. This
             method can modify this value
         :return: None, or a console dict
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     def get_vminstance_console(self, vm_id, console_type="vnc"):
         """
@@ -617,7 +621,7 @@ class vimconnector():
                 port:     the http, ssh, ... port
                 suffix:   extra text, e.g. the http path and query string
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     def inject_user_key(self, ip_addr=None, user=None, key=None, ro_key=None, password=None):
         """
@@ -631,9 +635,9 @@ class vimconnector():
         The function doesn't return a value:
         """
         if not ip_addr or not user:
-            raise vimconnNotSupportedException("All parameters should be different from 'None'")
+            raise VimConnNotSupportedException("All parameters should be different from 'None'")
         elif not ro_key and not password:
-            raise vimconnNotSupportedException("All parameters should be different from 'None'")
+            raise VimConnNotSupportedException("All parameters should be different from 'None'")
         else:
             commands = {'mkdir -p ~/.ssh/', 'echo "{}" >> ~/.ssh/authorized_keys'.format(key),
                         'chmod 644 ~/.ssh/authorized_keys', 'chmod 700 ~/.ssh/'}
@@ -648,44 +652,32 @@ class vimconnector():
                 for command in commands:
                     (i, o, e) = client.exec_command(command, timeout=10)
                     returncode = o.channel.recv_exit_status()
-                    output = o.read()
                     outerror = e.read()
                     if returncode != 0:
                         text = "run_command='{}' Error='{}'".format(command, outerror)
-                        raise vimconnUnexpectedResponse("Cannot inject ssh key in VM: '{}'".format(text))
+                        raise VimConnUnexpectedResponse("Cannot inject ssh key in VM: '{}'".format(text))
                         return
             except (socket.error, paramiko.AuthenticationException, paramiko.SSHException) as message:
-                raise vimconnUnexpectedResponse(
+                raise VimConnUnexpectedResponse(
                     "Cannot inject ssh key in VM: '{}' - {}".format(ip_addr, str(message)))
                 return
 
 # Optional methods
 
-    def new_tenant(self,tenant_name,tenant_description):
+    def new_tenant(self, tenant_name, tenant_description):
         """Adds a new tenant to VIM with this name and description, this is done using admin_url if provided
         "tenant_name": string max lenght 64
         "tenant_description": string max length 256
         returns the tenant identifier or raise exception
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
-    def delete_tenant(self,tenant_id,):
+    def delete_tenant(self, tenant_id,):
         """Delete a tenant from VIM
         tenant_id: returned VIM tenant_id on "new_tenant"
-        Returns None on success. Raises and exception of failure. If tenant is not found raises vimconnNotFoundException
+        Returns None on success. Raises and exception of failure. If tenant is not found raises VimConnNotFoundException
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
-
-    def get_tenant_list(self, filter_dict=None):
-        """Obtain tenants of VIM
-        filter_dict dictionary that can contain the following keys:
-            name: filter by tenant name
-            id: filter by tenant uuid/id
-            <other VIM specific>
-        Returns the tenant list of dictionaries, and empty list if no tenant match all the filers:
-            [{'name':'<name>, 'id':'<id>, ...}, ...]
-        """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     def new_classification(self, name, ctype, definition):
         """Creates a traffic classification in the VIM
@@ -695,7 +687,7 @@ class vimconnector():
             'definition': definition of this classification (type-dependent free-form text)
         Returns the VIM's classification ID on success or raises an exception on failure
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def get_classification(self, classification_id):
         """Obtain classification details of the VIM's classification with ID='classification_id'
@@ -709,13 +701,15 @@ class vimconnector():
             other VIM specific fields: (optional) whenever possible
         Raises an exception upon error or when classification is not found
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def get_classification_list(self, filter_dict={}):
         """Obtain classifications from the VIM
         Params:
-            'filter_dict' (optional): contains the entries to filter the classifications on and only return those that match ALL:
-                id:   string => returns classifications with this VIM's classification ID, which implies a return of one classification at most
+            'filter_dict' (optional): contains the entries to filter the classifications on and only return those that
+                match ALL:
+                id:   string => returns classifications with this VIM's classification ID, which implies a return of one
+                    classification at most
                 name: string => returns only classifications with this name
                 type: string => returns classifications of this type
                 definition: string => returns classifications that have this definition
@@ -729,7 +723,7 @@ class vimconnector():
         List can be empty if no classification matches the filter_dict. Raise an exception only upon VIM connectivity,
             authorization, or some other unspecific error
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def refresh_classifications_status(self, classification_list):
         '''Get the status of the classifications
@@ -746,13 +740,14 @@ class vimconnector():
                     error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
         '''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def delete_classification(self, classification_id):
         """Deletes a classification from the VIM
-        Returns the classification ID (classification_id) or raises an exception upon error or when classification is not found
+        Returns the classification ID (classification_id) or raises an exception upon error or when classification is
+           not found
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def new_sfi(self, name, ingress_ports, egress_ports, sfc_encap=True):
         """Creates a service function instance in the VIM
@@ -763,7 +758,7 @@ class vimconnector():
             'sfc_encap': boolean stating whether this specific instance supports IETF SFC Encapsulation
         Returns the VIM's service function instance ID on success or raises an exception on failure
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def get_sfi(self, sfi_id):
         """Obtain service function instance details of the VIM's service function instance with ID='sfi_id'
@@ -777,7 +772,7 @@ class vimconnector():
             other VIM specific fields: (optional) whenever possible
         Raises an exception upon error or when service function instance is not found
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def get_sfi_list(self, filter_dict={}):
         """Obtain service function instances from the VIM
@@ -795,13 +790,13 @@ class vimconnector():
         List can be empty if no sfi matches the filter_dict. Raise an exception only upon VIM connectivity,
             authorization, or some other unspecific error
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def delete_sfi(self, sfi_id):
         """Deletes a service function instance from the VIM
         Returns the service function instance ID (sfi_id) or raises an exception upon error or when sfi is not found
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def refresh_sfis_status(self, sfi_list):
         '''Get the status of the service function instances
@@ -818,7 +813,7 @@ class vimconnector():
                     error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
         '''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def new_sf(self, name, sfis, sfc_encap=True):
         """Creates (an abstract) service function in the VIM
@@ -828,7 +823,7 @@ class vimconnector():
             'sfc_encap': boolean stating whether this service function supports IETF SFC Encapsulation
         Returns the VIM's service function ID on success or raises an exception on failure
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def get_sf(self, sf_id):
         """Obtain service function details of the VIM's service function with ID='sf_id'
@@ -859,13 +854,13 @@ class vimconnector():
         List can be empty if no sf matches the filter_dict. Raise an exception only upon VIM connectivity,
             authorization, or some other unspecific error
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def delete_sf(self, sf_id):
         """Deletes (an abstract) service function from the VIM
         Returns the service function ID (sf_id) or raises an exception upon error or when sf is not found
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def refresh_sfs_status(self, sf_list):
         '''Get the status of the service functions
@@ -882,7 +877,7 @@ class vimconnector():
                     error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
         '''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def new_sfp(self, name, classifications, sfs, sfc_encap=True, spi=None):
         """Creates a service function path
@@ -894,7 +889,7 @@ class vimconnector():
             'spi': (optional) the Service Function Path identifier (SPI: Service Path Identifier) for this path
         Returns the VIM's sfp ID on success or raises an exception on failure
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def get_sfp(self, sfp_id):
         """Obtain service function path details of the VIM's sfp with ID='sfp_id'
@@ -908,7 +903,7 @@ class vimconnector():
             other VIM specific fields: (optional) whenever possible
         Raises an exception upon error or when sfp is not found
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def get_sfp_list(self, filter_dict={}):
         """Obtain service function paths from VIM
@@ -926,7 +921,7 @@ class vimconnector():
         List can be empty if no sfp matches the filter_dict. Raise an exception only upon VIM connectivity,
             authorization, or some other unspecific error
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
     def refresh_sfps_status(self, sfp_list):
         '''Get the status of the service function path
@@ -943,13 +938,13 @@ class vimconnector():
                     error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
                     vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)F
         '''
-        raise vimconnNotImplemented("Should have implemented this")
+        raise VimConnNotImplemented("Should have implemented this")
 
     def delete_sfp(self, sfp_id):
         """Deletes a service function path from the VIM
         Returns the sfp ID (sfp_id) or raises an exception upon error or when sf is not found
         """
-        raise vimconnNotImplemented( "SFC support not implemented" )
+        raise VimConnNotImplemented("SFC support not implemented")
 
 # NOT USED METHODS in current version. Deprecated
 
@@ -958,52 +953,51 @@ class vimconnector():
         """Transform host dictionary from VIM format to GUI format,
         and append to the server_dict
         """
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     @deprecated
     def get_hosts_info(self):
         """Get the information of deployed hosts
         Returns the hosts content"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     @deprecated
     def get_hosts(self, vim_tenant):
         """Get the hosts and deployed instances
         Returns the hosts content"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     @deprecated
     def get_processor_rankings(self):
         """Get the processor rankings in the VIM database"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     @deprecated
     def new_host(self, host_data):
         """Adds a new host to VIM"""
         """Returns status code of the VIM response"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     @deprecated
     def new_external_port(self, port_data):
         """Adds a external port to VIM"""
         """Returns the port identifier"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     @deprecated
-    def new_external_network(self,net_name,net_type):
+    def new_external_network(self, net_name, net_type):
         """Adds a external network to VIM (shared)"""
         """Returns the network identifier"""
-        raise vimconnNotImplemented( "Should have implemented this" )
-    @deprecated
+        raise VimConnNotImplemented("Should have implemented this")
 
     @deprecated
     def connect_port_network(self, port_id, network_id, admin=False):
         """Connects a external port to a network"""
         """Returns status code of the VIM response"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")
 
     @deprecated
     def new_vminstancefromJSON(self, vm_data):
         """Adds a VM instance to VIM"""
         """Returns the instance identifier"""
-        raise vimconnNotImplemented( "Should have implemented this" )
+        raise VimConnNotImplemented("Should have implemented this")

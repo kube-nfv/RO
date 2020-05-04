@@ -36,18 +36,20 @@ setup(
     # version=VERSION,
     # python_requires='>3.5.0',
     author='ETSI OSM',
-    # TODO py3 author_email='',
-    maintainer='oscarluis.peral@atos.net',  # TODO py3
-    # TODO py3 maintainer_email='',
+    author_email='OSM_TECH@LIST.ETSI.ORG',
+    maintainer='Oscar Luis Peral',
+    maintainer_email='oscarluis.peral@atos.net',
     url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
     license='Apache 2.0',
 
     packages=[_name],
     include_package_data=True,
-    install_requires=["requests",
-                      "uuid",
-                      "cvprac",
-                      "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"],
+    install_requires=[
+        "requests",
+        "uuid",
+        "cvprac",
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
+    ],
     setup_requires=['setuptools-version-command'],
     entry_points={
         'osm_rosdn.plugins': ['rosdn_arista_cloudvision = osm_rosdn_arista_cloudvision.'

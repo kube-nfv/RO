@@ -17,7 +17,7 @@
 ##
 import logging
 from http import HTTPStatus
-from osm_ro.wim.sdnconn import SdnConnectorBase, SdnConnectorError
+from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 from uuid import uuid4
 
 """

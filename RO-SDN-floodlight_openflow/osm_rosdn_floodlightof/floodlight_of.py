@@ -34,7 +34,7 @@ __date__ = "$28-oct-2014 12:07:15$"
 import json
 import requests
 import logging
-from osm_ro.wim.openflow_conn import OpenflowConn, OpenflowConnUnexpectedResponse, OpenflowConnConnectionException
+from osm_ro_plugin.openflow_conn import OpenflowConn, OpenflowConnUnexpectedResponse, OpenflowConnConnectionException
 
 
 class OfConnFloodLight(OpenflowConn):

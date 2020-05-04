@@ -28,7 +28,7 @@ AWS-connector implements all the methods to interact with AWS using the BOTO cli
 __author__ = "Saboor Ahmad"
 __date__ = "10-Apr-2017"
 
-from osm_ro import vimconn
+from osm_ro_plugin import vimconn
 import yaml
 import logging
 import netaddr
@@ -39,7 +39,7 @@ import boto.ec2
 import boto.vpc
 
 
-class vimconnector(vimconn.vimconnector):
+class vimconnector(vimconn.VimConnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
                  config={}, persistent_info={}):
         """ Params: uuid - id asigned to this VIM
@@ -59,7 +59,7 @@ class vimconnector(vimconn.vimconnector):
                     empty dict. Useful to store login/tokens information for speed up communication
         """
 
-        vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
+        vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config, persistent_info)
 
         self.persistent_info = persistent_info
@@ -67,15 +67,15 @@ class vimconnector(vimconn.vimconnector):
         if user:
             self.a_creds['aws_access_key_id'] = user
         else:
-            raise vimconn.vimconnAuthException("Username is not specified")
+            raise vimconn.VimConnAuthException("Username is not specified")
         if passwd:
             self.a_creds['aws_secret_access_key'] = passwd
         else:
-            raise vimconn.vimconnAuthException("Password is not specified")
+            raise vimconn.VimConnAuthException("Password is not specified")
         if 'region_name' in config:
             self.region = config.get('region_name')
         else:
-            raise vimconn.vimconnException("AWS region_name is not specified at config")
+            raise vimconn.VimConnException("AWS region_name is not specified at config")
 
         self.vpc_data = {}
         self.subnet_data = {}
@@ -113,9 +113,9 @@ class vimconnector(vimconn.vimconnector):
                         self.flavor_info = yaml.load(flavor_data, Loader=yaml.Loader)
                 except yaml.YAMLError as e:
                     self.flavor_info = None
-                    raise vimconn.vimconnException("Bad format at file '{}': {}".format(flavor_data[1:], e))
+                    raise vimconn.VimConnException("Bad format at file '{}': {}".format(flavor_data[1:], e))
                 except IOError as e:
-                    raise vimconn.vimconnException("Error reading file '{}': {}".format(flavor_data[1:], e))
+                    raise vimconn.VimConnException("Error reading file '{}': {}".format(flavor_data[1:], e))
             elif isinstance(flavor_data, dict):
                 self.flavor_info = flavor_data
 
@@ -134,7 +134,7 @@ class vimconnector(vimconn.vimconnector):
         elif index == 'region':
             self.region = value
         else:
-            vimconn.vimconnector.__setitem__(self, index, value)
+            vimconn.VimConnector.__setitem__(self, index, value)
 
     def _reload_connection(self):
         """Returns: sets boto.EC2 and boto.VPC connection to work with AWS services
@@ -157,7 +157,7 @@ class vimconnector(vimconn.vimconnector):
 
         self.conn = None
         self.conn_vpc = None
-        raise vimconn.vimconnConnectionException(type(e).__name__ + ": " + str(e))
+        raise vimconn.VimConnConnectionException(type(e).__name__ + ": " + str(e))
 
     def get_availability_zones_list(self):
         """Obtain AvailabilityZones from AWS
@@ -251,7 +251,7 @@ class vimconnector(vimconn.vimconnector):
 
         if availability_zones != 2 and availability_zones != 3:
             self.logger.debug("Number of AZs should be 2 or 3")
-            raise vimconn.vimconnNotSupportedException("Number of AZs should be 2 or 3")
+            raise vimconn.VimConnNotSupportedException("Number of AZs should be 2 or 3")
 
         netmasks = ('255.255.252.0', '255.255.254.0', '255.255.255.0', '255.255.255.128')
         ip = netaddr.IPNetwork(cidr)
@@ -259,7 +259,7 @@ class vimconnector(vimconn.vimconnector):
 
         if str(mask) not in netmasks:
             self.logger.debug("Netmask " + str(mask) + " not found")
-            raise vimconn.vimconnNotFoundException("Netmask " + str(mask) + " not found")
+            raise vimconn.VimConnNotFoundException("Netmask " + str(mask) + " not found")
 
         if availability_zones == 2:
             for n, netmask in enumerate(netmasks):
@@ -459,7 +459,7 @@ class vimconnector(vimconn.vimconnector):
             if flavor_id in self.flavor_info:
                 return self.flavor_info[flavor_id]
             else:
-                raise vimconn.vimconnNotFoundException("Cannot find flavor with this flavor ID/Name")
+                raise vimconn.VimConnNotFoundException("Cannot find flavor with this flavor ID/Name")
         except Exception as e:
             self.format_vimconn_exception(e)
 
@@ -492,7 +492,7 @@ class vimconnector(vimconn.vimconnector):
                             flavor = (key, values)
             if flavor:
                 return flavor[0]
-            raise vimconn.vimconnNotFoundException("Cannot find flavor with this flavor ID/Name")
+            raise vimconn.VimConnNotFoundException("Cannot find flavor with this flavor ID/Name")
         except Exception as e:
             self.format_vimconn_exception(e)
 

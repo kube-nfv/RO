@@ -37,11 +37,10 @@ and intranet SDN connectivity.
 It receives information from ports to be connected .
 """
 import logging
+from http import HTTPStatus
 
-from ..http_tools.errors import HttpMappedError
 
-
-class SdnConnectorError(HttpMappedError):
+class SdnConnectorError(Exception):
     """Base Exception for all connector related errors
         provide the parameter 'http_code' (int) with the error code:
             Bad_Request = 400
@@ -55,6 +54,9 @@ class SdnConnectorError(HttpMappedError):
             Service_Unavailable = 503
             Internal_Server_Error = 500
     """
+    def __init__(self, message, http_code=HTTPStatus.INTERNAL_SERVER_ERROR.value):
+        Exception.__init__(self, message)
+        self.http_code = http_code
 
 
 class SdnConnectorBase(object):

@@ -22,12 +22,12 @@ This WIM does nothing and allows using it for testing and when no WIM is needed
 
 import logging
 from uuid import uuid4
-from .sdnconn import SdnConnectorBase, SdnConnectorError
+from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 from http import HTTPStatus
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 
 
-class DummyConnector(SdnConnectorBase):
+class SdnDummyConnector(SdnConnectorBase):
     """Abstract base class for all the WIM connectors
 
     Arguments:
@@ -45,7 +45,7 @@ class DummyConnector(SdnConnectorBase):
     """
     def __init__(self, wim, wim_account, config=None, logger=None):
         self.logger = logger or logging.getLogger('openmano.sdnconn.dummy')
-        super(DummyConnector, self).__init__(wim, wim_account, config, self.logger)
+        super(SdnDummyConnector, self).__init__(wim, wim_account, config, self.logger)
         self.logger.debug("__init: wim='{}' wim_account='{}'".format(wim, wim_account))
         self.connections = {}
         self.counter = 0

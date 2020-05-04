@@ -36,7 +36,10 @@ from osm_ro import utils
 from osm_ro.utils import deprecated
 from osm_ro.vim_thread import vim_thread
 import osm_ro.console_proxy_thread as cli
-from osm_ro import vimconn, vim_dummy
+from osm_ro_plugin.vim_dummy import VimDummyConnector
+from osm_ro_plugin.sdn_dummy import SdnDummyConnector
+from osm_ro_plugin.sdn_failing import SdnFailingConnector
+from osm_ro_plugin import vimconn, sdnconn
 import logging
 import collections
 import math
@@ -58,9 +61,6 @@ from pkg_resources import iter_entry_points
 
 
 # WIM
-from .wim import sdnconn
-from .wim.wimconn_dummy import DummyConnector
-from .wim.failing_connector import FailingConnector
 from .http_tools import errors as httperrors
 from .wim.engine import WimEngine
 from .wim.persistence import WimPersistence
@@ -110,12 +110,12 @@ def _load_plugin(name, type="vim"):
     except Exception as e:
         logger.critical("Cannot load osm_{}: {}".format(name, e))
         if name:
-            plugins[name] = FailingConnector("Cannot load osm_{}: {}".format(name, e))
+            plugins[name] = SdnFailingConnector("Cannot load osm_{}: {}".format(name, e))
     if name and name not in plugins:
         error_text = "Cannot load a module for {t} type '{n}'. The plugin 'osm_{n}' has not been" \
                      " registered".format(t=type, n=name)
         logger.critical(error_text)
-        plugins[name] = FailingConnector(error_text)
+        plugins[name] = SdnFailingConnector(error_text)
         # raise NfvoException("Cannot load a module for {t} type '{n}'. The plugin 'osm_{n}' has not been registered".
         #                     format(t=type, n=name), httperrors.Bad_Request)
 
@@ -150,11 +150,13 @@ def get_process_id():
     # Try getting docker id. If fails, get pid
     try:
         with open("/proc/self/cgroup", "r") as f:
-            text_id_ = f.readline()
-            _, _, text_id = text_id_.rpartition("/")
-            text_id = text_id.replace("\n", "")[:12]
-            if text_id:
-                return text_id
+            for text_id_ in f.readlines():
+                if "docker/" not in text_id_:
+                    continue
+                _, _, text_id = text_id_.rpartition("/")
+                text_id = text_id.replace("\n", "")[:12]
+                if text_id:
+                    return text_id
     except Exception:
         pass
     # Return a random id
@@ -191,9 +193,9 @@ def start_service(mydb, persistence=None, wim=None):
     try:
         worker_id = get_process_id()
         if "rosdn_dummy" not in plugins:
-            plugins["rosdn_dummy"] = DummyConnector
+            plugins["rosdn_dummy"] = SdnDummyConnector
         if "rovim_dummy" not in plugins:
-            plugins["rovim_dummy"] = vim_dummy
+            plugins["rovim_dummy"] = VimDummyConnector
         # starts ovim library
         ovim = Sdn(db, plugins)
 
@@ -230,14 +232,14 @@ def start_service(mydb, persistence=None, wim=None):
             try:
                 #if not tenant:
                 #    return -httperrors.Bad_Request, "You must provide a valid tenant name or uuid for VIM  %s" % ( vim["type"])
-                myvim = plugins[plugin_name].vimconnector(
+                myvim = plugins[plugin_name](
                     uuid=vim['datacenter_id'], name=vim['datacenter_name'],
                     tenant_id=vim['vim_tenant_id'], tenant_name=vim['vim_tenant_name'],
                     url=vim['vim_url'], url_admin=vim['vim_url_admin'],
                     user=vim['user'], passwd=vim['passwd'],
                     config=extra, persistent_info=vim_persistent_info[thread_id]
                 )
-            except vimconn.vimconnException as e:
+            except vimconn.VimConnException as e:
                 myvim = e
                 logger.error("Cannot launch thread for VIM {} '{}': {}".format(vim['datacenter_name'],
                                                                                vim['datacenter_id'], e))
@@ -429,7 +431,7 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                     persistent_info = {}
                 #if not tenant:
                 #    return -httperrors.Bad_Request, "You must provide a valid tenant name or uuid for VIM  %s" % ( vim["type"])
-                vim_dict[vim['datacenter_id']] = plugins[plugin_name].vimconnector(
+                vim_dict[vim['datacenter_id']] = plugins[plugin_name](
                                 uuid=vim['datacenter_id'], name=vim['datacenter_name'],
                                 tenant_id=vim.get('vim_tenant_id',vim_tenant),
                                 tenant_name=vim.get('vim_tenant_name',vim_tenant_name),
@@ -442,7 +444,7 @@ def get_vim(mydb, nfvo_tenant=None, datacenter_id=None, datacenter_name=None, da
                     logger.error("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, str(e)))
                     continue
                 http_code = httperrors.Internal_Server_Error
-                if isinstance(e, vimconn.vimconnException):
+                if isinstance(e, vimconn.VimConnException):
                     http_code = e.http_code
                 raise NfvoException("Error at VIM  {}; {}: {}".format(vim["type"], type(e).__name__, str(e)), http_code)
         return vim_dict
@@ -472,7 +474,7 @@ def rollback(mydb,  vims, rollback_list):
                     vim.delete_network(item["uuid"])
                 elif item["what"]=="vm":
                     vim.delete_vminstance(item["uuid"])
-            except vimconn.vimconnException as e:
+            except vimconn.VimConnException as e:
                 logger.error("Error in rollback. Not possible to delete VIM %s '%s'. Message: %s", item['what'], item["uuid"], str(e))
                 undeleted_items.append("{} {} from VIM {}".format(item['what'], item["uuid"], vim["name"]))
             except db_base_Exception as e:
@@ -649,14 +651,14 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
                 vim_images = vim.get_image_list(filter_dict)
                 #logger.debug('>>>>>>>> VIM images: %s', str(vim_images))
                 if len(vim_images) > 1:
-                    raise vimconn.vimconnException("More than one candidate VIM image found for filter: {}".format(str(filter_dict)), httperrors.Conflict)
+                    raise vimconn.VimConnException("More than one candidate VIM image found for filter: {}".format(str(filter_dict)), httperrors.Conflict)
                 elif len(vim_images) == 0:
-                    raise vimconn.vimconnNotFoundException("Image not found at VIM with filter: '{}'".format(str(filter_dict)))
+                    raise vimconn.VimConnNotFoundException("Image not found at VIM with filter: '{}'".format(str(filter_dict)))
                 else:
                     #logger.debug('>>>>>>>> VIM image 0: %s', str(vim_images[0]))
                     image_vim_id = vim_images[0]['id']
 
-        except vimconn.vimconnNotFoundException as e:
+        except vimconn.VimConnNotFoundException as e:
             #Create the image in VIM only if image_dict['location'] or image_dict['new_location'] is not None
             try:
                 #image_dict['location']=image_dict.get('new_location') if image_dict['location'] is None
@@ -666,15 +668,15 @@ def create_or_use_image(mydb, vims, image_dict, rollback_list, only_create_at_vi
                     image_created="true"
                 else:
                     #If we reach this point, then the image has image name, and optionally checksum, and could not be found
-                    raise vimconn.vimconnException(str(e))
-            except vimconn.vimconnException as e:
+                    raise vimconn.VimConnException(str(e))
+            except vimconn.VimConnException as e:
                 if return_on_error:
                     logger.error("Error creating image at VIM '%s': %s", vim["name"], str(e))
                     raise
                 image_vim_id = None
                 logger.warn("Error creating image at VIM '%s': %s", vim["name"], str(e))
                 continue
-        except vimconn.vimconnException as e:
+        except vimconn.VimConnException as e:
             if return_on_error:
                 logger.error("Error contacting VIM to know if the image exists at VIM: %s", str(e))
                 raise
@@ -812,7 +814,7 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
             try:
                 vim.get_flavor(flavor_vim_id)
                 continue #flavor exist
-            except vimconn.vimconnException:
+            except vimconn.VimConnException:
                 pass
         #create flavor at vim
         logger.debug("nfvo.create_or_use_flavor() adding flavor to VIM %s", vim["name"])
@@ -820,14 +822,14 @@ def create_or_use_flavor(mydb, vims, flavor_dict, rollback_list, only_create_at_
             flavor_vim_id = None
             flavor_vim_id=vim.get_flavor_id_from_data(flavor_dict)
             flavor_created="false"
-        except vimconn.vimconnException as e:
+        except vimconn.VimConnException as e:
             pass
         try:
             if not flavor_vim_id:
                 flavor_vim_id = vim.new_flavor(flavor_dict)
                 rollback_list.append({"where":"vim", "vim_id": vim_id, "what":"flavor","uuid":flavor_vim_id})
                 flavor_created="true"
-        except vimconn.vimconnException as e:
+        except vimconn.VimConnException as e:
             if return_on_error:
                 logger.error("Error creating flavor at VIM %s: %s.", vim["name"], str(e))
                 raise
@@ -1546,7 +1548,7 @@ def new_vnf(mydb, tenant_id, vnf_descriptor):
         # Step 8. Adding the VNF to the NFVO DB
         vnf_id = mydb.new_vnf_as_a_whole(tenant_id,vnf_name,vnf_descriptor,VNFCDict)
         return vnf_id
-    except (db_base_Exception, vimconn.vimconnException, KeyError) as e:
+    except (db_base_Exception, vimconn.VimConnException, KeyError) as e:
         _, message = rollback(mydb, vims, rollback_list)
         if isinstance(e, db_base_Exception):
             error_text = "Exception at database"
@@ -1682,7 +1684,7 @@ def new_vnf_v02(mydb, tenant_id, vnf_descriptor):
         # Step 8. Adding the VNF to the NFVO DB
         vnf_id = mydb.new_vnf_as_a_whole2(tenant_id,vnf_name,vnf_descriptor,VNFCDict)
         return vnf_id
-    except (db_base_Exception, vimconn.vimconnException, KeyError) as e:
+    except (db_base_Exception, vimconn.VimConnException, KeyError) as e:
         _, message = rollback(mydb, vims, rollback_list)
         if isinstance(e, db_base_Exception):
             error_text = "Exception at database"
@@ -1811,10 +1813,10 @@ def delete_vnf(mydb,tenant_id,vnf_id,datacenter=None,vim_tenant=None):
                     continue
                 try:
                     myvim.delete_flavor(flavor_vim["vim_id"])
-                except vimconn.vimconnNotFoundException:
+                except vimconn.VimConnNotFoundException:
                     logger.warn("VIM flavor %s not exist at datacenter %s", flavor_vim["vim_id"],
                                 flavor_vim["datacenter_vim_id"] )
-                except vimconn.vimconnException as e:
+                except vimconn.VimConnException as e:
                     logger.error("Not possible to delete VIM flavor %s from datacenter %s: %s %s",
                             flavor_vim["vim_id"], flavor_vim["datacenter_vim_id"], type(e).__name__, str(e))
                     undeletedItems.append("flavor {} from VIM {}".format(flavor_vim["vim_id"],
@@ -1844,9 +1846,9 @@ def delete_vnf(mydb,tenant_id,vnf_id,datacenter=None,vim_tenant=None):
                 myvim=vims[ image_vim["datacenter_id"] ]
                 try:
                     myvim.delete_image(image_vim["vim_id"])
-                except vimconn.vimconnNotFoundException as e:
+                except vimconn.VimConnNotFoundException as e:
                     logger.warn("VIM image %s not exist at datacenter %s", image_vim["vim_id"], image_vim["datacenter_id"] )
-                except vimconn.vimconnException as e:
+                except vimconn.VimConnException as e:
                     logger.error("Not possible to delete VIM image %s from datacenter %s: %s %s",
                             image_vim["vim_id"], image_vim["datacenter_id"], type(e).__name__, str(e))
                     undeletedItems.append("image {} from VIM {}".format(image_vim["vim_id"], image_vim["datacenter_id"] ))
@@ -1908,7 +1910,7 @@ def get_hosts(mydb, nfvo_tenant_id):
 
         #print 'datacenters '+ json.dumps(datacenter, indent=4)
         return datacenter
-    except vimconn.vimconnException as e:
+    except vimconn.VimConnException as e:
         raise NfvoException("Not possible to get_host_list from VIM: {}".format(str(e)), e.http_code)
 
 
@@ -2873,7 +2875,7 @@ def start_scenario(mydb, tenant_id, scenario_id, instance_scenario_name, instanc
         instance_id = mydb.new_instance_scenario_as_a_whole(tenant_id,instance_scenario_name, instance_scenario_description, scenarioDict)
         return mydb.get_instance_scenario(instance_id)
 
-    except (db_base_Exception, vimconn.vimconnException) as e:
+    except (db_base_Exception, vimconn.VimConnException) as e:
         _, message = rollback(mydb, vims, rollbackList)
         if isinstance(e, db_base_Exception):
             error_text = "Exception at database"
@@ -3780,11 +3782,11 @@ def create_instance(mydb, tenant_id, instance_dict):
         returned_instance = mydb.get_instance_scenario(instance_uuid)
         returned_instance["action_id"] = instance_action_id
         return returned_instance
-    except (NfvoException, vimconn.vimconnException, sdnconn.SdnConnectorError, db_base_Exception) as e:
+    except (NfvoException, vimconn.VimConnException, sdnconn.SdnConnectorError, db_base_Exception) as e:
         message = rollback(mydb, myvims, rollbackList)
         if isinstance(e, db_base_Exception):
             error_text = "database Exception"
-        elif isinstance(e, vimconn.vimconnException):
+        elif isinstance(e, vimconn.VimConnException):
             error_text = "VIM Exception"
         elif isinstance(e, sdnconn.SdnConnectorError):
             error_text = "WIM Exception"
@@ -4638,7 +4640,7 @@ def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenan
     #         try:
     #             vm_dict.update(myvims[datacenter_key].refresh_vms_status(vm_list[datacenter_key]) )
     #             failed = False
-    #         except vimconn.vimconnException as e:
+    #         except vimconn.VimConnException as e:
     #             logger.error("VIM exception %s %s", type(e).__name__, str(e))
     #             failed_message = str(e)
     #     if failed:
@@ -4700,7 +4702,7 @@ def refresh_instance(mydb, nfvo_tenant, instanceDict, datacenter=None, vim_tenan
     #         try:
     #             net_dict.update(myvims[datacenter_key].refresh_nets_status(net_list[datacenter_key]) )
     #             failed = False
-    #         except vimconn.vimconnException as e:
+    #         except vimconn.VimConnException as e:
     #             logger.error("VIM exception %s %s", type(e).__name__, str(e))
     #             failed_message = str(e)
     #     if failed:
@@ -5038,7 +5040,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                     else:
                         vm_result[ vm['uuid'] ] = {"vim_result": 200, "description": "ok", "name":vm['name']}
                         vm_ok +=1
-            except vimconn.vimconnException as e:
+            except vimconn.VimConnException as e:
                 vm_result[ vm['uuid'] ] = {"vim_result": e.http_code, "name":vm['name'], "description": str(e)}
                 vm_error+=1
 
@@ -5265,7 +5267,7 @@ def create_vim_account(mydb, nfvo_tenant, datacenter_id, name=None, vim_id=None,
                                                        vim_passwd=vim_password)
                 datacenter_name = myvim["name"]
                 vim_tenant = myvim.new_tenant(vim_tenant_name, "created by openmano for datacenter "+datacenter_name)
-            except vimconn.vimconnException as e:
+            except vimconn.VimConnException as e:
                 raise NfvoException("Not possible to create vim_tenant {} at VIM: {}".format(vim_tenant_name, e),
                                     httperrors.Internal_Server_Error)
             datacenter_tenants_dict = {}
@@ -5299,7 +5301,7 @@ def create_vim_account(mydb, nfvo_tenant, datacenter_id, name=None, vim_id=None,
         thread_id = datacenter_tenants_dict["uuid"]
         vim_threads["running"][thread_id] = new_thread
         return thread_id
-    except vimconn.vimconnException as e:
+    except vimconn.VimConnException as e:
         raise NfvoException(str(e), httperrors.Bad_Request)
 
 
@@ -5378,7 +5380,7 @@ def delete_vim_account(mydb, tenant_id, vim_account_id, datacenter=None):
                 try:
                     datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
                     myvim.delete_tenant(vim_tenant_dict['vim_tenant_id'])
-                except vimconn.vimconnException as e:
+                except vimconn.VimConnException as e:
                     warning = "Not possible to delete vim_tenant_id {} from VIM: {} ".format(vim_tenant_dict['vim_tenant_id'], str(e))
                     logger.warn(warning)
         except db_base_Exception as e:
@@ -5400,14 +5402,14 @@ def datacenter_action(mydb, tenant_id, datacenter, action_dict):
     if 'check-connectivity' in action_dict:
         try:
             myvim.check_vim_connectivity()
-        except vimconn.vimconnException as e:
+        except vimconn.VimConnException as e:
             #logger.error("nfvo.datacenter_action() Not possible to get_network_list from VIM: %s ", str(e))
             raise NfvoException(str(e), e.http_code)
     elif 'net-update' in action_dict:
         try:
             nets = myvim.get_network_list(filter_dict={'shared': True, 'admin_state_up': True, 'status': 'ACTIVE'})
             #print content
-        except vimconn.vimconnException as e:
+        except vimconn.VimConnException as e:
             #logger.error("nfvo.datacenter_action() Not possible to get_network_list from VIM: %s ", str(e))
             raise NfvoException(str(e), httperrors.Internal_Server_Error)
         #update nets Change from VIM format to NFVO format
@@ -5466,7 +5468,7 @@ def datacenter_new_netmap(mydb, tenant_id, datacenter, action_dict=None):
 
     try:
         vim_nets = myvim.get_network_list(filter_dict=filter_dict)
-    except vimconn.vimconnException as e:
+    except vimconn.VimConnException as e:
         #logger.error("nfvo.datacenter_new_netmap() Not possible to get_network_list from VIM: %s ", str(e))
         raise NfvoException(str(e), httperrors.Internal_Server_Error)
     if len(vim_nets)>1 and action_dict:
@@ -5507,7 +5509,7 @@ def get_sdn_net_id(mydb, tenant_id, datacenter, network_id):
 
         datacenter_id, myvim = get_datacenter_by_name_uuid(mydb, tenant_id, datacenter)
         network = myvim.get_network_list(filter_dict=filter_dict)
-    except vimconn.vimconnException as e:
+    except vimconn.VimConnException as e:
         raise NfvoException("Not possible to get_sdn_net_id from VIM: {}".format(str(e)), e.http_code)
 
     # ensure the network is defined
@@ -5678,7 +5680,7 @@ def vim_action_get(mydb, tenant_id, datacenter, item, name):
                  datacenter)
         else:
             return {item: content}
-    except vimconn.vimconnException as e:
+    except vimconn.VimConnException as e:
         print("vim_action Not possible to get_{}_list from VIM: {} ".format(item, str(e)))
         raise NfvoException("Not possible to get_{}_list from VIM: {}".format(item, str(e)), e.http_code)
 
@@ -5742,7 +5744,7 @@ def vim_action_delete(mydb, tenant_id, datacenter, item, name):
             content = myvim.delete_image(item_id)
         else:
             raise NfvoException(item + "?", httperrors.Method_Not_Allowed)
-    except vimconn.vimconnException as e:
+    except vimconn.VimConnException as e:
         #logger.error( "vim_action Not possible to delete_{} {}from VIM: {} ".format(item, name, str(e)))
         raise NfvoException("Not possible to delete_{} {} from VIM: {}".format(item, name, str(e)), e.http_code)
 
@@ -5804,7 +5806,7 @@ def vim_action_create(mydb, tenant_id, datacenter, item, descriptor):
             content = myvim.new_tenant(tenant["name"], tenant.get("description"))
         else:
             raise NfvoException(item + "?", httperrors.Method_Not_Allowed)
-    except vimconn.vimconnException as e:
+    except vimconn.VimConnException as e:
         raise NfvoException("Not possible to create {} at VIM: {}".format(item, str(e)), e.http_code)
 
     return vim_action_get(mydb, tenant_id, datacenter, item, content)

@@ -49,10 +49,10 @@ setup(
         "netaddr",
         "PyYAML",
         "azure==4.0.0",
-        "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
     ],
     setup_requires=['setuptools-version-command'],
     entry_points={
-        'osm_rovim.plugins': ['rovim_azure = osm_rovim_azure.vimconn_azure'],
+        'osm_rovim.plugins': ['rovim_azure = osm_rovim_azure.vimconn_azure:vimconnector'],
     },
 )

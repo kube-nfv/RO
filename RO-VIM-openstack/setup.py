@@ -47,12 +47,12 @@ setup(
     install_requires=[
         "python-openstackclient", "python-neutronclient", 
         "requests", "netaddr", "PyYAML",
-        "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
         # TODO py3 "networking-l2gw"
         # "python-novaclient", "python-keystoneclient", "python-glanceclient", "python-cinderclient",
     ],
     setup_requires=['setuptools-version-command'],
     entry_points={
-        'osm_rovim.plugins': ['rovim_openstack = osm_rovim_openstack.vimconn_openstack'],
+        'osm_rovim.plugins': ['rovim_openstack = osm_rovim_openstack.vimconn_openstack:vimconnector'],
     },
 )

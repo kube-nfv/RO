@@ -37,9 +37,9 @@ setup(
     # version=VERSION,
     # python_requires='>3.5.0',
     author='ETSI OSM',
-    # TODO py3 author_email='',
-    maintainer='OSM_TECH@LIST.ETSI.ORG',  # TODO py3
-    # TODO py3 maintainer_email='',
+    author_email='OSM_TECH@LIST.ETSI.ORG',
+    maintainer='ETSI OSM',
+    maintainer_email='OSM_TECH@LIST.ETSI.ORG',
     url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
     license='Apache 2.0',
 
@@ -49,10 +49,10 @@ setup(
         "requests",
         "netaddr",
         "PyYAML",
-        "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
     ],
     setup_requires=['setuptools-version-command'],
     entry_points={
-        'osm_rovim.plugins': ['rovim_opennebula = osm_rovim_opennebula.vimconn_opennebula'],
+        'osm_rovim.plugins': ['rovim_opennebula = osm_rovim_opennebula.vimconn_opennebula:vimconnector'],
     },
 )

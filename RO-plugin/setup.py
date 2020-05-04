@@ -18,38 +18,39 @@
 
 from setuptools import setup
 
-_name = "osm_rovim_aws"
+_name = "osm_ro_plugin"
 
 README = """
 ===========
-osm-rovim_aws
+osm-ro_plugin
 ===========
 
-osm-ro pluging for aws VIM
+osm-ro plugin is the base class for RO VIM and SDN plugins
 """
 
 setup(
     name=_name,
-    description='OSM ro vim plugin for aws',
+    description='OSM ro base class for vim and SDN plugins',
     long_description=README,
     version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
     # version=VERSION,
     # python_requires='>3.5.0',
     author='ETSI OSM',
-    author_email='OSM_TECH@LIST.ETSI.ORG',
-    maintainer='ETSI OSM',
-    maintainer_email='OSM_TECH@LIST.ETSI.ORG',
+    author_email='alfonso.tiernosepulveda@telefonica.com',
+    maintainer='Alfonso Tierno',
+    maintainer_email='alfonso.tiernosepulveda@telefonica.com',
     url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
     license='Apache 2.0',
 
     packages=[_name],
     include_package_data=True,
     install_requires=[
-        "requests", "netaddr", "PyYAML", "boto",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
+        "requests", "paramiko", "PyYAML",
     ],
     setup_requires=['setuptools-version-command'],
     entry_points={
-        'osm_rovim.plugins': ['rovim_aws = osm_rovim_aws.vimconn_aws:vimconnector'],
+        'osm_ro.plugins': ['rovim_plugin = osm_ro_plugin.vimconn:VimConnector',
+                           'rosdn_plugin = osm_ro_plugin.sdnconn:SdnConnectorBase'
+                           ],
     },
 )

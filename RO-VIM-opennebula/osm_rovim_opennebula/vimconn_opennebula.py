@@ -28,7 +28,7 @@ vimconnector implements all the methods to interact with OpenNebula using the XM
 __author__ = "Jose Maria Carmona Perez,Juan Antonio Hernando Labajo, Emilio Abraham Garrido Garcia,Alberto Florez " \
              "Pages, Andres Pozo Munoz, Santiago Perez Marin, Onlife Networks Telefonica I+D Product Innovation "
 __date__ = "$13-dec-2017 11:09:29$"
-from osm_ro import vimconn
+from osm_ro_plugin import vimconn
 import requests
 import logging
 import oca
@@ -37,7 +37,7 @@ import math
 import random
 import pyone
 
-class vimconnector(vimconn.vimconnector):
+class vimconnector(vimconn.VimConnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
                  log_level="DEBUG", config={}, persistent_info={}):
 
@@ -59,7 +59,7 @@ class vimconnector(vimconn.vimconnector):
             check against the VIM
         """
 
-        vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
+        vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config)
 
     def _new_one_connection(self):
@@ -95,7 +95,7 @@ class vimconnector(vimconn.vimconnector):
                                 return str(group.id)
         except Exception as e:
             self.logger.error("Create new tenant error: " + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def delete_tenant(self, tenant_id):
         """Delete a tenant from VIM. Returns the old tenant identifier"""
@@ -112,10 +112,10 @@ class vimconnector(vimconn.vimconnector):
                             self._delete_secondarygroup(user.id, group.id)
                             group.delete(client)
                     return None
-            raise vimconn.vimconnNotFoundException("Group {} not found".format(tenant_id))
+            raise vimconn.VimConnNotFoundException("Group {} not found".format(tenant_id))
         except Exception as e:
             self.logger.error("Delete tenant " + str(tenant_id) + " error: " + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def _add_secondarygroup(self, id_user, id_group):
         # change secondary_group to primary_group
@@ -229,7 +229,7 @@ class vimconnector(vimconn.vimconnector):
             return net_id, created_items
         except Exception as e:
             self.logger.error("Create new network error: " + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def get_network_list(self, filter_dict={}):
         """Obtain tenant networks of VIM
@@ -272,7 +272,7 @@ class vimconnector(vimconn.vimconnector):
             return response
         except Exception as e:
             self.logger.error("Get network list error: " + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def get_network(self, net_id):
         """Obtain network details from the 'net_id' VIM network
@@ -297,10 +297,10 @@ class vimconnector(vimconn.vimconnector):
             if net:
                 return net
             else:
-                raise vimconn.vimconnNotFoundException("Network {} not found".format(net_id))
+                raise vimconn.VimConnNotFoundException("Network {} not found".format(net_id))
         except Exception as e:
             self.logger.error("Get network " + str(net_id) + " error): " + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def delete_network(self, net_id, created_items=None):
         """
@@ -316,7 +316,7 @@ class vimconnector(vimconn.vimconnector):
             return net_id
         except Exception as e:
             self.logger.error("Delete network " + str(net_id) + "error: network not found" + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def refresh_nets_status(self, net_list):
         """Get the status of the networks
@@ -343,17 +343,17 @@ class vimconnector(vimconn.vimconnector):
                     net_vim = self.get_network(net_id)
                     net["status"] = net_vim["status"]
                     net["vim_info"] = None
-                except vimconn.vimconnNotFoundException as e:
+                except vimconn.VimConnNotFoundException as e:
                     self.logger.error("Exception getting net status: {}".format(str(e)))
                     net['status'] = "DELETED"
                     net['error_msg'] = str(e)
-                except vimconn.vimconnException as e:
+                except vimconn.VimConnException as e:
                     self.logger.error(e)
                     net["status"] = "VIM_ERROR"
                     net["error_msg"] = str(e)
                 net_dict[net_id] = net
             return net_dict
-        except vimconn.vimconnException as e:
+        except vimconn.VimConnException as e:
             self.logger.error(e)
             for k in net_dict:
                 net_dict[k]["status"] = "VIM_ERROR"
@@ -371,10 +371,10 @@ class vimconnector(vimconn.vimconnector):
             template = one.template.info(int(flavor_id))
             if template is not None:
                 return {'id': template.ID, 'name': template.NAME}
-            raise vimconn.vimconnNotFoundException("Flavor {} not found".format(flavor_id))
+            raise vimconn.VimConnNotFoundException("Flavor {} not found".format(flavor_id))
         except Exception as e:
             self.logger.error("get flavor " + str(flavor_id) + " error: " + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def new_flavor(self, flavor_data):
         """Adds a tenant flavor to VIM
@@ -424,7 +424,7 @@ class vimconnector(vimconn.vimconnector):
 
         except Exception as e:
             self.logger.error("Create new flavor error: " + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def delete_flavor(self, flavor_id):
         """ Deletes a tenant flavor from VIM
@@ -436,7 +436,7 @@ class vimconnector(vimconn.vimconnector):
             return flavor_id
         except Exception as e:
             self.logger.error("Error deleting flavor " + str(flavor_id) + ". Flavor not found")
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def get_image_list(self, filter_dict={}):
         """Obtain tenant images from VIM
@@ -468,7 +468,7 @@ class vimconnector(vimconn.vimconnector):
             return images
         except Exception as e:
             self.logger.error("Get image list error: " + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
                        availability_zone_index=None, availability_zone_list=None):
@@ -560,10 +560,10 @@ class vimconnector(vimconn.vimconnector):
             return str(vm_instance_id), None
         except pyone.OneNoExistsException as e:
             self.logger.error("Network with id " + str(e) + " not found: " + str(e))
-            raise vimconn.vimconnNotFoundException(e)
+            raise vimconn.VimConnNotFoundException(e)
         except Exception as e:
             self.logger.error("Create new vm instance error: " + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def get_vminstance(self, vm_id):
         """Returns the VM instance information from VIM"""
@@ -573,7 +573,7 @@ class vimconnector(vimconn.vimconnector):
             return vm
         except Exception as e:
             self.logger.error("Getting vm instance error: " + str(e) + ": VM Instance not found")
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def delete_vminstance(self, vm_id, created_items=None):
         """
@@ -595,10 +595,10 @@ class vimconnector(vimconn.vimconnector):
 
         except pyone.OneNoExistsException as e:
             self.logger.info("The vm " + str(vm_id) + " does not exist or is already deleted")
-            raise vimconn.vimconnNotFoundException("The vm {} does not exist or is already deleted".format(vm_id))
+            raise vimconn.VimConnNotFoundException("The vm {} does not exist or is already deleted".format(vm_id))
         except Exception as e:
             self.logger.error("Delete vm instance " + str(vm_id) + " error: " + str(e))
-            raise vimconn.vimconnException(e)
+            raise vimconn.VimConnException(e)
 
     def refresh_vms_status(self, vm_list):
         """Get the status of the virtual machines and their interfaces/ports

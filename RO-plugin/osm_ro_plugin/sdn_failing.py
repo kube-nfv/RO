@@ -37,10 +37,10 @@ we need a replacement for it, that will throw an error every time we try to
 execute any action
 """
 import json
-from .sdnconn import SdnConnectorError
+from osm_ro_plugin.sdnconn import SdnConnectorError
 
 
-class FailingConnector(object):
+class SdnFailingConnector(object):
     """Placeholder for a connector whose incitation failed,
     This place holder will just raise an error every time an action is needed
     from the connector.

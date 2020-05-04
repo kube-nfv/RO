@@ -36,9 +36,9 @@ setup(
     # version=VERSION,
     # python_requires='>3.5.0',
     author='ETSI OSM',
-    # TODO py3 author_email='',
-    maintainer='OSM_TECH@LIST.ETSI.ORG',  # TODO py3
-    # TODO py3 maintainer_email='',
+    author_email='OSM_TECH@list.etsi.org',
+    maintainer='ETSI OSM',
+    maintainer_email='OSM_TECH@list.etsi.org',
     url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
     license='Apache 2.0',
 
@@ -46,7 +46,7 @@ setup(
     include_package_data=True,
     install_requires=[
         "requests",
-        "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
     ],
     setup_requires=['setuptools-version-command'],
     entry_points={

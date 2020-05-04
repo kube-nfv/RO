@@ -1,4 +1,4 @@
-#
+##
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,9 +11,14 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
+##
 
-[DEFAULT]
-X-Python3-Version : >= 3.5
-Depends3: python3-requests, python3-netaddr, python3-yaml, python3-osm-ro-plugin, python3-pip
+all: clean package
+
+clean:
+	rm -rf dist deb_dist osm_ro_plugin-*.tar.gz osm_ro_plugin.egg-info .eggs
+
+package:
+	python3 setup.py --command-packages=stdeb.command sdist_dsc
+	cd deb_dist/osm-ro-plugin*/ && dpkg-buildpackage -rfakeroot -uc -us
 

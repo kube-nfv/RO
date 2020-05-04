@@ -14,7 +14,7 @@
 ##
 
 import base64
-from osm_ro import vimconn
+from osm_ro_plugin import vimconn
 import logging
 import netaddr
 import re
@@ -41,7 +41,7 @@ if getenv('OSMRO_PDB_DEBUG'):
     pdb.set_trace()
 
 
-class vimconnector(vimconn.vimconnector):
+class vimconnector(vimconn.VimConnector):
 
     # Translate azure provisioning state to OSM provision state
     # The first three ones are the transitional status once a user initiated action has been requested
@@ -85,7 +85,7 @@ class vimconnector(vimconn.vimconnector):
             "^Standard_B" will select a serie B maybe for test environment
         """
 
-        vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
+        vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config, persistent_info)
 
         # Variable that indicates if client must be reloaded or initialized
@@ -112,19 +112,19 @@ class vimconnector(vimconn.vimconnector):
             self._config["subscription_id"] = config.get('subscription_id')
             # self.logger.debug('Setting subscription to: %s', self.config["subscription_id"])
         else:
-            raise vimconn.vimconnException('Subscription not specified')
+            raise vimconn.VimConnException('Subscription not specified')
 
         # REGION
         if 'region_name' in config:
             self.region = config.get('region_name')
         else:
-            raise vimconn.vimconnException('Azure region_name is not specified at config')
+            raise vimconn.VimConnException('Azure region_name is not specified at config')
 
         # RESOURCE_GROUP
         if 'resource_group' in config:
             self.resource_group = config.get('resource_group')
         else:
-            raise vimconn.vimconnException('Azure resource_group is not specified at config')
+            raise vimconn.VimConnException('Azure resource_group is not specified at config')
 
         # VNET_NAME
         if 'vnet_name' in config:
@@ -168,7 +168,7 @@ class vimconnector(vimconn.vimconnector):
             resource = str(resource_id.split('/')[-1])
             return resource
         except Exception as e:
-            raise vimconn.vimconnException("Unable to get resource name from resource_id '{}' Error: '{}'".
+            raise vimconn.VimConnException("Unable to get resource name from resource_id '{}' Error: '{}'".
                                            format(resource_id, e))
 
     def _get_location_from_resource_group(self, resource_group_name):
@@ -176,7 +176,7 @@ class vimconnector(vimconn.vimconnector):
             location = self.conn.resource_groups.get(resource_group_name).location
             return location
         except Exception as e:
-            raise vimconn.vimconnNotFoundException("Location '{}' not found".format(resource_group_name))
+            raise vimconn.VimConnNotFoundException("Location '{}' not found".format(resource_group_name))
 
     def _get_resource_group_name_from_resource_id(self, resource_id):
 
@@ -184,7 +184,7 @@ class vimconnector(vimconn.vimconnector):
             rg = str(resource_id.split('/')[4])
             return rg
         except Exception as e:
-            raise vimconn.vimconnException("Unable to get resource group from invalid resource_id format '{}'".
+            raise vimconn.VimConnException("Unable to get resource group from invalid resource_id format '{}'".
                                            format(resource_id))
 
     def _get_net_name_from_resource_id(self, resource_id):
@@ -193,7 +193,7 @@ class vimconnector(vimconn.vimconnector):
             net_name = str(resource_id.split('/')[8])
             return net_name
         except Exception as e:
-            raise vimconn.vimconnException("Unable to get azure net_name from invalid resource_id format '{}'".
+            raise vimconn.VimConnException("Unable to get azure net_name from invalid resource_id format '{}'".
                                            format(resource_id))
 
     def _check_subnets_for_vm(self, net_list):
@@ -208,16 +208,16 @@ class vimconnector(vimconn.vimconnector):
         """
         Transforms a generic or azure exception to a vimcommException
         """
-        if isinstance(e, vimconn.vimconnException):
+        if isinstance(e, vimconn.VimConnException):
             raise
         elif isinstance(e, AuthenticationError):
-            raise vimconn.vimconnAuthException(type(e).__name__ + ': ' + str(e))
+            raise vimconn.VimConnAuthException(type(e).__name__ + ': ' + str(e))
         elif isinstance(e, ConnectionError):
-            raise vimconn.vimconnConnectionException(type(e).__name__ + ': ' + str(e))
+            raise vimconn.VimConnConnectionException(type(e).__name__ + ': ' + str(e))
         else:
             # In case of generic error recreate client
             self.reload_client = True
-            raise vimconn.vimconnException(type(e).__name__ + ': ' + str(e))
+            raise vimconn.VimConnException(type(e).__name__ + ': ' + str(e))
 
     def _check_or_create_resource_group(self):
         """
@@ -314,7 +314,7 @@ class vimconnector(vimconn.vimconnector):
                     self.logger.debug('dinamically obtained ip_profile: %s', ip_range)
                     break
             else:
-                raise vimconn.vimconnException("Cannot find a non-used subnet range in {}".
+                raise vimconn.VimConnException("Cannot find a non-used subnet range in {}".
                                                format(self.vnet_address_space))
         else:
             ip_profile = {"subnet_address": ip_profile['subnet_address']}
@@ -416,25 +416,25 @@ class vimconnector(vimconn.vimconnector):
         """
         It is not allowed to create new flavors in Azure, must always use an existing one
         """
-        raise vimconn.vimconnAuthException("It is not possible to create new flavors in AZURE")
+        raise vimconn.VimConnAuthException("It is not possible to create new flavors in AZURE")
 
     def new_tenant(self, tenant_name, tenant_description):
         """
         It is not allowed to create new tenants in azure
         """
-        raise vimconn.vimconnAuthException("It is not possible to create a TENANT in AZURE")
+        raise vimconn.VimConnAuthException("It is not possible to create a TENANT in AZURE")
 
     def new_image(self, image_dict):
         """
         It is not allowed to create new images in Azure, must always use an existing one
         """
-        raise vimconn.vimconnAuthException("It is not possible to create new images in AZURE")
+        raise vimconn.VimConnAuthException("It is not possible to create new images in AZURE")
 
     def get_image_id_from_path(self, path):
         """Get the image id from image path in the VIM database.
            Returns the image_id or raises a vimconnNotFoundException
         """
-        raise vimconn.vimconnAuthException("It is not possible to obtain image from path in AZURE")
+        raise vimconn.VimConnAuthException("It is not possible to obtain image from path in AZURE")
 
     def get_image_list(self, filter_dict={}):
         """Obtain tenant images from VIM
@@ -472,10 +472,10 @@ class vimconnector(vimconn.vimconnector):
                             else:
                                 image_list = self._get_sku_image_list(publisher, offer, sku)
                 else:
-                    raise vimconn.vimconnAuthException(
+                    raise vimconn.VimConnAuthException(
                         "List images in Azure must include name param with at least publisher")
             else:
-                raise vimconn.vimconnAuthException("List images in Azure must include name param with at"
+                raise vimconn.VimConnAuthException("List images in Azure must include name param with at"
                                                    " least publisher")
 
             return image_list
@@ -608,7 +608,7 @@ class vimconnector(vimconn.vimconnector):
 
         # At least one network must be provided
         if not net_list:
-            raise vimconn.vimconnException("At least one net must be provided to create a new VM")
+            raise vimconn.VimConnException("At least one net must be provided to create a new VM")
 
         # image_id are several fields of the image_id
         image_reference = self._get_image_reference(image_id)
@@ -778,7 +778,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 return availability_zone_list[availability_zone_index]
         else:
-            raise vimconn.vimconnConflictException("No enough availability zones at VIM for this deployment")
+            raise vimconn.VimConnConflictException("No enough availability zones at VIM for this deployment")
 
     def _get_azure_availability_zones(self):
         return self.AZURE_ZONES
@@ -838,9 +838,9 @@ class vimconnector(vimconn.vimconnector):
                         created_items[data_disk.id] = True
 
                     else:
-                        raise vimconn.vimconnNotFoundException("Invalid image_id: %s ", image_id)
+                        raise vimconn.VimConnNotFoundException("Invalid image_id: %s ", image_id)
                 else:
-                    raise vimconn.vimconnNotFoundException("Invalid image_id: %s ", image_id)
+                    raise vimconn.VimConnNotFoundException("Invalid image_id: %s ", image_id)
 
         # Attach the disk created
         virtual_machine.storage_profile.data_disks.append({
@@ -887,7 +887,7 @@ class vimconnector(vimconn.vimconnector):
                 'version': version
             }
         except Exception as e:
-            raise vimconn.vimconnException(
+            raise vimconn.VimConnException(
                 "Unable to get image_reference from invalid image_id format: '{}'".format(image_id))
 
     # Azure VM names can not have some special characters
@@ -938,7 +938,7 @@ class vimconnector(vimconn.vimconnector):
 
             if listedFilteredSizes:
                 return listedFilteredSizes[0]['name']
-            raise vimconn.vimconnNotFoundException("Cannot find any flavor matching '{}'".format(str(flavor_dict)))
+            raise vimconn.VimConnNotFoundException("Cannot find any flavor matching '{}'".format(str(flavor_dict)))
 
         except Exception as e:
             self._format_vimconn_exception(e)
@@ -967,7 +967,7 @@ class vimconnector(vimconn.vimconnector):
             self._reload_connection()
             return True
         except Exception as e:
-            raise vimconn.vimconnException("Connectivity issue with Azure API: {}".format(e))
+            raise vimconn.VimConnException("Connectivity issue with Azure API: {}".format(e))
 
     def get_network(self, net_id):
 
@@ -979,7 +979,7 @@ class vimconnector(vimconn.vimconnector):
         network_list = self.get_network_list(filter_dict)
 
         if not network_list:
-            raise vimconn.vimconnNotFoundException("network '{}' not found".format(net_id))
+            raise vimconn.VimConnNotFoundException("network '{}' not found".format(net_id))
         else:
             return network_list[0]
 
@@ -992,7 +992,7 @@ class vimconnector(vimconn.vimconnector):
         filter_dict = {'name': res_name}
         network_list = self.get_network_list(filter_dict)
         if not network_list:
-            raise vimconn.vimconnNotFoundException("network '{}' not found".format(net_id))
+            raise vimconn.VimConnNotFoundException("network '{}' not found".format(net_id))
 
         try:
             # Subnet API fails (CloudError: Azure Error: ResourceNotFound)
@@ -1003,7 +1003,7 @@ class vimconnector(vimconn.vimconnector):
 
         except CloudError as e:
             if e.error.error and "notfound" in e.error.error.lower():
-                raise vimconn.vimconnNotFoundException("network '{}' not found".format(net_id))
+                raise vimconn.VimConnNotFoundException("network '{}' not found".format(net_id))
             else:
                 self._format_vimconn_exception(e)
         except Exception as e:
@@ -1084,7 +1084,7 @@ class vimconnector(vimconn.vimconnector):
 
         except CloudError as e:
             if e.error.error and "notfound" in e.error.error.lower():
-                raise vimconn.vimconnNotFoundException("No vm instance found '{}'".format(vm_id))
+                raise vimconn.VimConnNotFoundException("No vm instance found '{}'".format(vm_id))
             else:
                 self._format_vimconn_exception(e)
         except Exception as e:
@@ -1171,20 +1171,20 @@ class vimconnector(vimconn.vimconnector):
             return None
         except CloudError as e:
             if e.error.error and "notfound" in e.error.error.lower():
-                raise vimconn.vimconnNotFoundException("No vm found '{}'".format(vm_id))
+                raise vimconn.VimConnNotFoundException("No vm found '{}'".format(vm_id))
             else:
                 self._format_vimconn_exception(e)
         except Exception as e:
             self._format_vimconn_exception(e)
 
     def delete_flavor(self, flavor_id):
-        raise vimconn.vimconnAuthException("It is not possible to delete a FLAVOR in AZURE")
+        raise vimconn.VimConnAuthException("It is not possible to delete a FLAVOR in AZURE")
 
     def delete_tenant(self, tenant_id,):
-        raise vimconn.vimconnAuthException("It is not possible to delete a TENANT in AZURE")
+        raise vimconn.VimConnAuthException("It is not possible to delete a TENANT in AZURE")
 
     def delete_image(self, image_id):
-        raise vimconn.vimconnAuthException("It is not possible to delete a IMAGE in AZURE")
+        raise vimconn.VimConnAuthException("It is not possible to delete a IMAGE in AZURE")
 
     def get_vminstance(self, vm_id):
         """
@@ -1197,7 +1197,7 @@ class vimconnector(vimconn.vimconnector):
             vm = self.conn_compute.virtual_machines.get(self.resource_group, resName)
         except CloudError as e:
             if e.error.error and "notfound" in e.error.error.lower():
-                raise vimconn.vimconnNotFoundException("No vminstance found '{}'".format(vm_id))
+                raise vimconn.VimConnNotFoundException("No vminstance found '{}'".format(vm_id))
             else:
                 self._format_vimconn_exception(e)
         except Exception as e:
@@ -1222,7 +1222,7 @@ class vimconnector(vimconn.vimconnector):
             }
             return flavor
         else:
-            raise vimconn.vimconnNotFoundException("flavor '{}' not found".format(flavor_id))
+            raise vimconn.VimConnNotFoundException("flavor '{}' not found".format(flavor_id))
 
     def get_tenant_list(self, filter_dict={}):
         """ Obtains the list of tenants
@@ -1290,7 +1290,7 @@ class vimconnector(vimconn.vimconnector):
                         "status": "VIM_ERROR",
                         "error_msg": str(e)
                     }
-            except vimconn.vimconnNotFoundException as e:
+            except vimconn.VimConnNotFoundException as e:
                 self.logger.error("VimConnNotFoundException %s when searching subnet", e)
                 out_nets[net_id] = {
                     "status": "DELETED",

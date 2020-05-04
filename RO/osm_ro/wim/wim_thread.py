@@ -59,9 +59,9 @@ from .errors import (
     InvalidParameters as Invalid,
     UndefinedAction,
 )
-from .failing_connector import FailingConnector
-from .sdnconn import SdnConnectorError
-from .wimconn_dummy import DummyConnector
+from osm_ro_plugin.sdn_failing import SdnFailingConnector
+from osm_ro_plugin.sdnconn import SdnConnectorError
+from osm_ro_plugin.sdn_dummy import SdnDummyConnector
 
 ACTIONS = {
     'instance_wim_nets': wan_link_actions.ACTIONS
@@ -69,7 +69,7 @@ ACTIONS = {
 
 CONNECTORS = {
     # "odl": wimconn_odl.OdlConnector,
-    "dummy": DummyConnector,
+    "dummy": SdnDummyConnector,
     # Add extra connectors here not managed via plugins
 }
 
@@ -111,7 +111,7 @@ class WimThread(threading.Thread):
         super(WimThread, self).__init__(name=name)
         self.plugins = plugins
         if "rosdn_dummy" not in self.plugins:
-            self.plugins["rosdn_dummy"] = DummyConnector
+            self.plugins["rosdn_dummy"] = SdnDummyConnector
 
         self.name = name
         self.connector = None
@@ -183,7 +183,7 @@ class WimThread(threading.Thread):
         error_msg_extra = ('Any task targeting WIM account {} ({}) will fail.'
                            .format(account_id, self.wim_account.get('name')))
         self.logger.warning(error_msg_extra)
-        return FailingConnector(error_msg + '\n' + error_msg_extra)
+        return SdnFailingConnector(error_msg + '\n' + error_msg_extra)
 
     @contextmanager
     def avoid_exceptions(self):
@@ -388,7 +388,7 @@ class WimThread(threading.Thread):
                            self.process_list('refresh')):
                         sleep(self.WAITING_TIME)
 
-                    if isinstance(self.connector, FailingConnector):
+                    if isinstance(self.connector, SdnFailingConnector):
                         # Wait sometime to try instantiating the connector
                         # again and restart
                         # Increase the recovery time if restarting is not

@@ -27,7 +27,7 @@ import copy
 import requests
 from requests.auth import HTTPBasicAuth
 
-from osm_ro.wim.sdnconn import SdnConnectorBase, SdnConnectorError
+from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 
 
 class OnosVpls(SdnConnectorBase):

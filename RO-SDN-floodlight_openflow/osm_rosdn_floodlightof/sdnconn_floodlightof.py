@@ -20,7 +20,7 @@
 """
 
 import logging
-from osm_ro.wim.openflow_conn import SdnConnectorOpenFlow
+from osm_ro_plugin.openflow_conn import SdnConnectorOpenFlow
 from .floodlight_of import OfConnFloodLight
 
 

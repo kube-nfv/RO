@@ -15,5 +15,6 @@
 
 paramiko
 requests
-git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro
+git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin
+
 

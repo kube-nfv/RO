@@ -23,7 +23,7 @@
 
 
 from osm_rovim_vmware.vimconn_vmware import vimconnector
-from osm_ro.vimconn import vimconnUnexpectedResponse, vimconnNotFoundException,vimconnException
+from osm_ro_plugin.vimconn import VimConnUnexpectedResponse, VimConnNotFoundException,VimConnException
 from pyvcloud.vcd.client import Client
 from lxml import etree as lxmlElementTree
 from pyvcloud.vcd.org import Org
@@ -78,7 +78,7 @@ class TestVimconn_VMware(unittest.TestCase):
         perform_request.return_value.content = xml_resp.vdc_xml_response
 
         # call to VIM connector method with invalid id
-        self.assertRaises(vimconnNotFoundException,self.vim.get_network,'mgmt-net')
+        self.assertRaises(VimConnNotFoundException,self.vim.get_network,'mgmt-net')
 
     @mock.patch.object(vimconnector,'perform_request')
     @mock.patch.object(vimconnector,'get_vdc_details')
@@ -189,7 +189,7 @@ class TestVimconn_VMware(unittest.TestCase):
                                               <OrgVdcNetwork></OrgVdcNetwork>"""
 
         # assert verified expected and return result from VIM connector
-        self.assertRaises(vimconnUnexpectedResponse,self.vim.new_network,
+        self.assertRaises(VimConnUnexpectedResponse,self.vim.new_network,
                                                               'test_net',
                                                                 'bridge')
 
@@ -222,7 +222,7 @@ class TestVimconn_VMware(unittest.TestCase):
         # assumed return value from VIM connector
         get_vcd_network.return_value = False
         # assert verified expected and return result from VIM connector
-        self.assertRaises(vimconnNotFoundException,self.vim.delete_network,
+        self.assertRaises(VimConnNotFoundException,self.vim.delete_network,
                                     '2a23e5d1-42a2-0648-bc92-cb508046bf87')
 
     def test_get_flavor(self):
@@ -244,7 +244,7 @@ class TestVimconn_VMware(unittest.TestCase):
         """
         vimconnector.flavorlist = {}
         # assert verified expected and return result from VIM connector
-        self.assertRaises(vimconnNotFoundException,self.vim.get_flavor,
+        self.assertRaises(VimConnNotFoundException,self.vim.get_flavor,
                                 'a646eb8a-95bd-4e81-8321-5413ee72b62e')
 
     def test_new_flavor(self):
@@ -287,7 +287,7 @@ class TestVimconn_VMware(unittest.TestCase):
                                        ]
 
         # assert verified expected and return result from VIM connector
-        self.assertRaises(vimconnNotFoundException, self.vim.delete_image, 'invali3453')
+        self.assertRaises(VimConnNotFoundException, self.vim.delete_image, 'invali3453')
 
     @mock.patch.object(vimconnector,'get_vdc_details')
     @mock.patch.object(vimconnector,'connect')
@@ -550,7 +550,7 @@ class TestVimconn_VMware(unittest.TestCase):
         create_vdc.return_value = None
 
         # assert verified expected and return result from VIM connector
-        self.assertRaises(vimconnException,self.vim.new_tenant,tenant_name)
+        self.assertRaises(VimConnException,self.vim.new_tenant,tenant_name)
 
     @mock.patch.object(vimconnector,'connect_as_admin')
     @mock.patch.object(vimconnector,'connect')
@@ -587,7 +587,7 @@ class TestVimconn_VMware(unittest.TestCase):
         perform_request.return_value.status_code = 201
 
         # assert verified expected and return result from VIM connector
-        self.assertRaises(vimconnNotFoundException,self.vim.delete_tenant,tenant_id)
+        self.assertRaises(VimConnNotFoundException,self.vim.delete_tenant,tenant_id)
 
     @mock.patch.object(vimconnector,'get_vdc_details')
     @mock.patch.object(Org,'list_catalogs')
@@ -708,7 +708,7 @@ class TestVimconn_VMware(unittest.TestCase):
                                        content = "Bad request error")]
 
         # call to VIM connector method
-        self.assertRaises(vimconnUnexpectedResponse,self.vim.new_vminstance,
+        self.assertRaises(VimConnUnexpectedResponse,self.vim.new_vminstance,
                                                                  name='Test1_vm',
                                                                  image_id=image_id,
                                                                  flavor_id=flavor_id,
@@ -779,7 +779,7 @@ class TestVimconn_VMware(unittest.TestCase):
         get_catalogid.return_value = '34925a30-0f4a-4018-9759-0d6799063b51'
 
         # assert verified expected and return result from VIM connector
-        self.assertRaises(vimconnException,self.vim.new_image,{'name':'TestImage', 'location':path})
+        self.assertRaises(VimConnException,self.vim.new_image,{'name':'TestImage', 'location':path})
 
     @mock.patch.object(vimconnector,'connect_as_admin')
     @mock.patch.object(vimconnector,'perform_request')
@@ -878,7 +878,7 @@ class TestVimconn_VMware(unittest.TestCase):
         create_catalog.return_value = catalog
         upload_vimimage.return_value = False
         get_catalogid.return_value = '7208-0f6777052c30'
-        self.assertRaises(vimconnException, self.vim.get_image_id_from_path, path)
+        self.assertRaises(VimConnException, self.vim.get_image_id_from_path, path)
 
     @mock.patch.object(vimconnector,'get_vdc_details')
     @mock.patch.object(vimconnector,'connect')
@@ -915,7 +915,7 @@ class TestVimconn_VMware(unittest.TestCase):
         get_vapp_details_rest.return_value = False
 
         # assert verified expected and return result from VIM connector
-        self.assertRaises(vimconnNotFoundException, self.vim.get_vminstance,invalid_vmid)
+        self.assertRaises(VimConnNotFoundException, self.vim.get_vminstance,invalid_vmid)
 
     @mock.patch.object(vimconnector,'connect')
     @mock.patch.object(vimconnector,'get_namebyvappid')
@@ -940,7 +940,7 @@ class TestVimconn_VMware(unittest.TestCase):
         get_vapp.return_value = None
 
         # call to VIM connector method
-        self.assertRaises(vimconnException, self.vim.delete_vminstance,vm_id)
+        self.assertRaises(VimConnException, self.vim.delete_vminstance,vm_id)
 
     @mock.patch.object(vimconnector,'get_vcd_network')
     def test_refresh_nets_status_negative(self, get_vcd_network):
@@ -977,4 +977,4 @@ class TestVimconn_VMware(unittest.TestCase):
         self.vim.client = self.vim.connect()
 
         # call to VIM connector method
-        self.assertRaises(vimconnException, self.vim.action_vminstance, vm_id,{'invalid': None})
+        self.assertRaises(VimConnException, self.vim.action_vminstance, vm_id,{'invalid': None})

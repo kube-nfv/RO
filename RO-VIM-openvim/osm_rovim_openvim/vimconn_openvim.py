@@ -27,7 +27,7 @@ vimconnector implements all the methods to interact with openvim using the openv
 __author__="Alfonso Tierno, Gerardo Garcia"
 __date__ ="$26-aug-2014 11:09:29$"
 
-from osm_ro import vimconn
+from osm_ro_plugin import vimconn
 import requests
 import json
 import yaml
@@ -324,10 +324,10 @@ get_processor_rankings_response_schema = {
 }
 
 
-class vimconnector(vimconn.vimconnector):
+class vimconnector(vimconn.VimConnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
                  log_level="DEBUG", config={}, persistent_info={}):
-        vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level, config)
+        vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level, config)
         self.tenant = None
         self.headers_req = {'content-type': 'application/json'}
         self.logger = logging.getLogger('openmano.vim.openvim')
@@ -343,7 +343,7 @@ class vimconnector(vimconn.vimconnector):
             self.tenant = value
         elif index=='tenant_name':
             self.tenant = None
-        vimconn.vimconnector.__setitem__(self,index, value)    
+        vimconn.VimConnector.__setitem__(self,index, value)    
 
     def _get_my_tenant(self):
         '''Obtain uuid of my tenant from name
@@ -358,13 +358,13 @@ class vimconnector(vimconn.vimconnector):
         try:
             tenant_list = vim_response.json()["tenants"]
             if len(tenant_list) == 0:
-                raise vimconn.vimconnNotFoundException("No tenant found for name '{}'".format(self.tenant_name))
+                raise vimconn.VimConnNotFoundException("No tenant found for name '{}'".format(self.tenant_name))
             elif len(tenant_list) > 1:
-                raise vimconn.vimconnConflictException ("More that one tenant found for name '{}'".format(self.tenant_name))
+                raise vimconn.VimConnConflictException ("More that one tenant found for name '{}'".format(self.tenant_name))
             self.tenant = tenant_list[0]["id"]
             return self.tenant
         except Exception as e:
-            raise vimconn.vimconnUnexpectedResponse("Get VIM tenant {} '{}'".format(type(e).__name__, str(e)))
+            raise vimconn.VimConnUnexpectedResponse("Get VIM tenant {} '{}'".format(type(e).__name__, str(e)))
 
     def _format_jsonerror(self,http_response):
         #DEPRECATED, to delete in the future
@@ -409,24 +409,24 @@ class vimconnector(vimconn.vimconnector):
     def _format_request_exception(self, request_exception):
         '''Transform a request exception into a vimconn exception'''
         if isinstance(request_exception, js_e.ValidationError):
-            raise vimconn.vimconnUnexpectedResponse("jsonschema exception '{}' at '{}'".format(request_exception.message, request_exception.path))            
+            raise vimconn.VimConnUnexpectedResponse("jsonschema exception '{}' at '{}'".format(request_exception.message, request_exception.path))            
         elif isinstance(request_exception, requests.exceptions.HTTPError):
-            raise vimconn.vimconnUnexpectedResponse(type(request_exception).__name__ + ": " + str(request_exception))
+            raise vimconn.VimConnUnexpectedResponse(type(request_exception).__name__ + ": " + str(request_exception))
         else:
-            raise vimconn.vimconnConnectionException(type(request_exception).__name__ + ": " + str(request_exception))
+            raise vimconn.VimConnConnectionException(type(request_exception).__name__ + ": " + str(request_exception))
 
     def _check_http_request_response(self, request_response):
         '''Raise a vimconn exception if the response is not Ok'''
         if request_response.status_code >= 200 and  request_response.status_code < 300:
             return
         if request_response.status_code == vimconn.HTTP_Unauthorized:
-            raise vimconn.vimconnAuthException(request_response.text)
+            raise vimconn.VimConnAuthException(request_response.text)
         elif request_response.status_code == vimconn.HTTP_Not_Found:
-            raise vimconn.vimconnNotFoundException(request_response.text)
+            raise vimconn.VimConnNotFoundException(request_response.text)
         elif request_response.status_code == vimconn.HTTP_Conflict:
-            raise vimconn.vimconnConflictException(request_response.text)
+            raise vimconn.VimConnConflictException(request_response.text)
         else: 
-            raise vimconn.vimconnUnexpectedResponse("VIM HTTP_response {}, {}".format(request_response.status_code, str(request_response.text)))
+            raise vimconn.VimConnUnexpectedResponse("VIM HTTP_response {}, {}".format(request_response.status_code, str(request_response.text)))
 
     def new_tenant(self,tenant_name,tenant_description):
         '''Adds a new tenant to VIM with this name and description, returns the tenant identifier'''
@@ -759,9 +759,9 @@ class vimconnector(vimconn.vimconnector):
             #if r is not None: 
             #    self.logger.warn("Warning: remove extra items %s", str(r))
             if len(response['images'])==0:
-                raise vimconn.vimconnNotFoundException("Image not found at VIM with path '{}'".format(path))
+                raise vimconn.VimConnNotFoundException("Image not found at VIM with path '{}'".format(path))
             elif len(response['images'])>1:
-                raise vimconn.vimconnConflictException("More than one image found at VIM with path '{}'".format(path))
+                raise vimconn.VimConnConflictException("More than one image found at VIM with path '{}'".format(path))
             return response['images'][0]['id']
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
@@ -1033,11 +1033,11 @@ class vimconnector(vimconn.vimconnector):
                 if vm['status'] == "ACTIVE" and not management_ip:
                     vm['status'] = "ACTIVE:NoMgmtIP"
                     
-            except vimconn.vimconnNotFoundException as e:
+            except vimconn.VimConnNotFoundException as e:
                 self.logger.error("Exception getting vm status: %s", str(e))
                 vm['status'] = "DELETED"
                 vm['error_msg'] = str(e)
-            except (requests.exceptions.RequestException, js_e.ValidationError, vimconn.vimconnException) as e:
+            except (requests.exceptions.RequestException, js_e.ValidationError, vimconn.VimConnException) as e:
                 self.logger.error("Exception getting vm status: %s", str(e))
                 vm['status'] = "VIM_ERROR"
                 vm['error_msg'] = str(e)
@@ -1083,11 +1083,11 @@ class vimconnector(vimconn.vimconnector):
                 if net_vim.get('last_error'):
                     net['error_msg'] = net_vim['last_error']
                 net["vim_info"] = yaml.safe_dump(net_vim)
-            except vimconn.vimconnNotFoundException as e:
+            except vimconn.VimConnNotFoundException as e:
                 self.logger.error("Exception getting net status: %s", str(e))
                 net['status'] = "DELETED"
                 net['error_msg'] = str(e)
-            except (requests.exceptions.RequestException, js_e.ValidationError, vimconn.vimconnException) as e:
+            except (requests.exceptions.RequestException, js_e.ValidationError, vimconn.VimConnException) as e:
                 self.logger.error("Exception getting net status: %s", str(e))
                 net['status'] = "VIM_ERROR"
                 net['error_msg'] = str(e)
@@ -1100,7 +1100,7 @@ class vimconnector(vimconn.vimconnector):
         try:
             self._get_my_tenant()
             if "console" in action_dict:
-                raise vimconn.vimconnException("getting console is not available at openvim", http_code=vimconn.HTTP_Service_Unavailable)
+                raise vimconn.VimConnException("getting console is not available at openvim", http_code=vimconn.HTTP_Service_Unavailable)
             url = self.url+'/'+self.tenant+'/servers/'+vm_id+"/action"
             self.logger.info("Action over VM instance POST %s", url)
             vim_response = requests.post(url, headers = self.headers_req, data=json.dumps(action_dict) )

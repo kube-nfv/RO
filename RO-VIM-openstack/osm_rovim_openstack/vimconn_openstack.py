@@ -32,7 +32,7 @@ to the VIM connector's SFC resources as follows:
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research, Igor D.C., Eduardo Sousa"
 __date__  = "$22-sep-2017 23:59:59$"
 
-from osm_ro import vimconn
+from osm_ro_plugin import vimconn
 # import json
 import logging
 import netaddr
@@ -87,7 +87,7 @@ class SafeDumper(yaml.SafeDumper):
         return super(SafeDumper, self).represent_data(data)
 
 
-class vimconnector(vimconn.vimconnector):
+class vimconnector(vimconn.VimConnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
                  log_level=None, config={}, persistent_info={}):
         '''using common constructor parameters. In this case
@@ -96,11 +96,11 @@ class vimconnector(vimconn.vimconnector):
         '''
         api_version = config.get('APIversion')
         if api_version and api_version not in ('v3.3', 'v2.0', '2', '3'):
-            raise vimconn.vimconnException("Invalid value '{}' for config:APIversion. "
+            raise vimconn.VimConnException("Invalid value '{}' for config:APIversion. "
                                            "Allowed values are 'v3.3', 'v2.0', '2' or '3'".format(api_version))
         vim_type = config.get('vim_type')
         if vim_type and vim_type not in ('vio', 'VIO'):
-            raise vimconn.vimconnException("Invalid value '{}' for config:vim_type."
+            raise vimconn.VimConnException("Invalid value '{}' for config:vim_type."
                             "Allowed values are 'vio' or 'VIO'".format(vim_type))
 
         if config.get('dataplane_net_vlan_range') is not None:
@@ -111,11 +111,11 @@ class vimconnector(vimconn.vimconnector):
             #validate vlan ranges provided by user
             self._validate_vlan_ranges(config.get('multisegment_vlan_range'), 'multisegment_vlan_range')
 
-        vimconn.vimconnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
+        vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config)
 
         if self.config.get("insecure") and self.config.get("ca_cert"):
-            raise vimconn.vimconnException("options insecure and ca_cert are mutually exclusive")
+            raise vimconn.VimConnException("options insecure and ca_cert are mutually exclusive")
         self.verify = True
         if self.config.get("insecure"):
             self.verify = False
@@ -168,7 +168,7 @@ class vimconnector(vimconn.vimconnector):
         elif index == 'user_domain_id':
             return self.config.get("user_domain_id")
         else:
-            return vimconn.vimconnector.__getitem__(self, index)
+            return vimconn.VimConnector.__getitem__(self, index)
 
     def __setitem__(self, index, value):
         """Set individuals parameters and it is marked as dirty so to force connection reload.
@@ -178,7 +178,7 @@ class vimconnector(vimconn.vimconnector):
         elif index == 'user_domain_id':
                 self.config["user_domain_id"] = value
         else:
-            vimconn.vimconnector.__setitem__(self, index, value)
+            vimconn.VimConnector.__setitem__(self, index, value)
         self.session['reload_client'] = True
 
     def serialize(self, value):
@@ -401,22 +401,22 @@ class vimconnector(vimconn.vimconnector):
 
         if isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound, ksExceptions.NotFound,
                                   gl1Exceptions.HTTPNotFound)):
-            raise vimconn.vimconnNotFoundException(type(exception).__name__ + ": " + message_error)
+            raise vimconn.VimConnNotFoundException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
                                     ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed)):
-            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + message_error)
+            raise vimconn.VimConnConnectionException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, (KeyError, nvExceptions.BadRequest, ksExceptions.BadRequest)):
-            raise vimconn.vimconnException(type(exception).__name__ + ": " + message_error)
+            raise vimconn.VimConnException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
                                     neExceptions.NeutronException)):
-            raise vimconn.vimconnUnexpectedResponse(type(exception).__name__ + ": " + message_error)
+            raise vimconn.VimConnUnexpectedResponse(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, nvExceptions.Conflict):
-            raise vimconn.vimconnConflictException(type(exception).__name__ + ": " + message_error)
-        elif isinstance(exception, vimconn.vimconnException):
+            raise vimconn.VimConnConflictException(type(exception).__name__ + ": " + message_error)
+        elif isinstance(exception, vimconn.VimConnException):
             raise exception
         else:  # ()
             self.logger.error("General Exception " + message_error, exc_info=True)
-            raise vimconn.vimconnConnectionException(type(exception).__name__ + ": " + message_error)
+            raise vimconn.VimConnConnectionException(type(exception).__name__ + ": " + message_error)
 
     def _get_ids_from_name(self):
         """
@@ -426,7 +426,7 @@ class vimconnector(vimconn.vimconnector):
         # get tenant_id if only tenant_name is supplied
         self._reload_connection()
         if not self.my_tenant_id:
-            raise vimconn.vimconnConnectionException("Error getting tenant information from name={} id={}".
+            raise vimconn.VimConnConnectionException("Error getting tenant information from name={} id={}".
                                                      format(self.tenant_name, self.tenant_id))
         if self.config.get('security_groups') and not self.security_groups_id:
             # convert from name to id
@@ -440,7 +440,7 @@ class vimconnector(vimconn.vimconnector):
                         break
                 else:
                     self.security_groups_id = None
-                    raise vimconn.vimconnConnectionException("Not found security group {} for this tenant".format(sg))
+                    raise vimconn.VimConnConnectionException("Not found security group {} for this tenant".format(sg))
 
     def check_vim_connectivity(self):
         # just get network list to check connectivity and credentials
@@ -541,7 +541,7 @@ class vimconnector(vimconn.vimconnector):
                     # or not declared, just ignore the checking
                     if isinstance(self.config.get('dataplane_physical_net'), (tuple, list)) and \
                             provider_physical_network not in self.config['dataplane_physical_net']:
-                        raise vimconn.vimconnConflictException(
+                        raise vimconn.VimConnConflictException(
                             "Invalid parameter 'provider-network:physical-network' for network creation. '{}' is not "
                             "one of the declared list at VIM_config:dataplane_physical_net".format(
                                 provider_physical_network))
@@ -552,7 +552,7 @@ class vimconnector(vimconn.vimconnector):
                         provider_physical_network = provider_physical_network[0]
 
                 if not provider_physical_network:
-                    raise vimconn.vimconnConflictException("You must provide a 'dataplane_physical_net' at VIM_config "
+                    raise vimconn.VimConnConflictException("You must provide a 'dataplane_physical_net' at VIM_config "
                                                            "for creating underlay networks. or use the NS instantiation"
                                                            " parameter provider-network:physical-network for the VLD")
 
@@ -582,7 +582,7 @@ class vimconnector(vimconn.vimconnector):
                         vlanID = self._generate_multisegment_vlanID()
                         segment2_dict["provider:segmentation_id"] = vlanID
                     # else
-                    #     raise vimconn.vimconnConflictException(
+                    #     raise vimconn.VimConnConflictException(
                     #         "You must provide 'multisegment_vlan_range' at config dict before creating a multisegment network")
                     segment_list.append(segment2_dict)
                     network_dict["segments"] = segment_list
@@ -590,7 +590,7 @@ class vimconnector(vimconn.vimconnector):
                 # VIO Specific Changes. It needs a concrete VLAN
                 if self.vim_type == "VIO" and vlan is None:
                     if self.config.get('dataplane_net_vlan_range') is None:
-                        raise vimconn.vimconnConflictException(
+                        raise vimconn.VimConnConflictException(
                             "You must provide 'dataplane_net_vlan_range' in format [start_ID - end_ID] at VIM_config "
                             "for creating underlay networks")
                     network_dict["provider:segmentation_id"] = self._generate_vlanID()
@@ -695,9 +695,9 @@ class vimconnector(vimconn.vimconnector):
         filter_dict={"id": net_id}
         net_list = self.get_network_list(filter_dict)
         if len(net_list)==0:
-            raise vimconn.vimconnNotFoundException("Network '{}' not found".format(net_id))
+            raise vimconn.VimConnNotFoundException("Network '{}' not found".format(net_id))
         elif len(net_list)>1:
-            raise vimconn.vimconnConflictException("Found more than one network with this criteria")
+            raise vimconn.VimConnConflictException("Found more than one network with this criteria")
         net = net_list[0]
         subnets=[]
         for subnet_id in net.get("subnets", () ):
@@ -784,11 +784,11 @@ class vimconnector(vimconn.vimconnector):
 
                 if net_vim.get('fault'):  #TODO
                     net['error_msg'] = str(net_vim['fault'])
-            except vimconn.vimconnNotFoundException as e:
+            except vimconn.VimConnNotFoundException as e:
                 self.logger.error("Exception getting net status: %s", str(e))
                 net['status'] = "DELETED"
                 net['error_msg'] = str(e)
-            except vimconn.vimconnException as e:
+            except vimconn.VimConnException as e:
                 self.logger.error("Exception getting net status: %s", str(e))
                 net['status'] = "VIM_ERROR"
                 net['error_msg'] = str(e)
@@ -824,9 +824,9 @@ class vimconnector(vimconn.vimconnector):
             extended = flavor_dict.get("extended", {})
             if extended:
                 #TODO
-                raise vimconn.vimconnNotFoundException("Flavor with EPA still not implemented")
+                raise vimconn.VimConnNotFoundException("Flavor with EPA still not implemented")
                 # if len(numas) > 1:
-                #     raise vimconn.vimconnNotFoundException("Cannot find any flavor with more than one numa")
+                #     raise vimconn.VimConnNotFoundException("Cannot find any flavor with more than one numa")
                 # numa=numas[0]
                 # numas = extended.get("numas")
             for flavor in self.nova.flavors.list():
@@ -842,7 +842,7 @@ class vimconnector(vimconn.vimconnector):
                     flavor_candidate_data = flavor_data
             if not exact_match and flavor_candidate_id:
                 return flavor_candidate_id
-            raise vimconn.vimconnNotFoundException("Cannot find any flavor matching '{}'".format(str(flavor_dict)))
+            raise vimconn.VimConnNotFoundException("Cannot find any flavor matching '{}'".format(str(flavor_dict)))
         except (nvExceptions.NotFound, nvExceptions.ClientException, ksExceptions.ClientException, ConnectionError) as e:
             self._format_exception(e)
 
@@ -927,7 +927,7 @@ class vimconnector(vimconn.vimconnector):
                                     extra_specs["hw:cpu_policy"] = "dedicated"
                                 # for interface in numa.get("interfaces",() ):
                                 #     if interface["dedicated"]=="yes":
-                                #         raise vimconn.vimconnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
+                                #         raise vimconn.VimConnException("Passthrough interfaces are not supported for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
                                 #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"' when a way to connect it is available
                         elif extended.get("cpu-quota"):
                             self.process_resource_quota(extended.get("cpu-quota"), "cpu", extra_specs)
@@ -1016,7 +1016,7 @@ class vimconnector(vimconn.vimconnector):
                     new_image = self.glance.images.create(name=image_dict['name'])
                 if image_dict['location'].startswith("http"):
                     # TODO there is not a method to direct download. It must be downloaded locally with requests
-                    raise vimconn.vimconnNotImplemented("Cannot create image from URL")
+                    raise vimconn.VimConnNotImplemented("Cannot create image from URL")
                 else: #local path
                     with open(image_dict['location']) as fimage:
                         self.glance.images.upload(new_image.id, fimage)
@@ -1037,7 +1037,7 @@ class vimconnector(vimconn.vimconnector):
                     continue
                 self._format_exception(e)
             except IOError as e:  #can not open the file
-                raise vimconn.vimconnConnectionException(type(e).__name__ + ": " + str(e)+ " for " + image_dict['location'],
+                raise vimconn.VimConnConnectionException(type(e).__name__ + ": " + str(e)+ " for " + image_dict['location'],
                                                          http_code=vimconn.HTTP_Bad_Request)
 
     def delete_image(self, image_id):
@@ -1058,7 +1058,7 @@ class vimconnector(vimconn.vimconnector):
             for image in images:
                 if image.metadata.get("location")==path:
                     return image.id
-            raise vimconn.vimconnNotFoundException("image with location '{}' not found".format( path))
+            raise vimconn.VimConnNotFoundException("image with location '{}' not found".format( path))
         except (ksExceptions.ClientException, nvExceptions.ClientException, gl1Exceptions.CommunicationError, ConnectionError) as e:
             self._format_exception(e)
 
@@ -1111,7 +1111,7 @@ class vimconnector(vimconn.vimconnector):
 
         # if we exceeded the timeout rollback
         if elapsed_time >= server_timeout:
-            raise vimconn.vimconnException('Timeout waiting for instance ' + vm_id + ' to get ' + status,
+            raise vimconn.VimConnException('Timeout waiting for instance ' + vm_id + ' to get ' + status,
                                            http_code=vimconn.HTTP_Request_Timeout)
 
     def _get_openstack_availablity_zones(self):
@@ -1170,7 +1170,7 @@ class vimconnector(vimconn.vimconnector):
             else:
                 return availability_zone_list[availability_zone_index]
         else:
-            raise vimconn.vimconnConflictException("No enough availability zones at VIM for this deployment")
+            raise vimconn.VimConnConflictException("No enough availability zones at VIM for this deployment")
 
     def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
                        availability_zone_index=None, availability_zone_list=None):
@@ -1347,7 +1347,7 @@ class vimconnector(vimconn.vimconnector):
                     elapsed_time += 5
                 # If we exceeded the timeout rollback
                 if elapsed_time >= volume_timeout:
-                    raise vimconn.vimconnException('Timeout creating volumes for instance ' + name,
+                    raise vimconn.VimConnException('Timeout creating volumes for instance ' + name,
                                                    http_code=vimconn.HTTP_Request_Timeout)
             # get availability Zone
             vm_av_zone = self._get_vm_availability_zone(availability_zone_index, availability_zone_list)
@@ -1378,7 +1378,7 @@ class vimconnector(vimconn.vimconnector):
                     self.neutron.update_port(port_id,
                                              {"port": {"port_security_enabled": False, "security_groups": None}})
                 except Exception as e:
-                    raise vimconn.vimconnException("It was not possible to disable port security for port {}".format(
+                    raise vimconn.VimConnException("It was not possible to disable port security for port {}".format(
                         port_id))
             # print "DONE :-)", server
 
@@ -1409,11 +1409,11 @@ class vimconnector(vimconn.vimconnector):
                                             external_nets.append(net)
 
                                 if len(external_nets) == 0:
-                                    raise vimconn.vimconnException("Cannot create floating_ip automatically since no external "
+                                    raise vimconn.VimConnException("Cannot create floating_ip automatically since no external "
                                                                    "network is present",
                                                                     http_code=vimconn.HTTP_Conflict)
                                 if len(external_nets) > 1:
-                                    raise vimconn.vimconnException("Cannot create floating_ip automatically since multiple "
+                                    raise vimconn.VimConnException("Cannot create floating_ip automatically since multiple "
                                                                    "external networks are present",
                                                                    http_code=vimconn.HTTP_Conflict)
 
@@ -1424,7 +1424,7 @@ class vimconnector(vimconn.vimconnector):
                                 new_floating_ip = self.neutron.create_floatingip(param)
                                 free_floating_ip = new_floating_ip['floatingip']['id']
                             except Exception as e:
-                                raise vimconn.vimconnException(type(e).__name__ + ": Cannot create new floating_ip " +
+                                raise vimconn.VimConnException(type(e).__name__ + ": Cannot create new floating_ip " +
                                                                str(e), http_code=vimconn.HTTP_Conflict)
 
                         while not assigned:
@@ -1441,7 +1441,7 @@ class vimconnector(vimconn.vimconnector):
                                     if time.time() - vm_start_time < server_timeout:
                                         time.sleep(5)
                                         continue
-                                raise vimconn.vimconnException(
+                                raise vimconn.VimConnException(
                                     "Cannot create floating_ip: {} {}".format(type(e).__name__, e),
                                     http_code=vimconn.HTTP_Conflict)
 
@@ -1456,7 +1456,7 @@ class vimconnector(vimconn.vimconnector):
 #            error_value=-vimconn.HTTP_Not_Found
 #            error_text= "vm instance %s not found" % vm_id
 #        except TypeError as e:
-#            raise vimconn.vimconnException(type(e).__name__ + ": "+  str(e), http_code=vimconn.HTTP_Bad_Request)
+#            raise vimconn.VimConnException(type(e).__name__ + ": "+  str(e), http_code=vimconn.HTTP_Bad_Request)
 
         except Exception as e:
             server_id = None
@@ -1507,7 +1507,7 @@ class vimconnector(vimconn.vimconnector):
             elif console_type == "spice-html5":
                 console_dict = server.get_spice_console(console_type)
             else:
-                raise vimconn.vimconnException("console type '{}' not allowed".format(console_type), http_code=vimconn.HTTP_Bad_Request)
+                raise vimconn.VimConnException("console type '{}' not allowed".format(console_type), http_code=vimconn.HTTP_Bad_Request)
 
             console_dict1 = console_dict.get("console")
             if console_dict1:
@@ -1526,7 +1526,7 @@ class vimconnector(vimconn.vimconnector):
                                   }
                     protocol_index += 2
                     return console_dict
-            raise vimconn.vimconnUnexpectedResponse("Unexpected response from VIM")
+            raise vimconn.VimConnUnexpectedResponse("Unexpected response from VIM")
 
         except (nvExceptions.NotFound, ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.BadRequest, ConnectionError) as e:
             self._format_exception(e)
@@ -1676,11 +1676,11 @@ class vimconnector(vimconn.vimconnector):
                 except Exception as e:
                     self.logger.error("Error getting vm interface information {}: {}".format(type(e).__name__, e),
                                       exc_info=True)
-            except vimconn.vimconnNotFoundException as e:
+            except vimconn.VimConnNotFoundException as e:
                 self.logger.error("Exception getting vm status: %s", str(e))
                 vm['status'] = "DELETED"
                 vm['error_msg'] = str(e)
-            except vimconn.vimconnException as e:
+            except vimconn.VimConnException as e:
                 self.logger.error("Exception getting vm status: %s", str(e))
                 vm['status'] = "VIM_ERROR"
                 vm['error_msg'] = str(e)
@@ -1737,7 +1737,7 @@ class vimconnector(vimconn.vimconnector):
                 elif console_type == "spice-html5":
                     console_dict = server.get_spice_console(console_type)
                 else:
-                    raise vimconn.vimconnException("console type '{}' not allowed".format(console_type),
+                    raise vimconn.VimConnException("console type '{}' not allowed".format(console_type),
                                                    http_code=vimconn.HTTP_Bad_Request)
                 try:
                     console_url = console_dict["console"]["url"]
@@ -1746,7 +1746,7 @@ class vimconnector(vimconn.vimconnector):
                     suffix_index = console_url[protocol_index+2:].find("/") + protocol_index+2
                     port_index = console_url[protocol_index+2:suffix_index].find(":") + protocol_index+2
                     if protocol_index < 0 or port_index<0 or suffix_index<0:
-                        raise vimconn.vimconnException("Unexpected response from VIM " + str(console_dict))
+                        raise vimconn.VimConnException("Unexpected response from VIM " + str(console_dict))
                     console_dict2={"protocol": console_url[0:protocol_index],
                                   "server":   console_url[protocol_index+2 : port_index],
                                   "port":     int(console_url[port_index+1 : suffix_index]),
@@ -1754,7 +1754,7 @@ class vimconnector(vimconn.vimconnector):
                                   }
                     return console_dict2
                 except Exception as e:
-                    raise vimconn.vimconnException("Unexpected response from VIM " + str(console_dict))
+                    raise vimconn.VimConnException("Unexpected response from VIM " + str(console_dict))
 
             return None
         except (ksExceptions.ClientException, nvExceptions.ClientException, nvExceptions.NotFound, ConnectionError) as e:
@@ -1786,9 +1786,9 @@ class vimconnector(vimconn.vimconnector):
                     if vlanID not in used_vlanIDs:
                         return vlanID
             except Exception as exp:
-                raise vimconn.vimconnException("Exception {} occurred while generating VLAN ID.".format(exp))
+                raise vimconn.VimConnException("Exception {} occurred while generating VLAN ID.".format(exp))
         else:
-            raise vimconn.vimconnConflictException("Unable to create the SRIOV VLAN network."\
+            raise vimconn.VimConnConflictException("Unable to create the SRIOV VLAN network."\
                 " All given Vlan IDs {} are in use.".format(self.config.get('dataplane_net_vlan_range')))
 
 
@@ -1820,9 +1820,9 @@ class vimconnector(vimconn.vimconnector):
                     if vlanID not in used_vlanIDs:
                         return vlanID
             except Exception as exp:
-                raise vimconn.vimconnException("Exception {} occurred while generating VLAN ID.".format(exp))
+                raise vimconn.VimConnException("Exception {} occurred while generating VLAN ID.".format(exp))
         else:
-            raise vimconn.vimconnConflictException("Unable to create the VLAN segment."
+            raise vimconn.VimConnConflictException("Unable to create the VLAN segment."
                 " All VLAN IDs {} are in use.".format(self.config.get('multisegment_vlan_range')))
 
 
@@ -1838,21 +1838,21 @@ class vimconnector(vimconn.vimconnector):
             vlanID_pattern = r'(\d)*-(\d)*$'
             match_obj = re.match(vlanID_pattern, vlan_range)
             if not match_obj:
-                raise vimconn.vimconnConflictException("Invalid VLAN range for {}: {}.You must provide "\
+                raise vimconn.VimConnConflictException("Invalid VLAN range for {}: {}.You must provide "\
                 "'{}' in format [start_ID - end_ID].".format(text_vlan_range, vlanID_range, text_vlan_range))
 
             start_vlanid , end_vlanid = map(int,vlan_range.split("-"))
             if start_vlanid <= 0 :
-                raise vimconn.vimconnConflictException("Invalid VLAN range for {}: {}."\
+                raise vimconn.VimConnConflictException("Invalid VLAN range for {}: {}."\
                 "Start ID can not be zero. For VLAN "\
                 "networks valid IDs are 1 to 4094 ".format(text_vlan_range, vlanID_range))
             if end_vlanid > 4094 :
-                raise vimconn.vimconnConflictException("Invalid VLAN range for {}: {}."\
+                raise vimconn.VimConnConflictException("Invalid VLAN range for {}: {}."\
                 "End VLAN ID can not be greater than 4094. For VLAN "\
                 "networks valid IDs are 1 to 4094 ".format(text_vlan_range, vlanID_range))
 
             if start_vlanid > end_vlanid:
-                raise vimconn.vimconnConflictException("Invalid VLAN range for {}: {}."\
+                raise vimconn.VimConnConflictException("Invalid VLAN range for {}: {}."\
                     "You must provide '{}' in format start_ID - end_ID and "\
                     "start_ID < end_ID ".format(text_vlan_range, vlanID_range, text_vlan_range))
 
@@ -1970,12 +1970,12 @@ class vimconnector(vimconn.vimconnector):
             new_class = None
             self._reload_connection()
             if ctype not in supportedClassificationTypes:
-                raise vimconn.vimconnNotSupportedException(
+                raise vimconn.VimConnNotSupportedException(
                         'OpenStack VIM connector doesn\'t support provided '
                         'Classification Type {}, supported ones are: '
                         '{}'.format(ctype, supportedClassificationTypes))
             if not self._validate_classification(ctype, definition):
-                raise vimconn.vimconnException(
+                raise vimconn.VimConnException(
                     'Incorrect Classification definition '
                     'for the type specified.')
             classification_dict = definition
@@ -1995,10 +1995,10 @@ class vimconnector(vimconn.vimconnector):
         filter_dict = {"id": class_id}
         class_list = self.get_classification_list(filter_dict)
         if len(class_list) == 0:
-            raise vimconn.vimconnNotFoundException(
+            raise vimconn.VimConnNotFoundException(
                 "Classification '{}' not found".format(class_id))
         elif len(class_list) > 1:
-            raise vimconn.vimconnConflictException(
+            raise vimconn.VimConnConflictException(
                 "Found more than one Classification with this criteria")
         classification = class_list[0]
         return classification
@@ -2040,11 +2040,11 @@ class vimconnector(vimconn.vimconnector):
             if sfc_encap:
                 correlation = 'nsh'
             if len(ingress_ports) != 1:
-                raise vimconn.vimconnNotSupportedException(
+                raise vimconn.VimConnNotSupportedException(
                     "OpenStack VIM connector can only have "
                     "1 ingress port per SFI")
             if len(egress_ports) != 1:
-                raise vimconn.vimconnNotSupportedException(
+                raise vimconn.VimConnNotSupportedException(
                     "OpenStack VIM connector can only have "
                     "1 egress port per SFI")
             sfi_dict = {'name': name,
@@ -2071,9 +2071,9 @@ class vimconnector(vimconn.vimconnector):
         filter_dict = {"id": sfi_id}
         sfi_list = self.get_sfi_list(filter_dict)
         if len(sfi_list) == 0:
-            raise vimconn.vimconnNotFoundException("Service Function Instance '{}' not found".format(sfi_id))
+            raise vimconn.VimConnNotFoundException("Service Function Instance '{}' not found".format(sfi_id))
         elif len(sfi_list) > 1:
-            raise vimconn.vimconnConflictException(
+            raise vimconn.VimConnConflictException(
                 'Found more than one Service Function Instance '
                 'with this criteria')
         sfi = sfi_list[0]
@@ -2117,7 +2117,7 @@ class vimconnector(vimconn.vimconnector):
             for instance in sfis:
                 sfi = self.get_sfi(instance)
                 if sfi.get('sfc_encap') != sfc_encap:
-                    raise vimconn.vimconnNotSupportedException(
+                    raise vimconn.VimConnNotSupportedException(
                         "OpenStack VIM connector requires all SFIs of the "
                         "same SF to share the same SFC Encapsulation")
             sf_dict = {'name': name,
@@ -2142,10 +2142,10 @@ class vimconnector(vimconn.vimconnector):
         filter_dict = {"id": sf_id}
         sf_list = self.get_sf_list(filter_dict)
         if len(sf_list) == 0:
-            raise vimconn.vimconnNotFoundException(
+            raise vimconn.VimConnNotFoundException(
                 "Service Function '{}' not found".format(sf_id))
         elif len(sf_list) > 1:
-            raise vimconn.vimconnConflictException(
+            raise vimconn.VimConnConflictException(
                 "Found more than one Service Function with this criteria")
         sf = sf_list[0]
         return sf
@@ -2211,10 +2211,10 @@ class vimconnector(vimconn.vimconnector):
         filter_dict = {"id": sfp_id}
         sfp_list = self.get_sfp_list(filter_dict)
         if len(sfp_list) == 0:
-            raise vimconn.vimconnNotFoundException(
+            raise vimconn.VimConnNotFoundException(
                 "Service Function Path '{}' not found".format(sfp_id))
         elif len(sfp_list) > 1:
-            raise vimconn.vimconnConflictException(
+            raise vimconn.VimConnConflictException(
                 "Found more than one Service Function Path with this criteria")
         sfp = sfp_list[0]
         return sfp
@@ -2278,11 +2278,11 @@ class vimconnector(vimconn.vimconnector):
                 if sfp_vim.get('fault'):
                     sfp['error_msg'] = str(sfp_vim['fault'])
 
-            except vimconn.vimconnNotFoundException as e:
+            except vimconn.VimConnNotFoundException as e:
                 self.logger.error("Exception getting sfp status: %s", str(e))
                 sfp['status'] = "DELETED"
                 sfp['error_msg'] = str(e)
-            except vimconn.vimconnException as e:
+            except vimconn.VimConnException as e:
                 self.logger.error("Exception getting sfp status: %s", str(e))
                 sfp['status'] = "VIM_ERROR"
                 sfp['error_msg'] = str(e)
@@ -2322,11 +2322,11 @@ class vimconnector(vimconn.vimconnector):
                 if sfi_vim.get('fault'):
                     sfi['error_msg'] = str(sfi_vim['fault'])
 
-            except vimconn.vimconnNotFoundException as e:
+            except vimconn.VimConnNotFoundException as e:
                 self.logger.error("Exception getting sfi status: %s", str(e))
                 sfi['status'] = "DELETED"
                 sfi['error_msg'] = str(e)
-            except vimconn.vimconnException as e:
+            except vimconn.VimConnException as e:
                 self.logger.error("Exception getting sfi status: %s", str(e))
                 sfi['status'] = "VIM_ERROR"
                 sfi['error_msg'] = str(e)
@@ -2366,11 +2366,11 @@ class vimconnector(vimconn.vimconnector):
                 if sf_vim.get('fault'):
                     sf['error_msg'] = str(sf_vim['fault'])
 
-            except vimconn.vimconnNotFoundException as e:
+            except vimconn.VimConnNotFoundException as e:
                 self.logger.error("Exception getting sf status: %s", str(e))
                 sf['status'] = "DELETED"
                 sf['error_msg'] = str(e)
-            except vimconn.vimconnException as e:
+            except vimconn.VimConnException as e:
                 self.logger.error("Exception getting sf status: %s", str(e))
                 sf['status'] = "VIM_ERROR"
                 sf['error_msg'] = str(e)
@@ -2411,11 +2411,11 @@ class vimconnector(vimconn.vimconnector):
                 if classification_vim.get('fault'):
                     classification['error_msg'] = str(classification_vim['fault'])
 
-            except vimconn.vimconnNotFoundException as e:
+            except vimconn.VimConnNotFoundException as e:
                 self.logger.error("Exception getting classification status: %s", str(e))
                 classification['status'] = "DELETED"
                 classification['error_msg'] = str(e)
-            except vimconn.vimconnException as e:
+            except vimconn.VimConnException as e:
                 self.logger.error("Exception getting classification status: %s", str(e))
                 classification['status'] = "VIM_ERROR"
                 classification['error_msg'] = str(e)

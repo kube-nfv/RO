@@ -45,7 +45,7 @@ from .errors import (
     NoRecordFound,
     NoExternalPortFound
 )
-from .sdnconn import SdnConnectorError
+from osm_ro_plugin.sdnconn import SdnConnectorError
 
 INSTANCE_NET_STATUS_ERROR = ('DOWN', 'ERROR', 'VIM_ERROR',
                              'DELETED', 'SCHEDULED_DELETION')

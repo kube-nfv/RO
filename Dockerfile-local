@@ -48,6 +48,7 @@ COPY . /root/RO
 
 RUN /root/RO/RO/osm_ro/scripts/install-osm-im.sh --develop && \
     mkdir -p /var/log/osm && \
+    python3 -m pip install -e /root/RO/RO-plugin && \
     python3 -m pip install -e /root/RO/RO && \
     python3 -m pip install -e /root/RO/RO-client && \
     python3 -m pip install -e /root/RO/RO-VIM-vmware && \

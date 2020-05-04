@@ -32,7 +32,7 @@ import json
 import requests
 import base64
 import logging
-from osm_ro.wim.openflow_conn import OpenflowConn, OpenflowConnException, OpenflowConnConnectionException, \
+from osm_ro_plugin.openflow_conn import OpenflowConn, OpenflowConnException, OpenflowConnConnectionException, \
     OpenflowConnUnexpectedResponse, OpenflowConnAuthException, OpenflowConnNotFoundException, \
     OpenflowConnConflictException, OpenflowConnNotSupportedException, OpenflowConnNotImplemented
 

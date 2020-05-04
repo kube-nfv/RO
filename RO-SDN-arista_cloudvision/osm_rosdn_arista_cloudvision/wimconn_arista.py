@@ -26,7 +26,7 @@
 #
 # This work has been performed in the context of Arista Telefonica OSM PoC.
 ##
-from osm_ro.wim.sdnconn import SdnConnectorBase, SdnConnectorError
+from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 import re
 import socket
 # Required by compare function

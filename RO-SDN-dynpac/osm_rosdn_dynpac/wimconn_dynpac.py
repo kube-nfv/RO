@@ -26,7 +26,7 @@ import json
 import logging
 from enum import Enum
 
-from osm_ro.wim.sdnconn import SdnConnectorBase, SdnConnectorError
+from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 
 
 class SdnError(Enum):

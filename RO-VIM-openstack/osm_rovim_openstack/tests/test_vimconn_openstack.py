@@ -30,8 +30,8 @@ import unittest
 import mock
 from neutronclient.v2_0.client import Client
 
-from osm_ro import vimconn
-from osm_ro.vimconn_openstack import vimconnector
+from osm_ro_plugin import vimconn
+from osm_rovim_openstack.vimconn_openstack import vimconnector
 
 
 __author__ = "Igor D.C."
@@ -238,7 +238,7 @@ class TestSfcOperations(unittest.TestCase):
 
     @mock.patch.object(Client, 'create_sfc_flow_classifier')
     def test_new_classification_unsupported_type(self, create_sfc_flow_classifier):
-        self.assertRaises(vimconn.vimconnNotSupportedException,
+        self.assertRaises(vimconn.VimConnNotSupportedException,
                           self._test_new_classification,
                           create_sfc_flow_classifier, 'h265')
 
@@ -258,11 +258,11 @@ class TestSfcOperations(unittest.TestCase):
     def test_new_sfi_bad_ingress_ports(self, create_sfc_port_pair):
         ingress_ports = ['5311c75d-d718-4369-bbda-cdcc6da60fcc',
                          'a0273f64-82c9-11e7-b08f-6328e53f0fa7']
-        self.assertRaises(vimconn.vimconnNotSupportedException,
+        self.assertRaises(vimconn.VimConnNotSupportedException,
                           self._test_new_sfi,
                           create_sfc_port_pair, True, ingress_ports=ingress_ports)
         ingress_ports = []
-        self.assertRaises(vimconn.vimconnNotSupportedException,
+        self.assertRaises(vimconn.VimConnNotSupportedException,
                           self._test_new_sfi,
                           create_sfc_port_pair, True, ingress_ports=ingress_ports)
 
@@ -270,11 +270,11 @@ class TestSfcOperations(unittest.TestCase):
     def test_new_sfi_bad_egress_ports(self, create_sfc_port_pair):
         egress_ports = ['230cdf1b-de37-4891-bc07-f9010cf1f967',
                         'b41228fe-82c9-11e7-9b44-17504174320b']
-        self.assertRaises(vimconn.vimconnNotSupportedException,
+        self.assertRaises(vimconn.VimConnNotSupportedException,
                           self._test_new_sfi,
                           create_sfc_port_pair, True, egress_ports=egress_ports)
         egress_ports = []
-        self.assertRaises(vimconn.vimconnNotSupportedException,
+        self.assertRaises(vimconn.VimConnNotSupportedException,
                           self._test_new_sfi,
                           create_sfc_port_pair, True, egress_ports=egress_ports)
 
@@ -289,7 +289,7 @@ class TestSfcOperations(unittest.TestCase):
     def test_new_sf_inconsistent_sfc_encap(self, create_sfc_port_pair_group,
                                            get_sfi):
         get_sfi.return_value = {'sfc_encap': 'nsh'}
-        self.assertRaises(vimconn.vimconnNotSupportedException,
+        self.assertRaises(vimconn.VimConnNotSupportedException,
                           self._test_new_sf, create_sfc_port_pair_group)
 
     @mock.patch.object(Client, 'create_sfc_port_chain')
@@ -566,7 +566,7 @@ class TestSfcOperations(unittest.TestCase):
         ]}
 
         # call the VIM connector
-        self.assertRaises(vimconn.vimconnConflictException,
+        self.assertRaises(vimconn.VimConnConflictException,
                           self.vimconn.get_classification,
                           '3196bafc-82dd-11e7-a205-9bf6c14b0721')
 
@@ -580,7 +580,7 @@ class TestSfcOperations(unittest.TestCase):
         list_sfc_flow_classifiers.return_value = {'flow_classifiers': []}
 
         # call the VIM connector
-        self.assertRaises(vimconn.vimconnNotFoundException,
+        self.assertRaises(vimconn.VimConnNotFoundException,
                           self.vimconn.get_classification,
                           '3196bafc-82dd-11e7-a205-9bf6c14b0721')
 
@@ -644,7 +644,7 @@ class TestSfcOperations(unittest.TestCase):
         ]}
 
         # call the VIM connector
-        self.assertRaises(vimconn.vimconnConflictException,
+        self.assertRaises(vimconn.VimConnConflictException,
                           self.vimconn.get_sfi,
                           'c0436d92-82db-11e7-8f9c-5fa535f1261f')
 
@@ -658,7 +658,7 @@ class TestSfcOperations(unittest.TestCase):
         list_sfc_port_pairs.return_value = {'port_pairs': []}
 
         # call the VIM connector
-        self.assertRaises(vimconn.vimconnNotFoundException,
+        self.assertRaises(vimconn.VimConnNotFoundException,
                           self.vimconn.get_sfi,
                           'b22892fc-82d9-11e7-ae85-0fea6a3b3757')
 
@@ -715,7 +715,7 @@ class TestSfcOperations(unittest.TestCase):
         ]}
 
         # call the VIM connector
-        self.assertRaises(vimconn.vimconnConflictException,
+        self.assertRaises(vimconn.VimConnConflictException,
                           self.vimconn.get_sf,
                           'b22892fc-82d9-11e7-ae85-0fea6a3b3757')
 
@@ -729,7 +729,7 @@ class TestSfcOperations(unittest.TestCase):
         list_sfc_port_pair_groups.return_value = {'port_pair_groups': []}
 
         # call the VIM connector
-        self.assertRaises(vimconn.vimconnNotFoundException,
+        self.assertRaises(vimconn.VimConnNotFoundException,
                           self.vimconn.get_sf,
                           'b22892fc-82d9-11e7-ae85-0fea6a3b3757')
 
@@ -796,7 +796,7 @@ class TestSfcOperations(unittest.TestCase):
         ]}
 
         # call the VIM connector
-        self.assertRaises(vimconn.vimconnConflictException,
+        self.assertRaises(vimconn.VimConnConflictException,
                           self.vimconn.get_sfp,
                           '5d002f38-82de-11e7-a770-f303f11ce66a')
 
@@ -810,7 +810,7 @@ class TestSfcOperations(unittest.TestCase):
         list_sfc_port_chains.return_value = {'port_chains': []}
 
         # call the VIM connector
-        self.assertRaises(vimconn.vimconnNotFoundException,
+        self.assertRaises(vimconn.VimConnNotFoundException,
                           self.vimconn.get_sfp,
                           '5d002f38-82de-11e7-a770-f303f11ce66a')
 

@@ -20,4 +20,4 @@ netaddr
 untangle
 pyone
 git+https://github.com/python-oca/python-oca#egg=oca
-git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO
+git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin

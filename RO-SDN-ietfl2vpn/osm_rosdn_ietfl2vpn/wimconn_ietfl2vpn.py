@@ -33,7 +33,7 @@ the Layer 2 service.
 import requests
 import uuid
 import logging
-from osm_ro.wim.sdnconn import SdnConnectorBase, SdnConnectorError
+from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 """CHeck layer where we move it"""
 
 

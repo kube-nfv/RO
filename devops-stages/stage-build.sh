@@ -24,7 +24,11 @@ cp RO/deb_dist/python3-osm-ro_*.deb deb_dist/
 make -C RO-client clean package
 cp RO-client/deb_dist/python3-osm-roclient_*.deb deb_dist/
 
-# VIM plugings:  vmware, openstack, AWS, fos, azure, Opennebula, 
+# RO plugin
+make -C RO-plugin clean package
+cp RO-plugin/deb_dist/python3-osm-ro-plugin_*.deb deb_dist/
+
+# VIM plugings:  vmware, openstack, AWS, fos, azure, Opennebula,
 for vim_plugin in RO-VIM-*
 do
     make -C $vim_plugin clean package

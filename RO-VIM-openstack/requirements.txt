@@ -23,4 +23,4 @@ netaddr
 #TODO py3 python-keystoneclient
 #TODO py3 python-glanceclient
 #TODO py3 python-cinderclient
-git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO
+git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin
