@@ -320,6 +320,8 @@ class vim_thread(threading.Thread):
                 copy_to["sdn_net_id"] = copy_from["sdn_net_id"]
             if copy_from.get("interfaces"):
                 copy_to["interfaces"] = copy_from["interfaces"]
+            if copy_from.get("sdn-ports"):
+                copy_to["sdn-ports"] = copy_from["sdn-ports"]
             if copy_from.get("created_items"):
                 if not copy_to.get("created_items"):
                     copy_to["created_items"] = {}
@@ -1138,19 +1140,21 @@ class vim_thread(threading.Thread):
             # look for ports
             sdn_ports = []
             pending_ports = 0
+            vlan_used = None
 
             ports = self.db.get_rows(FROM='instance_interfaces', WHERE={'instance_wim_net_id': task["item_id"]})
             sdn_need_update = False
             for port in ports:
+                vlan_used = port.get("vlan") or vlan_used
                 # TODO. Do not connect if already done
                 if port.get("compute_node") and port.get("pci"):
-                    for map in self.port_mappings:
-                        if map.get("device_id") == port["compute_node"] and \
-                                map.get("device_interface_id") == port["pci"]:
+                    for pmap in self.port_mappings:
+                        if pmap.get("device_id") == port["compute_node"] and \
+                                pmap.get("device_interface_id") == port["pci"]:
                             break
                     else:
                         if self.sdnconn_config.get("mapping_not_needed"):
-                            map = {
+                            pmap = {
                                 "service_endpoint_id": "{}:{}".format(port["compute_node"], port["pci"]),
                                 "service_endpoint_encapsulation_info": {
                                     "vlan": port["vlan"],
@@ -1160,25 +1164,25 @@ class vim_thread(threading.Thread):
                                 }
                             }
                         else:
-                            map = None
+                            pmap = None
                             error_list.append("Port mapping not found for compute_node={} pci={}".format(
                                 port["compute_node"], port["pci"]))
 
-                    if map:
-                        if port["uuid"] not in connected_ports or port["modified_at"] > last_update:
+                    if pmap:
+                        if port["modified_at"] > last_update:
                             sdn_need_update = True
                         new_connected_ports.append(port["uuid"])
                         sdn_ports.append({
-                            "service_endpoint_id": map["service_endpoint_id"],
+                            "service_endpoint_id": pmap["service_endpoint_id"],
                             "service_endpoint_encapsulation_type": "dot1q" if port["model"] == "SR-IOV" else None,
                             "service_endpoint_encapsulation_info": {
                                 "vlan": port["vlan"],
                                 "mac": port["mac_address"],
-                                "device_id": map.get("device_id"),
-                                "device_interface_id": map.get("device_interface_id"),
-                                "switch_dpid": map.get("switch_dpid"),
-                                "switch_port": map.get("switch_port"),
-                                "service_mapping_info": map.get("service_mapping_info"),
+                                "device_id": pmap.get("device_id"),
+                                "device_interface_id": pmap.get("device_interface_id"),
+                                "switch_dpid": pmap.get("switch_dpid"),
+                                "switch_port": pmap.get("switch_port"),
+                                "service_mapping_info": pmap.get("service_mapping_info"),
                             }
                         })
 
@@ -1187,8 +1191,28 @@ class vim_thread(threading.Thread):
             if pending_ports:
                 error_list.append("Waiting for getting interfaces location from VIM. Obtained '{}' of {}"
                                   .format(len(ports)-pending_ports, len(ports)))
+
+            # connect external ports
+            for index, external_port in enumerate(task["extra"].get("sdn-ports") or ()):
+                external_port_id = external_port.get("service_endpoint_id") or str(index)
+                sdn_ports.append({
+                    "service_endpoint_id": external_port_id,
+                    "service_endpoint_encapsulation_type": external_port.get("service_endpoint_encapsulation_type",
+                                                                             "dot1q"),
+                    "service_endpoint_encapsulation_info": {
+                        "vlan": external_port.get("vlan") or vlan_used,
+                        "mac": external_port.get("mac_address"),
+                        "device_id": external_port.get("device_id"),
+                        "device_interface_id": external_port.get("device_interface_id"),
+                        "switch_dpid": external_port.get("switch_dpid") or external_port.get("switch_id"),
+                        "switch_port": external_port.get("switch_port"),
+                        "service_mapping_info": external_port.get("service_mapping_info"),
+                    }})
+                new_connected_ports.append(external_port_id)
+
             # if there are more ports to connect or they have been modified, call create/update
-            if sdn_need_update and len(sdn_ports) >= 2:
+            if (set(connected_ports) != set(new_connected_ports) or sdn_need_update) and len(sdn_ports) >= 2:
+                last_update = time.time()
                 if not wimconn_net_id:
                     if params[0] == "data":
                         net_type = "ELAN"
@@ -1201,7 +1225,6 @@ class vim_thread(threading.Thread):
                 else:
                     created_items = self.sdnconnector.edit_connectivity_service(wimconn_net_id, conn_info=created_items,
                                                                                 connection_points=sdn_ports)
-                last_update = time.time()
                 connected_ports = new_connected_ports
             elif wimconn_net_id:
                 try:

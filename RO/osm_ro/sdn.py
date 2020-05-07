@@ -207,8 +207,8 @@ class Sdn:
         # get database wim_accounts
         wim_account = self._get_of_controller(of_id)
 
-        db_wim_update = {x: ofc_data[x] for x in ("name", "description", "type", "wim_url")}
-        db_wim_account_update = {x: ofc_data[x] for x in ("name", "user", "password")}
+        db_wim_update = {x: ofc_data[x] for x in ("name", "description", "type", "wim_url") if x in ofc_data}
+        db_wim_account_update = {x: ofc_data[x] for x in ("name", "user", "password") if x in ofc_data}
         db_wim_account_config = ofc_data.get("config", {})
 
         if ofc_data.get("ip") or ofc_data.get("port"):
@@ -222,13 +222,15 @@ class Sdn:
             db_wim_account_config["version"] = ofc_data["version"]
 
         if db_wim_account_config:
-            db_wim_account_update["config"] = yaml.load(wim_account["config"]) or {}
+            db_wim_account_update["config"] = yaml.load(wim_account["config"], Loader=yaml.Loader) or {}
             db_wim_account_update["config"].update(db_wim_account_config)
+            db_wim_account_update["config"] = yaml.safe_dump(db_wim_account_update["config"], default_flow_style=True,
+                                                             width=256)
 
         if db_wim_account_update:
             self.db.update_rows('wim_accounts', db_wim_account_update, WHERE={'uuid': of_id})
         if db_wim_update:
-            self.db.update_rows('wims', db_wim_account_update, WHERE={'uuid': wim_account["wim_id"]})
+            self.db.update_rows('wims', db_wim_update, WHERE={'uuid': wim_account["wim_id"]})
 
     def _get_of_controller(self, of_id):
         wim_accounts = self.db.get_rows(FROM='wim_accounts', WHERE={"uuid": of_id, "sdn": "true"})
@@ -257,7 +259,7 @@ class Sdn:
         of_data = {x: wim_account[x] for x in ("uuid", "name", "user")}
         if isinstance(wim_account["config"], str):
             config = yaml.load(wim_account["config"], Loader=yaml.Loader)
-        of_data["dpid"] = config.get("dpid")
+        of_data["dpid"] = config.get("switch_id") or config.get("dpid")
         of_data["version"] = config.get("version")
         if wim:
             of_data["url"] = wim["wim_url"]
@@ -300,13 +302,14 @@ class Sdn:
         wim_id = wim_account["wim_id"]
         db_wim_port_mappings = []
         for map in maps:
+            _switch_dpid = map.get("switch_id") or map.get("switch_dpid") or switch_dpid
             new_map = {
                 'wim_id': wim_id,
-                'switch_dpid': switch_dpid,
+                'switch_dpid': _switch_dpid,
                 "switch_port": map.get("switch_port"),
                 'datacenter_id': vim_id,
                 "device_id": map.get("compute_node"),
-                "service_endpoint_id": switch_dpid + "-" + str(uuid4())
+                "service_endpoint_id": _switch_dpid + "-" + str(uuid4())
             }
             if map.get("pci"):
                 new_map["device_interface_id"] = map["pci"].lower()
@@ -344,3 +347,21 @@ class Sdn:
             else:
                 map["service_mapping_info"] = {}
         return maps
+
+    def get_ports(self, instance_wim_net_id):
+        # get wim_id
+        instance_wim_net = self.db.get_rows(FROM='instance_wim_nets', WHERE={"uuid": instance_wim_net_id})
+        wim_id = instance_wim_net[0]["wim_id"]
+        switch_ports = []
+        ports = self.db.get_rows(FROM='instance_interfaces', WHERE={"instance_wim_net_id": instance_wim_net_id})
+        maps = self.get_of_port_mappings(db_filter={"wim_id": wim_id})
+        for port in ports:
+            map_ = next((x for x in maps if x.get("device_id") == port["compute_node"] and
+                         x.get("device_interface_id") == port["pci"]), None)
+            if map_:
+                switch_port = {'switch_dpid': map_.get('switch_dpid') or map_.get('switch_id'),
+                               'switch_port': map_.get('switch_port')}
+                if switch_port not in switch_ports:
+                    switch_ports.append(switch_port)
+        return switch_ports
+

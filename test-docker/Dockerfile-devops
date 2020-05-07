@@ -21,7 +21,7 @@ from ubuntu:18.04
 MAINTAINER  Alfonso Tierno <alfonso.tiernosepulveda@telefoncia.com>
 
 RUN apt-get update && apt-get -y install curl software-properties-common git tox python3-pip \
-    && python3 -m pip install --upgrade pip && python3 -m pip install pyangbind
+    && python3 -m pip install --upgrade pip && python3 -m pip install pyangbind networking-l2gw
 
 ARG REPOSITORY_BASE=http://osm-download.etsi.org/repository/osm/debian
 ARG RELEASE=ReleaseSIX-daily

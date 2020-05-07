@@ -29,13 +29,15 @@ class SdnConnectorOnosOf(SdnConnectorOpenFlow):
     def __init__(self, wim, wim_account, config=None, logger=None):
         """Creates a connectivity based on pro-active openflow rules
         """
-        self.logger = logging.getLogger('openmano.sdn.onosof')
+        self.logger = logging.getLogger('openmano.sdnconn.onosof')
         super().__init__(wim, wim_account, config, logger)
         of_params = {
             "of_url": wim["wim_url"],
-            "of_dpid": config.get("dpid"),
+            "of_dpid": config.get("dpid") or config.get("switch_id"),
             "of_user": wim_account["user"],
             "of_password": wim_account["password"],
         }
         self.openflow_conn = OfConnOnos(of_params)
         super().__init__(wim, wim_account, config, logger, self.openflow_conn)
+        self.logger.debug("Init sdn plugin '{}' dpid={} user={}".format(of_params["of_url"], of_params["of_dpid"],
+                                                                        of_params["of_user"]))

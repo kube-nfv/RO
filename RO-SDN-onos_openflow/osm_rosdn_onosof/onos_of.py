@@ -49,7 +49,7 @@ class OfConnOnos(OpenflowConn):
         """ Constructor.
             :param params: dictionary with the following keys:
                 of_dpid:     DPID to use for this controller ?? Does a controller have a dpid?
-                url:         must be [http://HOST:PORT/]
+                of_url:      must be [http://HOST:PORT/]
                 of_user:     user credentials, can be missing or None
                 of_password: password credentials
                 of_debug:    debug level for logging. Default to ERROR
@@ -87,7 +87,7 @@ class OfConnOnos(OpenflowConn):
             self.auth = self.auth.decode()
             self.headers['authorization'] = 'Basic ' + self.auth
 
-        self.logger = logging.getLogger('openmano.sdn.onosof')
+        self.logger = logging.getLogger('openmano.sdnconn.onosof')
         #self.logger.setLevel( getattr(logging, params.get("of_debug", "ERROR")) )
         self.logger.debug("onosof plugin initialized")
         self.ip_address = None
@@ -164,7 +164,7 @@ class OfConnOnos(OpenflowConn):
         try:
             self.headers['content-type'] = 'text/plain'
             of_response = requests.get(self.url + "devices/" + self.id + "/ports", headers=self.headers)
-            error_text = "Openflow response %d: %s" % (of_response.status_code, of_response.text)
+            error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
             if of_response.status_code != 200:
                 self.logger.warning("obtain_port_correspondence " + error_text)
                 raise OpenflowConnUnexpectedResponse(error_text)
@@ -220,7 +220,7 @@ class OfConnOnos(OpenflowConn):
                         (vlan, None/int): for stripping/setting a vlan tag
                         (out, port):      send to this port
                     switch:       DPID, all
-                 Raise a openflowconnUnexpectedResponse expection in case of failure
+                 Raise a openflowconnUnexpectedResponse exception in case of failure
         """
 
         try:
@@ -235,7 +235,7 @@ class OfConnOnos(OpenflowConn):
 
             # The configured page does not exist if there are no rules installed. In that case we return an empty dict
             if of_response.status_code == 404:
-                return {}
+                return []
 
             elif of_response.status_code != 200:
                 self.logger.warning("get_of_rules " + error_text)
@@ -252,8 +252,7 @@ class OfConnOnos(OpenflowConn):
             flow_list = info.get('flows')
 
             if flow_list is None:
-                return {}
-
+                return []
             if type(flow_list) is not list:
                 self.logger.error(
                     "get_of_rules. Unexpected response at 'flows', not a list: %s",
@@ -261,7 +260,7 @@ class OfConnOnos(OpenflowConn):
                 raise OpenflowConnUnexpectedResponse("Unexpected response at 'flows', not a list. "
                                                                    "Wrong version?")
 
-            rules = [] # Response list
+            rules = []  # Response list
             for flow in flow_list:
                 if not ('id' in flow and 'selector' in flow and 'treatment' in flow and \
                                     'instructions' in flow['treatment'] and 'criteria' in \
@@ -362,7 +361,7 @@ class OfConnOnos(OpenflowConn):
                 actions:      list of actions, composed by a pair tuples with these posibilities:
                     ('vlan', None/int): for stripping/setting a vlan tag
                     ('out', port):      send to this port
-        :return: Raise a openflowconnUnexpectedResponse expection in case of failure
+        :return: Raise a openflowconnUnexpectedResponse exception in case of failure
         """
         try:
             self.logger.debug("new_flow data: {}".format(data))

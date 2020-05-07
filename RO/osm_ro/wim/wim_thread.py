@@ -61,7 +61,7 @@ from .errors import (
 )
 from .failing_connector import FailingConnector
 from .sdnconn import SdnConnectorError
-from .wimconn_fake import FakeConnector
+from .wimconn_dummy import DummyConnector
 
 ACTIONS = {
     'instance_wim_nets': wan_link_actions.ACTIONS
@@ -69,7 +69,7 @@ ACTIONS = {
 
 CONNECTORS = {
     # "odl": wimconn_odl.OdlConnector,
-    "fake": FakeConnector,
+    "dummy": DummyConnector,
     # Add extra connectors here not managed via plugins
 }
 
@@ -110,8 +110,8 @@ class WimThread(threading.Thread):
                                  wim_account['name'], wim_account['uuid'])
         super(WimThread, self).__init__(name=name)
         self.plugins = plugins
-        if "rosdn_fake" not in self.plugins:
-            self.plugins["rosdn_fake"] = FakeConnector
+        if "rosdn_dummy" not in self.plugins:
+            self.plugins["rosdn_dummy"] = DummyConnector
 
         self.name = name
         self.connector = None

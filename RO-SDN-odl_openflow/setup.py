@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright VMware Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -19,39 +18,38 @@
 
 from setuptools import setup
 
-_name = "osm_rovim_vmware"
+_name = "osm_rosdn_odlof"
 
 README = """
 ===========
-osm-rovim_vmware
+osm-rosdn_odlof
 ===========
 
-osm-ro pluging for vmware VIM
+osm-ro plugin for OpenDayLight SDN using pre-computed openflow rules
 """
 
 setup(
     name=_name,
-    description='OSM ro vim plugin for vmware',
+    description='OSM RO plugin for SDN with odl openflow rules',
     long_description=README,
     version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
     # version=VERSION,
     # python_requires='>3.5.0',
     author='ETSI OSM',
-    # TODO py3 author_email='',
-    maintainer='OSM_TECH@LIST.ETSI.ORG',  # TODO py3
-    # TODO py3 maintainer_email='',
+    author_email='alfonso.tiernosepulveda@telefonica.com',
+    maintainer='Alfonso Tierno',
+    maintainer_email='alfonso.tiernosepulveda@telefonica.com',
     url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
     license='Apache 2.0',
 
     packages=[_name],
     include_package_data=True,
     install_requires=[
-        "pyvcloud==19.1.1", "progressbar", "prettytable", "pyvmomi",
-        "requests", "netaddr", "PyYAML",
+        "requests",
         "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"
     ],
     setup_requires=['setuptools-version-command'],
     entry_points={
-        'osm_rovim.plugins': ['rovim_vmware = osm_rovim_vmware.vimconn_vmware'],
+        'osm_rosdn.plugins': ['rosdn_odlof = osm_rosdn_odlof.sdnconn_odlof:SdnConnectorOdlOf'],
     },
 )

@@ -13,6 +13,13 @@
 # limitations under the License.
 ##
 
-requests
-git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO
+all: clean package
+
+clean:
+	rm -rf dist deb_dist osm_rosdn_arista-*.tar.gz osm_rosdn_arista.egg-info .eggs
+
+package:
+	python3 setup.py --command-packages=stdeb.command sdist_dsc
+	cp debian/python3-osm-rosdn-arista.postinst deb_dist/osm-rosdn-arista*/debian/
+	cd deb_dist/osm-rosdn-arista*/ && dpkg-buildpackage -rfakeroot -uc -us
 

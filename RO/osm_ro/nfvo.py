@@ -29,6 +29,7 @@ __date__ ="$16-sep-2014 22:05:01$"
 
 # import imp
 import json
+import string
 import yaml
 from random import choice as random_choice
 from osm_ro import utils
@@ -64,7 +65,7 @@ from pkg_resources import iter_entry_points
 
 # WIM
 from .wim import sdnconn
-from .wim.wimconn_fake import FakeConnector
+from .wim.wimconn_dummy import DummyConnector
 from .wim.failing_connector import FailingConnector
 from .http_tools import errors as httperrors
 from .wim.engine import WimEngine
@@ -195,8 +196,8 @@ def start_service(mydb, persistence=None, wim=None):
 
     try:
         worker_id = get_process_id()
-        if "rosdn_fake" not in plugins:
-            plugins["rosdn_fake"] = FakeConnector
+        if "rosdn_dummy" not in plugins:
+            plugins["rosdn_dummy"] = DummyConnector
         # starts ovim library
         ovim = Sdn(db, plugins)
 
@@ -988,6 +989,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
 
             # table nets (internal-vld)
             net_id2uuid = {}  # for mapping interface with network
+            net_id2index = {}  # for mapping interface with network
             for vld in vnfd.get("internal-vld").values():
                 net_uuid = str(uuid4())
                 uuid_list.append(net_uuid)
@@ -1000,6 +1002,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                     "type": "bridge",   # TODO adjust depending on connection point type
                 }
                 net_id2uuid[vld.get("id")] = net_uuid
+                net_id2index[vld.get("id")] = len(db_nets)
                 db_nets.append(db_net)
                 # ip-profile, link db_ip_profile with db_sce_net
                 if vld.get("ip-profile-ref"):
@@ -1192,7 +1195,7 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                 raise KeyError()
 
                             if vdu_id in vdu_id2cp_name:
-                                vdu_id2cp_name[vdu_id] = None  # more than two connecdtion point for this VDU
+                                vdu_id2cp_name[vdu_id] = None  # more than two connection point for this VDU
                             else:
                                 vdu_id2cp_name[vdu_id] = db_interface["external_name"]
 
@@ -1227,6 +1230,10 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                             if not icp:
                                 raise KeyError("is not referenced by any 'internal-vld'")
 
+                            # set network type as data
+                            if iface.get("virtual-interface") and iface["virtual-interface"].get("type") in \
+                                    ("SR-IOV", "PCI-PASSTHROUGH"):
+                                db_nets[net_id2index[icp_vld.get("id")]]["type"] = "data"
                             db_interface["net_id"] = net_id2uuid[icp_vld.get("id")]
                             if str(icp_descriptor.get("port-security-enabled")).lower() == "false":
                                 db_interface["port_security"] = 0
@@ -3222,12 +3229,12 @@ def create_instance(mydb, tenant_id, instance_dict):
                     else:
                         update(scenario_net['ip_profile'], ipprofile_db)
 
-                if 'provider-network' in net_instance_desc:
-                        provider_network_db = net_instance_desc['provider-network']
-                        if 'provider-network' not in scenario_net:
-                            scenario_net['provider-network'] = provider_network_db
-                        else:
-                            update(scenario_net['provider-network'], provider_network_db)
+                if net_instance_desc.get('provider-network'):
+                    provider_network_db = net_instance_desc['provider-network']
+                    if 'provider_network' not in scenario_net:
+                        scenario_net['provider_network'] = provider_network_db
+                    else:
+                        update(scenario_net['provider_network'], provider_network_db)
 
             for vdu_id, vdu_instance_desc in vnf_instance_desc.get("vdus", {}).items():
                 for scenario_vm in scenario_vnf['vms']:
@@ -3308,7 +3315,10 @@ def create_instance(mydb, tenant_id, instance_dict):
             # TODO: use this information during network creation
             wim_account_id = wim_account_name = None
             if len(involved_datacenters) > 1 and 'uuid' in sce_net:
-                if target_wim_account is None or target_wim_account is True:  # automatic selection of WIM
+                urls = [myvims[v].url for v in involved_datacenters]
+                if len(set(urls)) < 2:
+                    wim_usage[sce_net['uuid']] = False
+                elif target_wim_account is None or target_wim_account is True:  # automatic selection of WIM
                     # OBS: sce_net without uuid are used internally to VNFs
                     # and the assumption is that VNFs will not be split among
                     # different datacenters
@@ -3474,7 +3484,11 @@ def create_instance(mydb, tenant_id, instance_dict):
                         "created": create_network, # TODO py3
                         "sdn": True,
                     })
+
                     task_wim_extra = {"params": [net_type, wim_account_name]}
+                    # add sdn interfaces
+                    if sce_net.get('provider_network') and sce_net['provider_network'].get("sdn-ports"):
+                        task_wim_extra["sdn-ports"] = sce_net['provider_network'].get("sdn-ports")
                     db_vim_action = {
                         "instance_action_id": instance_action_id,
                         "status": "SCHEDULED",
@@ -3810,6 +3824,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     sce_net2wim_instance = params_out["sce_net2wim_instance"]
 
     vnf_net2instance = {}
+    vnf_net2wim_instance = {}
 
     # 2. Creating new nets (vnf internal nets) in the VIM"
     # For each vnf net, we create it and we add it to instanceNetlist.
@@ -3857,6 +3872,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 "created": True,  # TODO py3
                 "sdn": True,
             })
+            vnf_net2wim_instance[net_uuid] = sdn_net_id
 
         db_net = {
             "uuid": net_uuid,
@@ -4093,7 +4109,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             else:
                 netDict['net_id'] = "TASK-{}".format(net2task_id[sce_vnf['uuid']][iface['net_id']])
                 instance_net_id = vnf_net2instance[sce_vnf['uuid']][iface['net_id']]
-                instance_wim_net_id = None
+                instance_wim_net_id = vnf_net2wim_instance.get(instance_net_id)
                 task_depends_on.append(net2task_id[sce_vnf['uuid']][iface['net_id']])
             # skip bridge ifaces not connected to any net
             if 'net_id' not in netDict or netDict['net_id'] == None:
@@ -4175,14 +4191,14 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 db_vm_iface_instance.update(db_vm_iface)
                 if db_vm_iface_instance.get("ip_address"):  # increment ip_address
                     ip = db_vm_iface_instance.get("ip_address")
-                    i = ip.rfind(".")
-                    if i > 0:
-                        try:
+                    try:
+                        i = ip.rfind(".")
+                        if i > 0:
                             i += 1
                             ip = ip[i:] + str(int(ip[:i]) + 1)
                             db_vm_iface_instance["ip_address"] = ip
-                        except:
-                            db_vm_iface_instance["ip_address"] = None
+                    except:
+                        db_vm_iface_instance["ip_address"] = None
                 db_instance_interfaces.append(db_vm_iface_instance)
                 myVMDict['networks'][iface_index]["uuid"] = iface_uuid
                 iface_index += 1
@@ -4812,6 +4828,16 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                         "extra": yaml.safe_dump({"params": vm_interfaces},
                                                 default_flow_style=True, width=256)
                     }
+                    # get affected instance_interfaces (deleted on cascade) to check if a wim_network must be updated
+                    deleted_interfaces = mydb.get_rows(
+                        SELECT=("instance_wim_net_id", ),
+                        FROM="instance_interfaces",
+                        WHERE={"instance_vm_id": vdu_id, "instance_wim_net_id<>": None},
+                    )
+                    for deleted_interface in deleted_interfaces:
+                        db_vim_actions.append({"TO-UPDATE": {}, "WHERE": {
+                            "item": "instance_wim_nets", "item_id": deleted_interface["instance_wim_net_id"]}})
+
                     task_index += 1
                     db_vim_actions.append(db_vim_action)
                     vm_result["deleted"].append(vdu_id)
@@ -4870,26 +4896,31 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                             "uuid": iface_uuid,
                             'instance_vm_id': vm_uuid,
                             "instance_net_id": vm_iface["instance_net_id"],
+                            "instance_wim_net_id": vm_iface["instance_wim_net_id"],
                             'interface_id': vm_iface['interface_id'],
                             'type': vm_iface['type'],
+                            'model': vm_iface['model'],
                             'floating_ip': vm_iface['floating_ip'],
                             'port_security': vm_iface['port_security']
                         }
                         db_instance_interfaces.append(db_vm_iface)
+                        if db_vm_iface["instance_wim_net_id"]:
+                            db_vim_actions.append({"TO-UPDATE": {}, "WHERE": {
+                                "item": "instance_wim_nets", "item_id": db_vm_iface["instance_wim_net_id"]}})
                     task_params_copy = deepcopy(task_params)
                     for iface in task_params_copy[5]:
                         iface["uuid"] = iface2iface[iface["uuid"]]
                         # increment ip_address
-                        if "ip_address" in iface:
-                            ip = iface.get("ip_address")
-                            i = ip.rfind(".")
-                            if i > 0:
-                                try:
+                        if iface.get("ip_address"):
+                            try:
+                                ip = iface["ip_address"]
+                                i = ip.rfind(".")
+                                if i > 0:
                                     i += 1
                                     ip = ip[i:] + str(int(ip[:i]) + 1)
                                     iface["ip_address"] = ip
-                                except:
-                                    iface["ip_address"] = None
+                            except:
+                                iface["ip_address"] = None
                     if vm_name:
                         task_params_copy[0] = vm_name
                     db_vim_action = {
@@ -5102,6 +5133,15 @@ def new_datacenter(mydb, datacenter_descriptor):
     datacenter_type = datacenter_descriptor.get("type", "openvim");
     # module_info = None
 
+    for url_field in ('vim_url', 'vim_url_admin'):
+        # It is common that users copy and paste the URL from the VIM website
+        # (example OpenStack), therefore a common mistake is to include blank
+        # characters at the end of the URL. Let's remove it and just in case,
+        # lets remove trailing slash as well.
+        url = datacenter_descriptor.get(url_field)
+        if url:
+            datacenter_descriptor[url_field] = url.strip(string.whitespace + '/')
+
     # load plugin
     plugin_name = "rovim_" + datacenter_type
     if plugin_name not in plugins:
@@ -5288,7 +5328,7 @@ def edit_vim_account(mydb, nfvo_tenant, datacenter_tenant_id, datacenter_id=None
     if config:
         original_config_dict = yaml.load(original_config, Loader=yaml.Loader)
         original_config_dict.update(config)
-        update["config"] = yaml.safe_dump(original_config_dict, default_flow_style=True, width=256)
+        update_["config"] = yaml.safe_dump(original_config_dict, default_flow_style=True, width=256)
     if name:
         update_['name'] = name
     if vim_tenant:
@@ -5846,6 +5886,8 @@ def datacenter_sdn_port_mapping_set(mydb, tenant_id, datacenter_id, sdn_port_map
                 pci = port.get("pci")
                 element["switch_port"] = port.get("switch_port")
                 element["switch_mac"] = port.get("switch_mac")
+                element["switch_dpid"] = port.get("switch_dpid")
+                element["switch_id"] = port.get("switch_id")
                 if not element["switch_port"] and not element["switch_mac"]:
                     raise NfvoException ("The mapping must contain 'switch_port' or 'switch_mac'", httperrors.Bad_Request)
                 for pci_expanded in utils.expand_brackets(pci):

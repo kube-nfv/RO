@@ -14,5 +14,8 @@
 ##
 
 requests
-git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO
+jsonrpclib-pelix
+uuid
+cvprac
+git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro
 

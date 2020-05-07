@@ -44,11 +44,11 @@ setup(
 
     packages=[_name],
     include_package_data=True,
-    dependency_links=["git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro"],
     install_requires=[
         "python-openstackclient", "python-neutronclient", 
         "requests", "netaddr", "PyYAML",
-        "osm-ro", # TODO py3 "networking-l2gw"
+        "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"
+        # TODO py3 "networking-l2gw"
         # "python-novaclient", "python-keystoneclient", "python-glanceclient", "python-cinderclient",
     ],
     setup_requires=['setuptools-version-command'],

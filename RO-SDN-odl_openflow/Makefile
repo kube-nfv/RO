@@ -13,6 +13,12 @@
 # limitations under the License.
 ##
 
-requests
-git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO
+all: clean package
+
+clean:
+	rm -rf dist deb_dist osm_rosdn_odlof-*.tar.gz osm_rosdn_odlof.egg-info .eggs
+
+package:
+	python3 setup.py --command-packages=stdeb.command sdist_dsc
+	cd deb_dist/osm-rosdn-odlof*/ && dpkg-buildpackage -rfakeroot -uc -us
 

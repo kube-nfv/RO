@@ -16,20 +16,20 @@
 # limitations under the License.
 #
 ##
-"""The SdnConnectorFloodLightOf connector is responsible for creating services using pro active operflow rules.
+"""The SdnConnectorOdlOf connector is responsible for creating services using pro active operflow rules.
 """
 
 import logging
 from osm_ro.wim.openflow_conn import SdnConnectorOpenFlow
-from .floodlight_of import OfConnFloodLight
+from .odl_of import OfConnOdl
 
 
-class SdnConnectorFloodLightOf(SdnConnectorOpenFlow):
+class SdnConnectorOdlOf(SdnConnectorOpenFlow):
 
     def __init__(self, wim, wim_account, config=None, logger=None):
         """Creates a connectivity based on pro-active openflow rules
         """
-        self.logger = logging.getLogger('openmano.sdnconn.floodlightof')
+        self.logger = logging.getLogger('openmano.sdnconn.odlof')
         super().__init__(wim, wim_account, config, logger)
         of_params = {
             "of_url": wim["wim_url"],
@@ -37,5 +37,5 @@ class SdnConnectorFloodLightOf(SdnConnectorOpenFlow):
             "of_user": wim_account["user"],
             "of_password": wim_account["password"],
         }
-        self.openflow_conn = OfConnFloodLight(of_params)
+        self.openflow_conn = OfConnOdl(of_params)
         super().__init__(wim, wim_account, config, logger, self.openflow_conn)

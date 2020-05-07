@@ -53,8 +53,8 @@ import osm_ro
 
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
-__version__ = "7.0.0.post13"
-version_date = "Jan 2019"
+__version__ = "7.1.0.post1"
+version_date = "May 2020"
 database_version = 40      # expected database schema version
 
 global global_config
@@ -292,7 +292,7 @@ if __name__ == "__main__":
         logger.critical("Starting openmano server version: '%s %s' command: '%s'",
                         ro_version, version_date, " ".join(sys.argv))
 
-        for log_module in ("nfvo", "http", "vim", "wim", "db", "console", "ovim","sdn"):
+        for log_module in ("nfvo", "http", "vim", "wim", "db", "console", "ovim", "sdn", "sdnconn"):
             log_level_module = "log_level_" + log_module
             log_file_module = "log_file_" + log_module
             logger_module = logging.getLogger('openmano.' + log_module)

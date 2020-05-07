@@ -17,8 +17,7 @@
 # contact with: OSM_TECH@list.etsi.org
 ##
 
-echo "POST INSTALL OSM-ROVIM-AZURE"
+echo "POST INSTALL OSM-ROSDN-ARISTA"
 
-#Pip packages required for azure connector
-python3 -m pip install azure==4.0.0
-
+#Pip packages required for openstack connector
+python3 -m pip install cvprac

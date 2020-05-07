@@ -784,6 +784,10 @@ class nfvo_db(db_base.db_base):
                     if "TO-DELETE" in row:
                         self._delete_row_by_id_internal(table_name, row["TO-DELETE"])
                         continue
+                    if "TO-UPDATE" in row:
+                        self._update_rows(table_name, UPDATE=row["TO-UPDATE"], WHERE=row["WHERE"],
+                                          modified_time=created_time)
+                        continue
                     if table_name in self.tables_with_created_field:
                         if "created_at" in row:
                             created_time_param = created_time + (index + row.pop("created_at"))*0.00001
