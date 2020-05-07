@@ -18,18 +18,16 @@
 #
 
 import logging
-import uuid
-import copy
 import json
 import yaml
 
-#import requests
-#from requests.auth import HTTPBasicAuth
 from osm_ro.wim.sdnconn import SdnConnectorBase, SdnConnectorError
-from osm_rosdn_juniper_contrail.rest_lib import Http
+from osm_rosdn_juniper_contrail.rest_lib import ContrailHttp
+from osm_rosdn_juniper_contrail.rest_lib import NotFound
+from osm_rosdn_juniper_contrail.rest_lib import DuplicateFound
+from osm_rosdn_juniper_contrail.rest_lib import HttpException
 
-from io import BytesIO
-import pycurl
+from osm_rosdn_juniper_contrail.sdn_api import UnderlayApi
 
 
 class JuniperContrail(SdnConnectorBase):
@@ -73,21 +71,21 @@ class JuniperContrail(SdnConnectorBase):
         self.user = wim_account.get("user")
         self.password = wim_account.get("password")
 
-        url = wim.get("wim_url")
+        url = wim.get("wim_url") # underlay url
         auth_url = None
-        overlay_url = None
         self.project = None
         self.domain = None
         self.asn = None
         self.fabric = None
+        overlay_url = None
         self.vni_range = None
         if config:
             auth_url = config.get("auth_url")
-            overlay_url = config.get("overlay_url")
             self.project = config.get("project")
             self.domain = config.get("domain")
             self.asn = config.get("asn")
             self.fabric = config.get("fabric")
+            self.overlay_url = config.get("overlay_url")
             self.vni_range = config.get("vni_range")
 
         if not url:
@@ -98,28 +96,10 @@ class JuniperContrail(SdnConnectorBase):
             url = url + "/"
         self.url = url
 
-        if not self.project:
-            raise SdnConnectorError("'project' must be provided")
-        if not self.asn:
-            # TODO: Get ASN from controller config; otherwise raise ERROR for the moment
-            raise SdnConnectorError("'asn' was not provided and was not possible to obtain it")
-        if not self.fabric:
-            # TODO: Get FABRIC from controller config; otherwise raise ERROR for the moment
-            raise SdnConnectorError("'fabric' was not provided and was not possible to obtain it")
-        if not self.domain:
-            self.domain = 'default'
-            self.logger.info("No domain was provided. Using 'default'")
         if not self.vni_range:
             self.vni_range = ['1000001-2000000']
             self.logger.info("No vni_range was provided. Using ['1000001-2000000']")
         self.used_vni = set()
-
-        if overlay_url:
-            if not overlay_url.startswith("http"):
-                overlay_url = "http://" + overlay_url
-            if not overlay_url.endswith("/"):
-                overlay_url = overlay_url + "/"
-        self.overlay_url = overlay_url
 
         if auth_url:
             if not auth_url.startswith("http"):
@@ -128,34 +108,36 @@ class JuniperContrail(SdnConnectorBase):
                 auth_url = auth_url + "/"
         self.auth_url = auth_url
 
-        # Init http lib
-        self.http = Http(self.logger)
+        if overlay_url:
+            if not overlay_url.startswith("http"):
+                overlay_url = "http://" + overlay_url
+            if not overlay_url.endswith("/"):
+                overlay_url = overlay_url + "/"
+        self.overlay_url = overlay_url
 
-        # Init http headers for all requests
-        self.headers = {'Content-Type': 'application/json'}
-        self.http_header = ['{}: {}'.format(key, val)
-                           for (key, val) in list(self.headers.items())]
+        if not self.project:
+            raise SdnConnectorError("'project' must be provided")
+        if not self.asn:
+            # TODO: Get ASN from controller config; otherwise raise ERROR for the moment
+            raise SdnConnectorError("'asn' was not provided and it was not possible to obtain it")
+        if not self.fabric:
+            # TODO: Get FABRIC from controller config; otherwise raise ERROR for the moment
+            raise SdnConnectorError("'fabric' was not provided and was not possible to obtain it")
+        if not self.domain:
+            self.domain = 'default-domain'
+            self.logger.info("No domain was provided. Using 'default-domain'")
 
-        auth_dict = {}
-        auth_dict['auth'] = {}
-        auth_dict['auth']['scope'] = {}
-        auth_dict['auth']['scope']['project'] = {}
-        auth_dict['auth']['scope']['project']['domain'] = {}
-        auth_dict['auth']['scope']['project']['domain']["id"] = self.domain
-        auth_dict['auth']['scope']['project']['name'] = self.project
-        auth_dict['auth']['identity'] = {}
-        auth_dict['auth']['identity']['methods'] = ['password']
-        auth_dict['auth']['identity']['password'] = {}
-        auth_dict['auth']['identity']['password']['user'] = {}
-        auth_dict['auth']['identity']['password']['user']['name'] = self.user
-        auth_dict['auth']['identity']['password']['user']['password'] = self.password
-        auth_dict['auth']['identity']['password']['user']['domain'] = {}
-        auth_dict['auth']['identity']['password']['user']['domain']['id'] = self.domain
-        self.auth_dict = auth_dict
-        self.token = None
+        underlay_api_config = {
+            "auth_url": self.auth_url,
+            "project": self.project,
+            "domain": self.domain,
+            "asn": self.asn,
+            "fabric": self.fabric
+        }
+        self.underlay_api = UnderlayApi(url, underlay_api_config, user=self.user, password=self.password, logger=logger)
 
+        self._max_duplicate_retry = 2
         self.logger.info("Juniper Contrail Connector Initialized.")
-
 
     def _generate_vni(self):
         """
@@ -178,154 +160,65 @@ class JuniperContrail(SdnConnectorBase):
             raise SdnConnectorError("Unable to create the virtual network."\
                 " All VNI in VNI range {} are in use.".format(self.vni_range))
 
-
-    def _get_token(self):
-        self.logger.debug('Current Token:'.format(str(self.token)))
-        auth_url = self.auth_url + 'auth/tokens'
-        if self.token is None:
-            if not self.auth_url:
-                self.token = ""
-            http_code, resp = self.http.post_cmd(url=auth_url, headers=self.http_header,
-                                                 postfields_dict=self.auth_dict,
-                                                 return_header = 'x-subject-token')
-            self.token = resp
-            self.logger.debug('Token: '.format(self.token))
-
-            if self.token:
-                self.headers['X-Auth-Token'] = self.token
-            else:
-                self.headers.pop('X-Auth-Token', None)
-            http_header = ['{}: {}'.format(key, val)
-                           for (key, val) in list(self.headers.items())]
-
     
     # Aux functions for testing
     def get_url(self):
         return self.url
 
-
     def get_overlay_url(self):
         return self.overlay_url
 
-    # Virtual network operations
+    def _create_port(self, switch_id, switch_port, network, vlan):
+        """
+        1 - Look for virtual port groups for provided switch_id, switch_port using name
+        2 - It the virtual port group does not exist, create it
+        3 - Create virtual machine interface for the indicated network and vlan
+        """
+        self.logger.debug("create_port: switch_id: {}, switch_port: {}, network: {}, vlan: {}".format(
+            switch_id, switch_port, network, vlan))
 
-    def _create_virtual_network(self, controller_url, name, vni):
-        routetarget = '{}:{}'.format(self.asn,vni)
-        vnet_dict = {
-                        "virtual-network": {
-                            "virtual_network_properties": {
-                                "vxlan_network_identifier": vni,
-                            },
-                            "parent_type": "project",
-                            "fq_name": [
-                                "default-domain",
-                                "admin",
-                                name
-                            ],
-                            "route_target_list": {
-                                "route_target": [
-                                    "target:" + routetarget
-                                ]
-                            }
-                        }
-                    }
-        self._get_token()
-        endpoint = controller_url + 'virtual-networks'
-        http_code, resp = self.http.post_cmd(url = endpoint,
-                                             headers = self.http_header,
-                                             postfields_dict = vnet_dict)
-        if http_code not in (200, 201, 202, 204) or not resp:
-           raise SdnConnectorError('Unexpected http status code, or empty response')
-        vnet_info = json.loads(resp)
-        self.logger.debug("vnet_info: {}".format(vnet_info))
-        return vnet_info.get("virtual-network").get('uuid'), vnet_info.get("virtual-network")
+        # 1 - Check if the vpg exists
+        vpg_name = self.underlay_api.get_vpg_name(switch_id, switch_port)
+        vpg = self.underlay_api.get_vpg_by_name(vpg_name)
+        if not vpg:
+            # 2 - If it does not exist create it
+            vpg_id, _ = self.underlay_api.create_vpg(switch_id, switch_port)
+        else:
+            # Assign vpg_id from vpg
+            vpg_id = vpg.get("uuid")
 
+        # 3 - Create vmi
+        vmi_id, _ = self.underlay_api.create_vmi(switch_id, switch_port, network, vlan)
+        self.logger.debug("port created")
 
-    def _get_virtual_networks(self, controller_url):
-        self._get_token()
-        endpoint = controller_url + 'virtual-networks'
-        print(endpoint)
-        http_code, resp = self.http.get_cmd(url=endpoint, headers=self.http_header)
-        if http_code not in (200, 201, 202, 204) or not resp:
-            raise SdnConnectorError('Unexpected http status code, or empty response')
-        vnets_info = json.loads(resp)
-        self.logger.debug("vnets_info: {}".format(vnets_info))
-        return vnets_info.get('virtual-networks')
+        return vpg_id, vmi_id
 
+    def _delete_port(self, vpg_id, vmi_id):
+        self.logger.debug("delete port, vpg_id: {}, vmi_id: {}".format(vpg_id, vmi_id))
 
-    def _get_virtual_network(self, controller_url, network_id):
-        self._get_token()
-        endpoint = controller_url + 'virtual-network/{}'.format(network_id)
-        http_code, resp = self.http.get_cmd(url=endpoint, headers=self.http_header)
-        if http_code not in (200, 201, 202, 204) or not resp:
-            if http_code == 404:
-                return None
-            raise SdnConnectorError('Unexpected http status code, or empty response')
-        vnet_info = json.loads(resp)
-        self.logger.debug("vnet_info: {}".format(vnet_info))
-        return vnet_info.get("virtual-network")
+        # 1 - Obtain vpg by id (if not vpg_id must have been error creating ig, nothing to be done)
+        if vpg_id:
+            vpg = self.underlay_api.get_by_uuid("virtual-port-group", vpg_id)
+            if not vpg:
+                self.logger.warning("vpg: {} to be deleted not found".format(vpg_id))
+            else:
+                # 2 - Get vmi interfaces from vpg
+                vmi_list = vpg.get("virtual_machine_interface_refs")
+                if not vmi_list:
+                    # must have been an error during port creation when vmi is created
+                    # may happen if there has been an error during creation
+                    self.logger.warning("vpg: {} has not vmi, will delete nothing".format(vpg))
+                else:
+                    num_vmis = len(vmi_list)
+                    for vmi in vmi_list:
+                        uuid = vmi.get("uuid")
+                        if uuid == vmi_id:
+                            self.underlay_api.delete_vmi(vmi.get("uuid"))
+                            num_vmis = num_vmis - 1
 
-
-    def _delete_virtual_network(self, controller_url, network_id):
-        self._get_token()
-        endpoint = controller_url + 'virtual-network/{}'.format(network_id)
-        http_code, _ = self.http.delete_cmd(url=endpoint, headers=self.http_header)
-        if http_code not in (200, 201, 202, 204):
-            raise SdnConnectorError('Unexpected http status code')
-        return
-
-
-    # Virtual port group operations
-
-    def _create_vpg(self, controller_url, switch_id, switch_port, network, vlan):
-        vpg_dict = {
-                       "virtual-port-group": {
-                       }
-                   }
-        self._get_token()
-        endpoint = controller_url + 'virtual-port-groups'
-        http_code, resp = self.http.post_cmd(url = endpoint,
-                                               headers = self.http_header,
-                                               postfields_dict = vpg_dict)
-        if http_code not in (200, 201, 202, 204) or not resp:
-           raise SdnConnectorError('Unexpected http status code, or empty response')
-        vpg_info = json.loads(resp)
-        self.logger.debug("vpg_info: {}".format(vpg_info))
-        return vpg_info.get("virtual-port-group").get('uuid'), vpg_info.get("virtual-port-group")
-
-
-    def _get_vpgs(self, controller_url):
-        self._get_token()
-        endpoint = controller_url + 'virtual-port-groups'
-        http_code, resp = self.http.get_cmd(url=endpoint, headers=self.http_header)
-        if http_code not in (200, 201, 202, 204) or not resp:
-            raise SdnConnectorError('Unexpected http status code, or empty response')
-        vpgs_info = json.loads(resp)
-        self.logger.debug("vpgs_info: {}".format(vpgs_info))
-        return vpgs_info.get('virtual-port-groups')
-
-
-    def _get_vpg(self, controller_url, vpg_id):
-        self._get_token()
-        endpoint = controller_url + 'virtual-port-group/{}'.format(vpg_id)
-        http_code, resp = self.http.get_cmd(url=endpoint, headers=self.http_header)
-        if http_code not in (200, 201, 202, 204) or not resp:
-            if http_code == 404:
-                return None
-            raise SdnConnectorError('Unexpected http status code, or empty response')
-        vpg_info = json.loads(resp)
-        self.logger.debug("vpg_info: {}".format(vpg_info))
-        return vpg_info.get("virtual-port-group")
-
-
-    def _delete_vpg(self, controller_url, vpg_id):
-        self._get_token()
-        endpoint = controller_url + 'virtual-port-group/{}'.format(vpg_id)
-        http_code, resp = self.http.delete_cmd(url=endpoint, headers=self.http_header)
-        if http_code not in (200, 201, 202, 204):
-            raise SdnConnectorError('Unexpected http status code')
-        return
-
+                # 3 - If there are no more vmi delete the vpg
+                if not vmi_list or num_vmis == 0:
+                    self.underlay_api.delete_vpg(vpg.get("uuid"))
 
     def check_credentials(self):
         """Check if the connector itself can access the SDN/WIM with the provided url (wim.wim_url),
@@ -336,15 +229,13 @@ class JuniperContrail(SdnConnectorBase):
                 external URLs, etc are detected.
         """
         self.logger.debug("")
-        self._get_token()
         try:
-            http_code, resp = self.http.get_cmd(url=self.auth_url, headers=self.http_header)
-            if http_code not in (200, 201, 202, 204) or not resp:
-                raise SdnConnectorError('Unexpected http status code, or empty response')
+            resp = self.underlay_api.check_auth()
+            if not resp:
+                raise SdnConnectorError('Empty response')
         except Exception as e:
             self.logger.error('Error checking credentials')
-            raise SdnConnectorError('Error checking credentials', http_code=http_code)
-
+            raise SdnConnectorError('Error checking credentials: {}'.format(str(e)))
 
     def get_connectivity_service_status(self, service_uuid, conn_info=None):
         """Monitor the status of the connectivity service established
@@ -384,18 +275,27 @@ class JuniperContrail(SdnConnectorBase):
                 new information available for the connectivity service.
         """
         self.logger.debug("")
-        self._get_token()
         try:
-            http_code, resp = self.http.get_cmd(endpoint='virtual-network/{}'.format(service_uuid))
-            if http_code not in (200, 201, 202, 204) or not resp:
-                raise SdnConnectorError('Unexpected http status code, or empty response')
+            resp = self.http.get_cmd(endpoint='virtual-network/{}'.format(service_uuid))
+            if not resp:
+                raise SdnConnectorError('Empty response')
             if resp:
                 vnet_info = json.loads(resp)
-                return {'sdn_status': 'ACTIVE', 'sdn_info': vnet_info['virtual-network']}
+
+                # Check if conn_info reports error
+                if conn_info.get("sdn_status") == "ERROR":
+                    return {'sdn_status': 'ACTIVE', 'sdn_info': "conn_info indicates pending error"}
+                else:
+                    return {'sdn_status': 'ACTIVE', 'sdn_info': vnet_info['virtual-network']}
             else:
                 return {'sdn_status': 'ERROR', 'sdn_info': 'not found'}
+        except SdnConnectorError:
+            raise
+        except HttpException as e:
+            self.logger.error("Error getting connectivity service: {}".format(e))
+            raise SdnConnectorError("Exception deleting connectivity service: {}".format(str(e)))
         except Exception as e:
-            self.logger.error('Exception getting connectivity service info: %s', e)
+            self.logger.error('Exception getting connectivity service info: %s', e, exc_info=True)
             return {'sdn_status': 'ERROR', 'error_msg': str(e)}
 
 
@@ -435,11 +335,6 @@ class JuniperContrail(SdnConnectorBase):
         :raises: SdnConnectorException: In case of error. Nothing should be created in this case.
             Provide the parameter http_code
         """
-        self.logger.debug("create_connectivity_service, service_type: {}, connection_points: {}".
-                          format(service_type, connection_points))
-        if service_type.lower() != 'elan':
-            raise SdnConnectorError('Only ELAN network type is supported by Juniper Contrail.')
-
         # Step 1. Check in the overlay controller the virtual network created by the VIM
         #   Best option: get network id of the VIM as param (if the VIM already created the network),
         #    and do a request to the controller of the virtual networks whose VIM network id is the provided
@@ -457,17 +352,131 @@ class JuniperContrail(SdnConnectorBase):
         #         name = 'osm-plugin-' + overlay_name
         #      Else:
         #         name = 'osm-plugin-' + VNI
-        try:
-            name = 'test-test-1'
-            vni = 999999
-            network_id, network_info = self._create_virtual_network(self.url, name, vni)
-        except SdnConnectorError:
-            raise SdnConnectorError('Failed to create connectivity service {}'.format(name))
-        except Exception as e:
-            self.logger.error('Exception creating connection_service: %s', e, exc_info=True)
-            raise SdnConnectorError("Exception creating connectivity service: {}".format(str(e)))
-        return service_id
+        self.logger.info("create_connectivity_service, service_type: {}, connection_points: {}".
+                         format(service_type, connection_points))
+        if service_type.lower() != 'elan':
+            raise SdnConnectorError('Only ELAN network type is supported by Juniper Contrail.')
 
+        try:
+            # Initialize data
+            conn_info = None
+            conn_info_cp = {}
+
+            # 1 - Obtain VLAN-ID
+            vlan = self._get_vlan(connection_points)
+            self.logger.debug("Provided vlan: {}".format(vlan))
+
+            # 2 - Obtain free VNI
+            vni = self._generate_vni()
+            self.logger.debug("VNI: {}".format(vni))
+
+            # 3 - Create virtual network (name, VNI, RT), by the moment the name will use VNI
+            retry = 0
+            while retry < self._max_duplicate_retry:
+                try:
+                    vnet_name = 'osm-plugin-' + str(vni)
+                    vnet_id, _ = self.underlay_api.create_virtual_network(vnet_name, vni)
+                    self.used_vni.add(vni)
+                    break
+                except DuplicateFound as e:
+                    self.logger.debug("Duplicate error for vnet_name: {}".format(vnet_name))
+                    self.used_vni.add(vni)
+                    retry += 1
+                    if retry >= self._max_duplicate_retry:
+                        raise e
+                    else:
+                        # Try to obtain a new vni
+                        vni = self._generate_vni()
+                        continue
+            conn_info = {
+                "vnet": {
+                    "uuid": vnet_id,
+                    "name": vnet_name
+                },
+                "connection_points": conn_info_cp # dict with port_name as key
+            }
+
+            # 4 - Create a port for each endpoint
+            for cp in connection_points:
+                switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
+                switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                vpg_id, vmi_id = self._create_port(switch_id, switch_port, vnet_name, vlan)
+                cp_added = cp.copy()
+                cp_added["vpg_id"] = vpg_id
+                cp_added["vmi_id"] = vmi_id
+                conn_info_cp[self.underlay_api.get_vpg_name(switch_id, switch_port)] = cp_added
+
+            return vnet_id, conn_info
+            self.logger.info("created connectivity service, uuid: {}, name: {}".format(vnet_id, vnet_name))
+        except Exception as e:
+            # Log error
+            if isinstance(e, SdnConnectorError) or isinstance(e, HttpException):
+                self.logger.error("Error creating connectivity service: {}".format(e))
+            else:
+                self.logger.error("Error creating connectivity service: {}".format(e), exc_info=True)
+
+
+            # If nothing is created raise error else return what has been created and mask as error
+            if not conn_info:
+                raise SdnConnectorError("Exception create connectivity service: {}".format(str(e)))
+            else:
+                conn_info["sdn_status"] = "ERROR"
+                # iterate over not added connection_points and add but marking them as error
+                for cp in connection_points[len(conn_info_cp):]:
+                    cp_error = cp.copy()
+                    cp_error["sdn_status"] = "ERROR"
+                    switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
+                    switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                    conn_info_cp[self.underlay_api.get_vpg_name(switch_id, switch_port)] = cp_error
+                return vnet_id, conn_info
+
+    def delete_connectivity_service(self, service_uuid, conn_info=None):
+        """
+        Disconnect multi-site endpoints previously connected
+
+        :param service_uuid: The one returned by create_connectivity_service
+        :param conn_info: The one returned by last call to 'create_connectivity_service' or 'edit_connectivity_service'
+            if they do not return None
+        :return: None
+        :raises: SdnConnectorException: In case of error. The parameter http_code must be filled
+        """
+        self.logger.info("delete_connectivity_service vnet_name: {}, connection_points: {}".
+                          format(service_uuid, conn_info))
+
+        try:
+            vnet_uuid = service_uuid
+            vnet_name = conn_info["vnet"]["name"]   # always should exist as the network is the first thing created
+            connection_points = conn_info["connection_points"].values()
+            vlan = self._get_vlan(connection_points)
+
+            # 1: For each connection point delete vlan from vpg and it is is the
+            # last one, delete vpg
+            for cp in connection_points:
+                self._delete_port(cp.get("vpg_id"), cp.get("vmi_id"))
+
+            # 2: Delete vnet
+            self.underlay_api.delete_virtual_network(vnet_uuid)
+        except SdnConnectorError:
+            raise
+        except HttpException as e:
+            self.logger.error("Error deleting connectivity service: {}".format(e))
+            raise SdnConnectorError("Exception deleting connectivity service: {}".format(str(e)))
+        except Exception as e:
+            self.logger.error("Error deleting connectivity service: {}".format(e), exc_info=True)
+            raise SdnConnectorError("Exception deleting connectivity service: {}".format(str(e)))
+
+    # Helper methods
+    @staticmethod
+    def _get_vlan(connection_points):
+        vlan = None
+        for cp in connection_points:
+            cp_vlan = cp.get("service_endpoint_encapsulation_info").get("vlan")
+            if not vlan:
+                vlan = cp_vlan
+            else:
+                if vlan != cp_vlan:
+                    raise SdnConnectorError("More that one cp provided")
+        return vlan
 
     def edit_connectivity_service(self, service_uuid, conn_info = None, connection_points = None, **kwargs):
         """ Change an existing connectivity service.
@@ -487,122 +496,134 @@ class JuniperContrail(SdnConnectorBase):
         Raises:
             SdnConnectorException: In case of error.
         """
-        #TODO: to be done. This comes from ONOS VPLS plugin
-        self.logger.debug("edit connectivity service, service_uuid: {}, conn_info: {}, "
+        # 0 - Check if there are connection_points marked as error and delete them
+        # 1 - Compare conn_info (old connection points) and connection_points (new ones to be applied):
+        #     Obtain list of connection points to be added and to be deleted
+        #     Obtain vlan and check it has not changed
+        # 2 - Obtain network: Check vnet exists and obtain name
+        # 3 - Delete unnecesary ports
+        # 4 - Add new ports
+        self.logger.info("edit connectivity service, service_uuid: {}, conn_info: {}, "
                           "connection points: {} ".format(service_uuid, conn_info, connection_points))
 
-        conn_info = conn_info or []
-        # Obtain current configuration
-        config_orig = self._get_onos_netconfig()
-        config = copy.deepcopy(config_orig)
+        # conn_info should always exist and have connection_points and vnet elements
+        old_cp = conn_info.get("connection_points", {})
+        old_vlan = self._get_vlan(old_cp)
 
-        # get current service data and check if it does not exists
-        #TODO: update
-        for vpls in config.get('apps', {}).get('org.onosproject.vpls', {}).get('vpls', {}).get('vplsList', {}):
-            if vpls['name'] == service_uuid:
-                self.logger.debug("service exists")
-                curr_interfaces = vpls.get("interfaces", [])
-                curr_encapsulation = vpls.get("encapsulation")
-                break
-        else:
-            raise SdnConnectorError("service uuid: {} does not exist".format(service_uuid))
-
-        self.logger.debug("current interfaces: {}".format(curr_interfaces))
-        self.logger.debug("current encapsulation: {}".format(curr_encapsulation))
-
-        # new interfaces names
-        new_interfaces = [port['service_endpoint_id'] for port in new_connection_points]
-
-        # obtain interfaces to delete, list will contain port
-        ifs_delete = list(set(curr_interfaces) - set(new_interfaces))
-        ifs_add = list(set(new_interfaces) - set(curr_interfaces))
-        self.logger.debug("interfaces to delete: {}".format(ifs_delete))
-        self.logger.debug("interfaces to add: {}".format(ifs_add))
-
-        # check if some data of the interfaces that already existed has changed
-        # in that case delete it and add it again
-        ifs_remain = list(set(new_interfaces) & set(curr_interfaces))
-        for port in connection_points:
-            if port['service_endpoint_id'] in ifs_remain:
-                # check if there are some changes
-                curr_port_name, curr_vlan = self._get_current_port_data(config, port['service_endpoint_id'])
-                new_port_name = 'of:{}/{}'.format(port['service_endpoint_encapsulation_info']['switch_dpid'],
-                                        port['service_endpoint_encapsulation_info']['switch_port'])
-                new_vlan = port['service_endpoint_encapsulation_info']['vlan']
-                if (curr_port_name != new_port_name or curr_vlan != new_vlan):
-                    self.logger.debug("TODO: must update data interface: {}".format(port['service_endpoint_id']))
-                    ifs_delete.append(port['service_endpoint_id'])
-                    ifs_add.append(port['service_endpoint_id'])
-
-        new_encapsulation = self._get_encapsulation(connection_points)
-
+        # Check if an element of old_cp is marked as error, in case it is delete it
+        # Not return a new conn_info in this case because it is only partial information
+        # Current conn_info already marks ports as error
         try:
-            # Delete interfaces, only will delete interfaces that are in provided conn_info
-            # because these are the ones that have been created for this service
-            if ifs_delete:
-                for port in config['ports'].values():
-                    for port_interface in port['interfaces']:
-                        interface_name = port_interface['name']
-                        self.logger.debug("interface name: {}".format(port_interface['name']))
-                        if interface_name in ifs_delete and interface_name in conn_info:
-                            self.logger.debug("delete interface name: {}".format(interface_name))
-                            port['interfaces'].remove(port_interface)
-                            conn_info.remove(interface_name)
+            delete_conn_info = []
+            for cp in old_cp:
+                if cp.get("sdn_status") == "ERROR":
+                    switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
+                    switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                    self._delete_port(switch_id, switch_port, old_vlan)
+                    delete_conn_info.append(self.underlay_api.get_vpg_name(switch_id, switch_port))
 
-            # Add new interfaces
-            for port in connection_points:
-                if port['service_endpoint_id'] in ifs_add:
-                    created_ifz = self._append_port_to_config(port, config)
-                    if created_ifz:
-                        conn_info.append(created_ifz[1])
-            self._pop_last_update_time(config)
-            self._post_netconfig(config)
+            for i in delete_conn_info:
+                del old_cp[i]
 
-            self.logger.debug("contrail config after updating interfaces: {}".format(config))
-            self.logger.debug("conn_info after updating interfaces: {}".format(conn_info))
-
-            # Update interfaces list in vpls service
-            for vpls in config.get('apps', {}).get('org.onosproject.vpls', {}).get('vpls', {}).get('vplsList', {}):
-                if vpls['name'] == service_uuid:
-                    vpls['interfaces'] = new_interfaces
-                    vpls['encapsulation'] = new_encapsulation
-
-            self._pop_last_update_time(config)
-            self._post_netconfig(config)
-            return conn_info
+            # Delete vnet status if exists (possibly marked as error)
+            if conn_info.get("vnet",{}).get("sdn_status"):
+                del conn_info["vnet"]["sdn_status"]
+        except HttpException as e:
+            self.logger.error("Error trying to delete old ports marked as error: {}".format(e))
+            raise SdnConnectorError(e)
+        except SdnConnectorError as e:
+            self.logger.error("Error trying to delete old ports marked as error: {}".format(e))
+            raise
         except Exception as e:
-            self.logger.error('Exception add connection_service: %s', e)
-            # try to rollback push original config
+            self.logger.error("Error trying to delete old ports marked as error: {}".format(e), exc_info=True)
+            raise SdnConnectorError("Error trying to delete old ports marked as error: {}".format(e))
+
+        if connection_points:
+
+            # Check and obtain what should be added and deleted, if there is an error here raise an exception
             try:
-                self._post_netconfig(config_orig)
-            except Exception as e2:
-                self.logger.error('Exception rolling back to original config: %s', e2)
-            # raise exception
-            if isinstance(e, SdnConnectorError):
+
+                vlan = self._get_vlan(connection_points)
+
+                old_port_list = ["{}_{}".format(cp["service_endpoint_encapsulation_info"]["switch_dpid"],
+                                          cp["service_endpoint_encapsulation_info"]["switch_port"])
+                           for cp in old_cp.values()]
+                port_list = ["{}_{}".format(cp["service_endpoint_encapsulation_info"]["switch_dpid"],
+                                          cp["service_endpoint_encapsulation_info"]["switch_port"])
+                           for cp in connection_points]
+                to_delete_ports = list(set(old_port_list) - set(port_list))
+                to_add_ports = list(set(port_list) - set(old_port_list))
+
+                # Obtain network
+                vnet = self.underlay_api.get_virtual_network(self.get_url(), service_uuid)
+                vnet_name = vnet["name"]
+
+            except SdnConnectorError:
                 raise
-            else:
-                raise SdnConnectorError("Exception create_connectivity_service: {}".format(e))
+            except Exception as e:
+                self.logger.error("Error edit connectivity service: {}".format(e), exc_info=True)
+                raise SdnConnectorError("Exception edit connectivity service: {}".format(str(e)))
 
 
-    def delete_connectivity_service(self, service_uuid, conn_info=None):
-        """
-        Disconnect multi-site endpoints previously connected
+            # Delete unneeded ports and add new ones: if there is an error return conn_info
+            try:
+                # Connection points returned in con_info should reflect what has (and should as ERROR) be done
+                # Start with old cp dictionary and modify it as we work
+                conn_info_cp = old_cp
 
-        :param service_uuid: The one returned by create_connectivity_service
-        :param conn_info: The one returned by last call to 'create_connectivity_service' or 'edit_connectivity_service'
-            if they do not return None
-        :return: None
-        :raises: SdnConnectorException: In case of error. The parameter http_code must be filled
-        """
-        self.logger.debug("delete_connectivity_service uuid: {}".format(service_uuid))
-        try:
-            #TO DO: check if virtual port groups have to be deleted
-            self._delete_virtual_network(self.url, service_uuid)
-        except SdnConnectorError:
-            raise SdnConnectorError('Failed to delete service uuid {}'.format(service_uuid))
-        except Exception as e:
-            self.logger.error('Exception deleting connection_service: %s', e, exc_info=True)
-            raise SdnConnectorError("Exception deleting connectivity service: {}".format(str(e)))
+                # Delete unneeded ports
+                for port_name in conn_info_cp.keys():
+                    if port_name in to_delete_ports:
+                        cp = conn_info_cp[port_name]
+                        switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
+                        switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                        self.logger.debug("delete port switch_id, switch_port: {}".format(switch_id, switch_port))
+                        self._delete_port(switch_id, switch_port, vlan)
+                        del conn_info_cp[port_name]
+
+                # Add needed ports
+                for cp in connection_points:
+                    if port_name in to_add_ports:
+                        switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
+                        switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                        self.logger.debug("add port switch_id, switch_port: {}".format(switch_id, switch_port))
+                        self._create_port(switch_id, switch_port, vnet_name, vlan)
+                        conn_info_cp[port_name]
+
+                conn_info["connection_points"] = conn_info_cp
+                return conn_info
+
+            except Exception as e:
+                # Log error
+                if isinstance(e, SdnConnectorError) or isinstance(e, HttpException):
+                    self.logger.error("Error edit connectivity service: {}".format(e), exc_info=True)
+                else:
+                    self.logger.error("Error edit connectivity service: {}".format(e))
+
+                # There has been an error mount conn_info_cp marking as error cp that should
+                # have been deleted but have not or should have been added
+                for port_name, cp in conn_info_cp.items():
+                    if port_name in to_delete_ports:
+                        cp["sdn_status"] = "ERROR"
+
+                for cp in connection_points:
+                    switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
+                    switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                    port_name = self.underlay_api.get_vpg_name(switch_id, switch_port)
+                    if port_name in to_add_ports:
+                        cp_error = cp.copy()
+                        cp_error["sdn_status"] = "ERROR"
+                        conn_info_cp[port_name] = cp_error
+
+                conn_info["sdn_status"] = "ERROR"
+                conn_info["connection_points"] = conn_info_cp
+                return conn_info
+
+
+        else:
+            # Connection points have not changed, so do nothing
+            self.logger.info("no new connection_points provided, nothing to be done")
+            return
 
 
 if __name__ == '__main__':
@@ -613,8 +634,8 @@ if __name__ == '__main__':
     handler.setFormatter(log_formatter)
     logger = logging.getLogger('openmano.sdnconn.junipercontrail')
     #logger.setLevel(level=logging.ERROR)
-    logger.setLevel(level=logging.INFO)
-    #logger.setLevel(level=logging.DEBUG)
+    #logger.setLevel(level=logging.INFO)
+    logger.setLevel(level=logging.DEBUG)
     logger.addHandler(handler)
 
     # Read config
@@ -645,6 +666,17 @@ if __name__ == '__main__':
 
     underlay_url = juniper_contrail.get_url()
     overlay_url = juniper_contrail.get_overlay_url()
+    # Generate VNI
+    for i in range(5):
+        vni = juniper_contrail._generate_vni()
+        juniper_contrail.used_vni.add(vni)
+    print(juniper_contrail.used_vni)
+    juniper_contrail.used_vni.remove(1000003)
+    print(juniper_contrail.used_vni)
+    for i in range(2):
+        vni = juniper_contrail._generate_vni()
+        juniper_contrail.used_vni.add(vni)
+    print(juniper_contrail.used_vni)
     # 1. Read virtual networks from overlay controller
     print('1. Read virtual networks from overlay controller')
     try:
@@ -653,8 +685,7 @@ if __name__ == '__main__':
         print('OK')
     except Exception as e:
         logger.error('Exception reading virtual networks from overlay controller: %s', e)
-        print('FAILED')
-
+        print('FAILED')    
     # 2. Read virtual networks from underlay controller
     print('2. Read virtual networks from underlay controller')
     vnets = juniper_contrail._get_virtual_networks(underlay_url)
@@ -703,66 +734,87 @@ if __name__ == '__main__':
         logger.info('Exception reading virtual networks from overlay controller: %s', e)
     exit(0)
 
+    # Test CRUD:
+    net_name = "gerardo"
+    net_vni = "2000"
+    net_vlan = "501"
+    switch_1 = "LEAF-2"
+    port_1 = "xe-0/0/18"
+    switch_2 = "LEAF-1"
+    port_2 = "xe-0/0/18"
 
-    #TODO: to be deleted (it comes from ONOS VPLS plugin)
-    service_type = 'ELAN'
-    conn_point_0 = {
-        "service_endpoint_id": "switch1:ifz1",
-        "service_endpoint_encapsulation_type": "dot1q",
-        "service_endpoint_encapsulation_info": {
-            "switch_dpid": "0000000000000011",
-            "switch_port": "1",
-            "vlan": "600"
-        }
-    }
-    conn_point_1 = {
-        "service_endpoint_id": "switch3:ifz1",
-        "service_endpoint_encapsulation_type": "dot1q",
-        "service_endpoint_encapsulation_info": {
-            "switch_dpid": "0000000000000031",
-            "switch_port": "3",
-            "vlan": "600"
-        }
-    }
-    connection_points = [conn_point_0, conn_point_1]
-    # service_uuid, created_items = juniper_contrail.create_connectivity_service(service_type, connection_points)
-    #print(service_uuid)
-    #print(created_items)
-    #sleep(10)
-    #juniper_contrail.delete_connectivity_service("5496dfea-27dc-457d-970d-b82bac266e5c"))
+    # 1 - Create a new virtual network
+    vnet2_id, vnet2_created = juniper_contrail._create_virtual_network(underlay_url, net_name, net_vni)
+    print("Created virtual network:")
+    print(vnet2_id)
+    print(yaml.safe_dump(vnet2_created, indent=4, default_flow_style=False))
+    print("Get virtual network:")
+    vnet2_info = juniper_contrail._get_virtual_network(underlay_url, vnet2_id)
+    print(json.dumps(vnet2_info, indent=4))
+    print('OK')
 
+    # 2 - Create a new virtual port group
+    vpg_id, vpg_info = juniper_contrail._create_vpg(underlay_url, switch_1, port_1, net_name, net_vlan)
+    print("Created virtual port group:")
+    print(vpg_id)
+    print(json.dumps(vpg_info, indent=4))
 
-    conn_info = None
-    conn_info = ['switch1:ifz1', 'switch3_ifz3']
-    juniper_contrail.delete_connectivity_service("f7afc4de-556d-4b5a-8a12-12b5ef97d269", conn_info)
+    print("Get virtual network:")
+    vnet2_info = juniper_contrail._get_virtual_network(underlay_url, vnet2_id)
+    print(yaml.safe_dump(vnet2_info, indent=4, default_flow_style=False))
+    print('OK')
 
-    conn_point_0 = {
-        "service_endpoint_id": "switch1:ifz1",
-        "service_endpoint_encapsulation_type": "dot1q",
-        "service_endpoint_encapsulation_info": {
-            "switch_dpid": "0000000000000011",
-            "switch_port": "1",
-            "vlan": "500"
-        }
-    }
-    conn_point_2 = {
-        "service_endpoint_id": "switch1:ifz3",
-        "service_endpoint_encapsulation_type": "dot1q",
-        "service_endpoint_encapsulation_info": {
-            "switch_dpid": "0000000000000011",
-            "switch_port": "3",
-            "vlan": "500"
-        }
-    }
-    conn_point_3 = {
-        "service_endpoint_id": "switch3_ifz3",
-        "service_endpoint_encapsulation_type": "dot1q",
-        "service_endpoint_encapsulation_info": {
-            "switch_dpid": "0000000000000033",
-            "switch_port": "3",
-            "vlan": "500"
-        }
-    }
-    new_connection_points = [conn_point_0, conn_point_3]
-    #conn_info = juniper_contrail.edit_connectivity_service("f7afc4de-556d-4b5a-8a12-12b5ef97d269", conn_info, new_connection_points)
-    #print(conn_info)
+    # 3 - Create a new virtual machine interface
+    vmi_id, vmi_info = juniper_contrail._create_vmi(underlay_url, switch_1, port_1, net_name, net_vlan)
+    print("Created virtual machine interface:")
+    print(vmi_id)
+    print(yaml.safe_dump(vmi_info, indent=4, default_flow_style=False))
+
+    # 4 - Create a second virtual port group
+    # 5 - Create a second virtual machine interface
+
+    ### Test rapido de modificación de requests:
+    # Ver que metodos siguen funcionando y cuales no e irlos corrigiendo
+
+    """
+    vnets = juniper_contrail._get_virtual_networks(underlay_url)
+    logger.debug("Virtual networks:")
+    logger.debug(json.dumps(vnets, indent=2))
+
+    vpgs = juniper_contrail._get_vpgs(underlay_url)
+    logger.debug("Virtual port groups:")
+    logger.debug(json.dumps(vpgs, indent=2))
+    """
+    # Get by uuid
+
+    """
+    # 3 - Get vmi
+    vmi_uuid = "dbfd2099-b895-459e-98af-882d77d968c1"
+    vmi = juniper_contrail._get_vmi(underlay_url, vmi_uuid)
+    logger.debug("Virtual machine interface:")
+    logger.debug(json.dumps(vmi, indent=2))
+
+    # Delete vmi    
+    logger.debug("Delete vmi")
+    juniper_contrail._delete_vmi(underlay_url, vmi_uuid)
+    """
+
+    """
+    # 2 - Get vpg
+    vpg_uuid = "85156474-d1a5-44c0-9d8b-8f690f39d27e"
+    vpg = juniper_contrail._get_vpg(underlay_url, vpg_uuid)
+    logger.debug("Virtual port group:")
+    logger.debug(json.dumps(vpg, indent=2))
+    # Delete vpg
+    vpg = juniper_contrail._delete_vpg(underlay_url, vpg_uuid)
+    """
+
+    # 1 - Obtain virtual network
+    """
+    vnet_uuid = "68457d61-6558-4d38-a03d-369a9de803ea"
+    vnet = juniper_contrail._get_virtual_network(underlay_url, vnet_uuid)
+    logger.debug("Virtual network:")
+    logger.debug(json.dumps(vnet, indent=2))
+    # Delete virtual network
+    juniper_contrail._delete_virtual_network(underlay_url, vnet_uuid)
+    """
