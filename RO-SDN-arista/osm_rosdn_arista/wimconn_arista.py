@@ -45,7 +45,6 @@ from cvprac.cvp_api import CvpApi
 from cvprac.cvp_client_errors import CvpLoginError,  CvpSessionLogOutError, CvpApiError
 from cvprac import __version__ as cvprac_version
 
-from osm_rosdn_arista.aristaSwitch import AristaSwitch
 from osm_rosdn_arista.aristaConfigLet import AristaSDNConfigLet
 from osm_rosdn_arista.aristaTask import AristaCVPTask
 
@@ -130,6 +129,7 @@ class AristaSdnConnector(SdnConnectorBase):
     __API_REQUEST_TOUT = 60
     __SWITCH_TAG_NAME = 'topology_type'
     __SWITCH_TAG_VALUE = 'leaf'
+    __LOOPBACK_INTF = "Loopback0"
 
 
     def __init__(self, wim, wim_account, config=None, logger=None):
@@ -183,7 +183,13 @@ class AristaSdnConnector(SdnConnectorBase):
         self.allDeviceFacts = []
         self.clC = AristaSDNConfigLet()
         self.taskC = None
-        self.__load_switches()
+        try:
+            self.__load_switches()
+        except SdnConnectorError as sc:
+            raise sc
+        except Exception as e:
+            raise SdnConnectorError(message="Unable to load switches from CVP",
+                                    http_code=500) from e
 
     def __load_switches(self):
         """ Retrieves the switches to configure in the following order
@@ -211,14 +217,20 @@ class AristaSdnConnector(SdnConnectorBase):
                                                   'ip': None,
                                                   'usr': self.__user,
                                                   'lo0': None,
-                                                  'AS': None}
+                                                  'AS': None,
+                                                  'serialNumber': None}
 
         if self.__config and self.__config.get('switches'):
             # Not directly from json, complete one by one
             config_switches = self.__config.get('switches')
             for cs, cs_content in config_switches.items():
                 if cs not in self.switches:
-                    self.switches[cs] = {'passwd': self.__passwd, 'ip': None, 'usr': self.__user, 'lo0': None,'AS': None}
+                    self.switches[cs] = {'passwd': self.__passwd,
+                                         'ip': None,
+                                         'usr': self.__user,
+                                         'lo0': None,
+                                         'AS': None,
+                                         'serialNumber': None}
                 if cs_content:
                     self.switches[cs].update(cs_content)
 
@@ -240,93 +252,31 @@ class AristaSdnConnector(SdnConnectorBase):
                                            'ip': device['ipAddress'],
                                            'usr': self.__user,
                                            'lo0': None,
-                                           'AS': None}
+                                           'AS': None,
+                                           'serialNumber': None}
                             self.switches[device['hostname']] = switch_data
         if len(self.switches) == 0:
             self.logger.error("Unable to load Leaf switches from CVP")
             return
 
-        # self.s_api are switch objects, one for each switch in self.switches,
+        # self.switches are switch objects, one for each switch in self.switches,
         # used to make eAPI calls by using switch.py module
-        self.s_api = {}
         for s in self.switches:
-            if not self.switches[s].get('ip'):
-                for device in self.allDeviceFacts:
-                    if device['hostname'] == s:
+            for device in self.allDeviceFacts:
+                if device['hostname'] == s:
+                    if not self.switches[s].get('ip'):
                         self.switches[s]['ip'] = device['ipAddress']
-            if self.is_valid_destination(self.switches[s].get('ip')):
-                self.s_api[s] = AristaSwitch(host=self.switches[s]['ip'],
-                                             user=self.switches[s]['usr'],
-                                             passwd=self.switches[s]['passwd'],
-                                             logger=self.logger)
+                    self.switches[s]['serialNumber'] = device['serialNumber']
+                    break
+                            
             # Each switch has a different loopback address,
             # so it's a different configLet
             if not self.switches[s].get('lo0'):
-                inf = self.__get_switch_interface_ip(s, 'Loopback0')
-                self.switches[s]["lo0"] = inf.split('/')[0]
+                self.switches[s]["lo0"] = self.__get_interface_ip(self.switches[s]['serialNumber'], self.__LOOPBACK_INTF)
             if not self.switches[s].get('AS'):
-                self.switches[s]["AS"] = self.__get_switch_asn(s)
+                self.switches[s]["AS"] = self.__get_device_ASN(self.switches[s]['serialNumber'])
         self.logger.debug("Using Arista Leaf switches: {}".format(
                 self.delete_keys_from_dict(self.switches, ('passwd',))))
-
-    def __lldp_find_neighbor(self, tlv_name=None, tlv_value=None):
-        """Returns a list of dicts where a mathing LLDP neighbor has been found
-           Each dict has:
-             switch -> switch name
-             interface -> switch interface
-        """
-        r = []
-        lldp_info = {}
-
-        # Get LLDP info from each switch
-        for s in self.s_api:
-            result = self.s_api[s].run("show lldp neighbors detail")
-            lldp_info[s] = result[0]["lldpNeighbors"]
-            # Look LLDP match on each interface
-            # Note that eAPI returns [] for an interface with no LLDP neighbors
-            # in the corresponding interface lldpNeighborInfo field
-            for interface in lldp_info[s]:
-                if lldp_info[s][interface]["lldpNeighborInfo"]:
-                    lldp_nInf = lldp_info[s][interface]["lldpNeighborInfo"][0]
-                    if tlv_name in lldp_nInf:
-                        if lldp_nInf[tlv_name] == tlv_value:
-                            r.append({"name": s, "interface": interface})
-
-        return r
-
-    def __get_switch_asn(self, switch):
-        """Returns switch ASN in default VRF
-        """
-        bgp_info = self.s_api[switch].run("show ip bgp summary")[0]
-        return(bgp_info["vrfs"]["default"]["asn"])
-
-    def __get_switch_po(self, switch, interface=None):
-        """Returns Port-Channels for a given interface
-           If interface is None returns a list with all PO interfaces
-           Note that if specified, interface should be exact name
-           for instance: Ethernet3 and not e3 eth3 and so on
-        """
-        po_inf = self.s_api[switch].run("show port-channel")[0]["portChannels"]
-
-        if interface:
-            r = [x for x in po_inf if interface in po_inf[x]["activePorts"]]
-        else:
-            r = po_inf
-
-        return r
-
-    def __get_switch_interface_ip(self, switch, interface=None):
-        """Returns interface primary ip
-           interface should be exact name
-           for instance: Ethernet3 and not ethernet 3, e3 eth3 and so on
-        """
-        cmd = "show ip interface {}".format(interface)
-        ip_info = self.s_api[switch].run(cmd)[0]["interfaces"][interface]
-
-        ip = ip_info["interfaceAddress"]["primaryIp"]["address"]
-        mask = ip_info["interfaceAddress"]["primaryIp"]["maskLen"]
-
-        return "{}/{}".format(ip, mask)
 
     def __check_service(self, service_type, connection_points,
                         check_vlan=True, check_num_cp=True, kwargs=None):
@@ -453,7 +403,7 @@ class AristaSdnConnector(SdnConnectorBase):
             t_isFailed = False
             t_isPending = False
             failed_switches = []
-            for s in self.s_api:
+            for s in self.switches:
                 if (len(cls_perSw[s]) > 0):
                     for cl in cls_perSw[s]:
                         # Fix 1030 SDN-ARISTA Key error note when deploy a NS
@@ -610,7 +560,7 @@ class AristaSdnConnector(SdnConnectorBase):
             cls_perSw = {}
             cls_cp = {}
             cl_bgp = {}
-            for s in self.s_api:
+            for s in self.switches:
                 cls_perSw[s] = []
                 cls_cp[s] = []
             vlan_processed = False
@@ -640,18 +590,8 @@ class AristaSdnConnector(SdnConnectorBase):
 
                 encap_type = cp.get(self.__ENCAPSULATION_TYPE_PARAM)
                 switch_id = encap_info.get(self.__SW_ID_PARAM)
-                if not switch_id:
-                    point_mac = encap_info.get(self.__MAC_PARAM)
-                    switches = self.__lldp_find_neighbor("chassisId", point_mac)
-                    self.logger.debug("Found connection point for MAC {}: {}".
-                                      format(point_mac, switches))
-                else:
-                    interface = encap_info.get(self.__SW_PORT_PARAM)
-                    switches = [{'name': switch_id, 'interface': interface}]
-
-                if len(switches) == 0:
-                    raise SdnConnectorError(message="Connection point MAC address {} not found in the switches".format(point_mac),
-                                            http_code=406)
+                interface = encap_info.get(self.__SW_PORT_PARAM)
+                switches = [{'name': switch_id, 'interface': interface}]
 
                 # remove those connections that are equal. This happens when several sriovs are located in the same
                 # compute node interface, that is, in the same switch and interface
@@ -660,13 +600,6 @@ class AristaSdnConnector(SdnConnectorBase):
                     continue
                 processed_connection_points += switches
                 for switch in switches:
-                    if not switch_id:
-                        port_channel = self.__get_switch_po(switch['name'],
-                                                            switch['interface'])
-                        if len(port_channel) > 0:
-                            interface = port_channel[0]
-                        else:
-                            interface = switch['interface']
                     if not interface:
                         raise SdnConnectorError(message="Connection point switch port empty for switch_dpid {}".format(switch_id),
                                                 http_code=406)
@@ -697,7 +630,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 raise SdnConnectorError(message=SdnError.UNSUPPORTED_FEATURE,
                                         http_code=406)
 
-            for s in self.s_api:
+            for s in self.switches:
                 # for cl in cp_configLets:
                 cl_name = (self.__OSM_PREFIX +
                            s +
@@ -760,11 +693,11 @@ class AristaSdnConnector(SdnConnectorBase):
             allLeafConfigured = {}
             allLeafModified = {}
 
-            for s in self.s_api:
+            for s in self.switches:
                 allLeafConfigured[s] = False
                 allLeafModified[s] = False
             cl_toDelete = []
-            for s in self.s_api:
+            for s in self.switches:
                 toDelete_in_cvp = False
                 if not (cls_perSw.get(s) and cls_perSw[s][0].get('config')):
                     # when there is no configuration, means that there is no interface
@@ -834,7 +767,7 @@ class AristaSdnConnector(SdnConnectorBase):
                              allLeafModified):
         """ Removes the given configLet from the devices and then remove the configLets
         """
-        for s in self.s_api:
+        for s in self.switches:
             if allLeafModified[s]:
                 try:
                     res = self.__device_modify(
@@ -851,7 +784,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 except Exception as e:
                     self.logger.error('Error removing configlets from device {}: {}'.format(s, e))
                     pass
-        for s in self.s_api:
+        for s in self.switches:
             if allLeafConfigured[s]:
                 self.__configlet_modify(cls_perSw[s], delete=True)
 
@@ -1099,7 +1032,7 @@ class AristaSdnConnector(SdnConnectorBase):
         return [changed, data]
 
     def __get_configletsDevices(self, configlets):
-        for s in self.s_api:
+        for s in self.switches:
             configlet = configlets[s]
             # Add applied Devices
             if len(configlet) > 0:
@@ -1111,14 +1044,14 @@ class AristaSdnConnector(SdnConnectorBase):
 
     def __get_serviceData(self, service_uuid, service_type, vlan_id, conn_info=None):
         cls_perSw = {}
-        for s in self.s_api:
+        for s in self.switches:
             cls_perSw[s] = []
         if not conn_info:
             srv_cls = self.__get_serviceConfigLets(service_uuid,
                                                    service_type,
                                                    vlan_id)
             self.__get_configletsDevices(srv_cls)
-            for s in self.s_api:
+            for s in self.switches:
                 cl = srv_cls[s]
                 if len(cl) > 0:
                     for dev in cl['devices']:
@@ -1155,11 +1088,11 @@ class AristaSdnConnector(SdnConnectorBase):
                                                c_info)
             allLeafConfigured = {}
             allLeafModified = {}
-            for s in self.s_api:
+            for s in self.switches:
                 allLeafConfigured[s] = True
                 allLeafModified[s] = True
             found_in_cvp = False
-            for s in self.s_api:
+            for s in self.switches:
                 if cls_perSw[s]:
                     found_in_cvp = True
             if found_in_cvp:
@@ -1392,7 +1325,7 @@ class AristaSdnConnector(SdnConnectorBase):
         connectivity service
         """
         srv_cls = {}
-        for s in self.s_api:
+        for s in self.switches:
             srv_cls[s] = []
             found_in_cvp = False
             name = (self.__OSM_PREFIX +
@@ -1547,6 +1480,25 @@ class AristaSdnConnector(SdnConnectorBase):
                     self.cvp_tags.append(elem)
         self.logger.debug('Available devices with tag_name {} - value {}: {} '.format(name, value, self.cvp_tags))
 
+    def __get_interface_ip(self, device_id, interface):
+        ip = None
+        url = '/api/v1/rest/{}/Sysdb/ip/config/ipIntfConfig/{}/'.format(device_id, interface)
+        self.logger.debug('get_interface_ip: URL {}'.format(url))
+        try:
+            data = self.client.get(url, timeout=self.__API_REQUEST_TOUT)
+            return data['notifications'][0]['updates']['addrWithMask']['value'].split('/')[0]
+        except Exception:
+            raise SdnConnectorError("Invalid response from url {}: data {}".format(url, data))
+
+    def __get_device_ASN(self, device_id):
+        url = '/api/v1/rest/{}/Sysdb/routing/bgp/config/'.format(device_id)
+        self.logger.debug('get_device_ASN: URL {}'.format(url))
+        try:
+            data = self.client.get(url, timeout=self.__API_REQUEST_TOUT)
+            return data['notifications'][0]['updates']['asNumber']['value']['value']['int']
+        except Exception:
+            raise SdnConnectorError("Invalid response from url {}: data {}".format(url, data))
+
     def is_valid_destination(self, url):
         """ Check that the provided WIM URL is correct
         """
@@ -1582,6 +1534,8 @@ class AristaSdnConnector(SdnConnectorBase):
         return True
 
     def delete_keys_from_dict(self, dict_del, lst_keys):
+        if dict_del is None:
+            return dict_del
         dict_copy = {k: v for k, v in dict_del.items() if k not in lst_keys}
         for k, v in dict_copy.items():
             if isinstance(v, dict):

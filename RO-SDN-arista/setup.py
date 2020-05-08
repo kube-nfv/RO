@@ -46,7 +46,6 @@ setup(
     include_package_data=True,
     install_requires=["requests",
                       "uuid",
-                      "jsonrpclib-pelix",
                       "cvprac",
                       "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"],
     setup_requires=['setuptools-version-command'],
