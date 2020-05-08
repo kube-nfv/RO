@@ -126,7 +126,7 @@ class vim_thread(threading.Thread):
         self.error_status = None
         self.wim_account_id = wim_account_id
         self.datacenter_tenant_id = datacenter_tenant_id
-        self.port_mapping = None
+        self.port_mappings = None
         if self.wim_account_id:
             self.target_k = "wim_account_id"
             self.target_v = self.wim_account_id
