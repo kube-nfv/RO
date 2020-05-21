@@ -46,8 +46,7 @@ setup(
     include_package_data=True,
     #dependency_links=["git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro"],
     install_requires=[
-        "pycurl",
-        #"requests",
+        "requests",
         "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"
     ],
     setup_requires=['setuptools-version-command'],

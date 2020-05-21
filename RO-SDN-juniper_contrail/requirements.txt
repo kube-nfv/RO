@@ -13,7 +13,6 @@
 # limitations under the License.
 ##
 
-#requests
-pycurl
+requests
 git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO
 
