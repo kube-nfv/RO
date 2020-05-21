@@ -72,8 +72,8 @@ netStatus2manoFormat={'ACTIVE':'ACTIVE','PAUSED':'PAUSED','INACTIVE':'INACTIVE',
 supportedClassificationTypes = ['legacy_flow_classifier']
 
 #global var to have a timeout creating and deleting volumes
-volume_timeout = 600
-server_timeout = 600
+volume_timeout = 1800
+server_timeout = 1800
 
 
 class SafeDumper(yaml.SafeDumper):
