@@ -96,18 +96,19 @@ class ContrailHttp(object):
         return resp.text
 
     def _get_token(self, headers):
-        self._logger.debug('Current Token:'.format(self.token))
-        auth_url = self.auth_url + 'auth/tokens'
-        if self.token is None or self._token_expired():
-            if not self.auth_url:
-                self.token = ""
-            resp = self._request_noauth(url=auth_url, op="POST", headers=headers,
-                                                 data=self.auth_dict)
-            self.token = resp.headers.get('x-subject-token')
-            self.last_token_time = time.time()
-            self._logger.debug('Obtained token: '.format(self.token))
+        if self.auth_url:
+            self._logger.debug('Current Token:'.format(self.token))
+            auth_url = self.auth_url + 'auth/tokens'
+            if self.token is None or self._token_expired():
+                if not self.auth_url:
+                    self.token = ""
+                resp = self._request_noauth(url=auth_url, op="POST", headers=headers,
+                                                     data=self.auth_dict)
+                self.token = resp.headers.get('x-subject-token')
+                self.last_token_time = time.time()
+                self._logger.debug('Obtained token: '.format(self.token))
 
-            return self.token
+                return self.token
 
     def _token_expired(self):
         current_time = time.time()

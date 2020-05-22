@@ -187,38 +187,44 @@ class JuniperContrail(SdnConnectorBase):
             # Assign vpg_id from vpg
             vpg_id = vpg.get("uuid")
 
-        # 3 - Create vmi
+        # 3 - Check if the vmi alreaady exists
         vmi_id, _ = self.underlay_api.create_vmi(switch_id, switch_port, network, vlan)
         self.logger.debug("port created")
 
         return vpg_id, vmi_id
 
-    def _delete_port(self, vpg_id, vmi_id):
-        self.logger.debug("delete port, vpg_id: {}, vmi_id: {}".format(vpg_id, vmi_id))
+    def _delete_port(self, switch_id, switch_port, vlan):
+        self.logger.debug("delete port, switch_id: {}, switch_port: {}, vlan: {}".format(switch_id, switch_port, vlan))
+
+        vpg_name = self.underlay_api.get_vpg_name(switch_id, switch_port)
+        vmi_name = self.underlay_api.get_vmi_name(switch_id, switch_port, vlan)
 
         # 1 - Obtain vpg by id (if not vpg_id must have been error creating ig, nothing to be done)
-        if vpg_id:
-            vpg = self.underlay_api.get_by_uuid("virtual-port-group", vpg_id)
-            if not vpg:
-                self.logger.warning("vpg: {} to be deleted not found".format(vpg_id))
+        vpg_fqdn = ["default-global-system-config", self.fabric, vpg_name]
+        vpg = self.underlay_api.get_by_fq_name("virtual-port-group", vpg_fqdn)
+        if not vpg:
+            self.logger.warning("vpg: {} to be deleted not found".format(vpg_name))
+        else:
+            # 2 - Get vmi interfaces from vpg
+            vmi_list = vpg.get("virtual_machine_interface_refs")
+            if not vmi_list:
+                # must have been an error during port creation when vmi is created
+                # may happen if there has been an error during creation
+                self.logger.warning("vpg: {} has not vmi, will delete nothing".format(vpg))
             else:
-                # 2 - Get vmi interfaces from vpg
-                vmi_list = vpg.get("virtual_machine_interface_refs")
-                if not vmi_list:
-                    # must have been an error during port creation when vmi is created
-                    # may happen if there has been an error during creation
-                    self.logger.warning("vpg: {} has not vmi, will delete nothing".format(vpg))
-                else:
-                    num_vmis = len(vmi_list)
-                    for vmi in vmi_list:
-                        uuid = vmi.get("uuid")
-                        if uuid == vmi_id:
-                            self.underlay_api.delete_vmi(vmi.get("uuid"))
-                            num_vmis = num_vmis - 1
+                num_vmis = len(vmi_list)
+                for vmi in vmi_list:
+                    uuid = vmi.get("uuid")
+                    fqdn = vmi.get("to")
+                    # check by name
+                    if fqdn[2] == vmi_name:
+                        self.underlay_api.unref_vmi_vpg(vpg.get("uuid"), vmi.get("uuid"), fqdn)
+                        self.underlay_api.delete_vmi(vmi.get("uuid"))
+                        num_vmis = num_vmis - 1
 
-                # 3 - If there are no more vmi delete the vpg
-                if not vmi_list or num_vmis == 0:
-                    self.underlay_api.delete_vpg(vpg.get("uuid"))
+            # 3 - If there are no more vmi delete the vpg
+            if not vmi_list or num_vmis == 0:
+                self.underlay_api.delete_vpg(vpg.get("uuid"))
 
     def check_credentials(self):
         """Check if the connector itself can access the SDN/WIM with the provided url (wim.wim_url),
@@ -276,17 +282,17 @@ class JuniperContrail(SdnConnectorBase):
         """
         self.logger.debug("")
         try:
-            resp = self.http.get_cmd(endpoint='virtual-network/{}'.format(service_uuid))
+            resp = self.underlay_api.get_virtual_network(service_uuid)
             if not resp:
                 raise SdnConnectorError('Empty response')
             if resp:
-                vnet_info = json.loads(resp)
+                vnet_info = resp
 
                 # Check if conn_info reports error
                 if conn_info.get("sdn_status") == "ERROR":
-                    return {'sdn_status': 'ACTIVE', 'sdn_info': "conn_info indicates pending error"}
+                    return {'sdn_status': 'ERROR', 'sdn_info': conn_info}
                 else:
-                    return {'sdn_status': 'ACTIVE', 'sdn_info': vnet_info['virtual-network']}
+                    return {'sdn_status': 'ACTIVE', 'sdn_info': vnet_info}
             else:
                 return {'sdn_status': 'ERROR', 'sdn_info': 'not found'}
         except SdnConnectorError:
@@ -360,11 +366,38 @@ class JuniperContrail(SdnConnectorBase):
         try:
             # Initialize data
             conn_info = None
-            conn_info_cp = {}
 
-            # 1 - Obtain VLAN-ID
-            vlan = self._get_vlan(connection_points)
-            self.logger.debug("Provided vlan: {}".format(vlan))
+
+            # 1 - Filter connection_points (transform cp to a dictionary with no duplicates)
+            # This data will be returned even if no cp can be created if something is created
+            vlans = set()
+            work_cps = {}
+            for cp in connection_points:
+                switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
+                switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                service_endpoint_id = cp.get("service_endpoint_id")
+                vlans.add(cp.get("service_endpoint_encapsulation_info").get("vlan"))
+                cp_name = self.underlay_api.get_vpg_name(switch_id, switch_port)
+                add_cp = work_cps.get(cp_name)
+                if not add_cp:
+                    # add cp to dict
+                    service_endpoint_ids = []
+                    service_endpoint_ids.append(service_endpoint_id)
+                    add_cp = {"service_endpoint_ids": service_endpoint_ids,
+                              "switch_dpid": switch_id,
+                              "switch_port": switch_port}
+                    work_cps[cp_name] = add_cp
+                else:
+                    # add service_endpoint_id to list
+                    service_endpoint_ids = add_cp["service_endpoint_ids"]
+                    service_endpoint_ids.append(service_endpoint_id)
+
+            # check vlan
+            if len(vlans) == 1:
+                vlan = vlans.pop()
+                self.logger.debug("Provided vlan: {}".format(vlan))
+            else:
+                raise SdnConnectorError("Provided more than one vlan")
 
             # 2 - Obtain free VNI
             vni = self._generate_vni()
@@ -391,23 +424,23 @@ class JuniperContrail(SdnConnectorBase):
             conn_info = {
                 "vnet": {
                     "uuid": vnet_id,
-                    "name": vnet_name
+                    "name": vnet_name,
+                    "vlan": vlan
                 },
-                "connection_points": conn_info_cp # dict with port_name as key
+                "connection_points": work_cps # dict with port_name as key
             }
 
             # 4 - Create a port for each endpoint
-            for cp in connection_points:
-                switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
-                switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+            for cp in work_cps.values():
+                switch_id = cp.get("switch_dpid")
+                switch_port = cp.get("switch_port")
                 vpg_id, vmi_id = self._create_port(switch_id, switch_port, vnet_name, vlan)
-                cp_added = cp.copy()
-                cp_added["vpg_id"] = vpg_id
-                cp_added["vmi_id"] = vmi_id
-                conn_info_cp[self.underlay_api.get_vpg_name(switch_id, switch_port)] = cp_added
+                cp["vpg_id"] = vpg_id
+                cp["vmi_id"] = vmi_id
 
-            return vnet_id, conn_info
             self.logger.info("created connectivity service, uuid: {}, name: {}".format(vnet_id, vnet_name))
+            return vnet_id, conn_info
+
         except Exception as e:
             # Log error
             if isinstance(e, SdnConnectorError) or isinstance(e, HttpException):
@@ -421,13 +454,11 @@ class JuniperContrail(SdnConnectorBase):
                 raise SdnConnectorError("Exception create connectivity service: {}".format(str(e)))
             else:
                 conn_info["sdn_status"] = "ERROR"
+                conn_info["sdn_info"] = repr(e)
                 # iterate over not added connection_points and add but marking them as error
-                for cp in connection_points[len(conn_info_cp):]:
-                    cp_error = cp.copy()
-                    cp_error["sdn_status"] = "ERROR"
-                    switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
-                    switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
-                    conn_info_cp[self.underlay_api.get_vpg_name(switch_id, switch_port)] = cp_error
+                for cp in work_cps.values():
+                    if not cp.get("vmi_id") or not cp.get("vpg_id"):
+                        cp["sdn_status"] = "ERROR"
                 return vnet_id, conn_info
 
     def delete_connectivity_service(self, service_uuid, conn_info=None):
@@ -446,16 +477,18 @@ class JuniperContrail(SdnConnectorBase):
         try:
             vnet_uuid = service_uuid
             vnet_name = conn_info["vnet"]["name"]   # always should exist as the network is the first thing created
-            connection_points = conn_info["connection_points"].values()
-            vlan = self._get_vlan(connection_points)
+            work_cps = conn_info["connection_points"]
+            vlan = conn_info["vnet"]["vlan"]
 
             # 1: For each connection point delete vlan from vpg and it is is the
             # last one, delete vpg
-            for cp in connection_points:
-                self._delete_port(cp.get("vpg_id"), cp.get("vmi_id"))
+            for cp in work_cps.values():
+                self._delete_port(cp.get("switch_dpid"), cp.get("switch_port"), vlan)
 
             # 2: Delete vnet
             self.underlay_api.delete_virtual_network(vnet_uuid)
+            self.logger.info("deleted connectivity_service vnet_name: {}, connection_points: {}".
+                             format(service_uuid, conn_info))
         except SdnConnectorError:
             raise
         except HttpException as e:
@@ -508,24 +541,24 @@ class JuniperContrail(SdnConnectorBase):
 
         # conn_info should always exist and have connection_points and vnet elements
         old_cp = conn_info.get("connection_points", {})
-        old_vlan = self._get_vlan(old_cp)
+        old_vlan = conn_info.get("vnet", {}).get("vlan")
 
         # Check if an element of old_cp is marked as error, in case it is delete it
         # Not return a new conn_info in this case because it is only partial information
         # Current conn_info already marks ports as error
         try:
-            delete_conn_info = []
-            for cp in old_cp:
+            deleted_ports = []
+            for cp in old_cp.values():
                 if cp.get("sdn_status") == "ERROR":
-                    switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
-                    switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                    switch_id = cp.get("switch_dpid")
+                    switch_port = cp.get("switch_port")
                     self._delete_port(switch_id, switch_port, old_vlan)
-                    delete_conn_info.append(self.underlay_api.get_vpg_name(switch_id, switch_port))
+                    deleted_ports.append(self.underlay_api.get_vpg_name(switch_id, switch_port))
 
-            for i in delete_conn_info:
-                del old_cp[i]
+            for port in deleted_ports:
+                del old_cp[port]
 
-            # Delete vnet status if exists (possibly marked as error)
+            # Delete sdn_status and sdn_info if exists (possibly marked as error)
             if conn_info.get("vnet",{}).get("sdn_status"):
                 del conn_info["vnet"]["sdn_status"]
         except HttpException as e:
@@ -542,28 +575,54 @@ class JuniperContrail(SdnConnectorBase):
 
             # Check and obtain what should be added and deleted, if there is an error here raise an exception
             try:
+                vlans = set()
+                work_cps = {}
+                for cp in connection_points:
+                    switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
+                    switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                    service_endpoint_id = cp.get("service_endpoint_id")
+                    vlans.add(cp.get("service_endpoint_encapsulation_info").get("vlan"))
+                    cp_name = self.underlay_api.get_vpg_name(switch_id, switch_port)
+                    add_cp = work_cps.get(cp_name)
+                    if not add_cp:
+                        # add cp to dict
+                        service_endpoint_ids = []
+                        service_endpoint_ids.append(service_endpoint_id)
+                        add_cp = {"service_endpoint_ids": service_endpoint_ids,
+                                  "switch_dpid": switch_id,
+                                  "switch_port": switch_port}
+                        work_cps[cp_name] = add_cp
+                    else:
+                        # add service_endpoint_id to list
+                        service_endpoint_ids = add_cp["service_endpoint_ids"]
+                        service_endpoint_ids.append(service_endpoint_id)
 
-                vlan = self._get_vlan(connection_points)
+                # check vlan
+                if len(vlans) == 1:
+                    vlan = vlans.pop()
+                    self.logger.debug("Provided vlan: {}".format(vlan))
+                else:
+                    raise SdnConnectorError("Provided more than one vlan")
 
-                old_port_list = ["{}_{}".format(cp["service_endpoint_encapsulation_info"]["switch_dpid"],
-                                          cp["service_endpoint_encapsulation_info"]["switch_port"])
-                           for cp in old_cp.values()]
-                port_list = ["{}_{}".format(cp["service_endpoint_encapsulation_info"]["switch_dpid"],
-                                          cp["service_endpoint_encapsulation_info"]["switch_port"])
-                           for cp in connection_points]
+                old_port_list = list(old_cp.keys())
+                port_list = list(work_cps.keys())
                 to_delete_ports = list(set(old_port_list) - set(port_list))
                 to_add_ports = list(set(port_list) - set(old_port_list))
+                self.logger.debug("ports to delete: {}".format(to_delete_ports))
+                self.logger.debug("ports to add: {}".format(to_add_ports))
 
-                # Obtain network
-                vnet = self.underlay_api.get_virtual_network(self.get_url(), service_uuid)
-                vnet_name = vnet["name"]
+                # Obtain network (check it is correctly created)
+                vnet = self.underlay_api.get_virtual_network(service_uuid)
+                if vnet:
+                    vnet_name = vnet["name"]
+                else:
+                    raise SdnConnectorError("vnet uuid: {} not found".format(service_uuid))
 
             except SdnConnectorError:
                 raise
             except Exception as e:
                 self.logger.error("Error edit connectivity service: {}".format(e), exc_info=True)
                 raise SdnConnectorError("Exception edit connectivity service: {}".format(str(e)))
-
 
             # Delete unneeded ports and add new ones: if there is an error return conn_info
             try:
@@ -572,23 +631,33 @@ class JuniperContrail(SdnConnectorBase):
                 conn_info_cp = old_cp
 
                 # Delete unneeded ports
+                deleted_ports = []
                 for port_name in conn_info_cp.keys():
                     if port_name in to_delete_ports:
                         cp = conn_info_cp[port_name]
-                        switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
-                        switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                        switch_id = cp.get("switch_dpid")
+                        switch_port = cp.get("switch_port")
                         self.logger.debug("delete port switch_id, switch_port: {}".format(switch_id, switch_port))
                         self._delete_port(switch_id, switch_port, vlan)
-                        del conn_info_cp[port_name]
+                        deleted_ports.append(port_name)
+
+                # Delete ports
+                for port_name in deleted_ports:
+                    del conn_info_cp[port_name]
 
                 # Add needed ports
-                for cp in connection_points:
+                for port_name, cp in work_cps.items():
                     if port_name in to_add_ports:
-                        switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
-                        switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
+                        switch_id = cp.get("switch_dpid")
+                        switch_port = cp.get("switch_port")
                         self.logger.debug("add port switch_id, switch_port: {}".format(switch_id, switch_port))
-                        self._create_port(switch_id, switch_port, vnet_name, vlan)
-                        conn_info_cp[port_name]
+                        vpg_id, vmi_id = self._create_port(switch_id, switch_port, vnet_name, vlan)
+                        cp_added = cp.copy()
+                        cp_added["vpg_id"] = vpg_id
+                        cp_added["vmi_id"] = vmi_id
+                        conn_info_cp[port_name] = cp_added
+                    # replace endpoints in case they have changed
+                    conn_info_cp[port_name]["service_endpoint_ids"] = cp["service_endpoint_ids"]
 
                 conn_info["connection_points"] = conn_info_cp
                 return conn_info
@@ -606,19 +675,18 @@ class JuniperContrail(SdnConnectorBase):
                     if port_name in to_delete_ports:
                         cp["sdn_status"] = "ERROR"
 
-                for cp in connection_points:
-                    switch_id = cp.get("service_endpoint_encapsulation_info").get("switch_dpid")
-                    switch_port = cp.get("service_endpoint_encapsulation_info").get("switch_port")
-                    port_name = self.underlay_api.get_vpg_name(switch_id, switch_port)
-                    if port_name in to_add_ports:
-                        cp_error = cp.copy()
+                for port_name, cp in work_cps.items():
+                    curr_cp = conn_info_cp.get(port_name)
+                    if not curr_cp:
+                        cp_error = work_cps.get(port_name).copy()
                         cp_error["sdn_status"] = "ERROR"
                         conn_info_cp[port_name] = cp_error
+                    conn_info_cp[port_name]["service_endpoint_ids"] = cp["service_endpoint_ids"]
 
                 conn_info["sdn_status"] = "ERROR"
+                conn_info["sdn_info"] = repr(e)
                 conn_info["connection_points"] = conn_info_cp
                 return conn_info
-
 
         else:
             # Connection points have not changed, so do nothing

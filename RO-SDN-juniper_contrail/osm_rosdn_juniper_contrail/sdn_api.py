@@ -39,7 +39,7 @@ class UnderlayApi:
             url = url + "/"
         self.url = url
 
-        auth_url = None
+        self.auth_url = None
         self.project = None
         self.domain = None
         self.asn = None
@@ -56,9 +56,12 @@ class UnderlayApi:
 
         if user:
             self.user = user
-
         if password:
             self.password = password
+
+        self.logger.debug("Config parameters for the underlay controller: auth_url: {}, project: {},"
+                          " domain: {}, user: {}, password: {}".format(self.auth_url, self.project,
+                            self.domain, self.user, self.password))
 
         auth_dict = {}
         auth_dict['auth'] = {}
@@ -130,6 +133,19 @@ class UnderlayApi:
         else:
             return None
 
+    def delete_ref(self, type, uuid, ref_type, ref_uuid, ref_fq_name):
+        payload = {
+            "type": type,
+            "uuid": uuid,
+            "ref-type": ref_type,
+            "ref-fq-name": ref_fq_name,
+            "operation": "DELETE"
+        }
+        endpoint = self.controller_url + "ref-update"
+        resp = self.http.post_cmd(url=endpoint,
+                                headers=self.http_header,
+                                post_fields_dict=payload)
+        return resp
 
     # Aux methods to avoid code duplication of name conventions
     def get_vpg_name(self, switch_id, switch_port):
@@ -302,4 +318,7 @@ class UnderlayApi:
         self.logger.debug("delete vmi uuid: {}".format(uuid))
         self.delete_by_uuid(self.controller_url, 'virtual-machine-interface', uuid)
         self.logger.debug("deleted vmi: {}".format(uuid))
+
+    def unref_vmi_vpg(self, vpg_id, vmi_id, vmi_fq_name):
+        self.delete_ref("virtual-port-group", vpg_id, "virtual-machine-interface", vmi_id, vmi_fq_name)
 
