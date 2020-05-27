@@ -1260,13 +1260,6 @@ class vimconnector(vimconn.vimconnector):
                         port_dict["provider_security_groups"]=[]
                         port_dict["security_groups"]=[]
                 else:   # For PT PCI-PASSTHROUGH
-                    # VIO specific Changes
-                    # Current VIO release does not support port with type 'direct-physical'
-                    # So no need to create virtual port in case of PCI-device.
-                    # Will update port_dict code when support gets added in next VIO release
-                    if self.vim_type == "VIO":
-                        raise vimconn.vimconnNotSupportedException(
-                            "Current VIO release does not support full passthrough (PT)")
                     # if "vpci" in net:
                     #     if "PF" not in metadata_vpci:
                     #         metadata_vpci["PF"]=[]
