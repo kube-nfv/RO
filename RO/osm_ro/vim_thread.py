@@ -1211,23 +1211,24 @@ class vim_thread(threading.Thread):
                 new_connected_ports.append(external_port_id)
 
             # if there are more ports to connect or they have been modified, call create/update
-            if (set(connected_ports) != set(new_connected_ports) or sdn_need_update) and len(sdn_ports) >= 2:
-                last_update = time.time()
-                if not wimconn_net_id:
-                    if params[0] == "data":
-                        net_type = "ELAN"
-                    elif params[0] == "ptp":
-                        net_type = "ELINE"
-                    else:
-                        net_type = "L3"
+            try:
+                if (set(connected_ports) != set(new_connected_ports) or sdn_need_update) and len(sdn_ports) >= 2:
+                    last_update = time.time()
+                    if not wimconn_net_id:
+                        if params[0] == "data":
+                            net_type = "ELAN"
+                        elif params[0] == "ptp":
+                            net_type = "ELINE"
+                        else:
+                            net_type = "L3"
 
-                    wimconn_net_id, created_items = self.sdnconnector.create_connectivity_service(net_type, sdn_ports)
-                else:
-                    created_items = self.sdnconnector.edit_connectivity_service(wimconn_net_id, conn_info=created_items,
-                                                                                connection_points=sdn_ports)
-                connected_ports = new_connected_ports
-            elif wimconn_net_id:
-                try:
+                        wimconn_net_id, created_items = self.sdnconnector.create_connectivity_service(
+                            net_type, sdn_ports)
+                    else:
+                        created_items = self.sdnconnector.edit_connectivity_service(
+                            wimconn_net_id, conn_info=created_items, connection_points=sdn_ports)
+                    connected_ports = new_connected_ports
+                elif wimconn_net_id:
                     wim_status_dict = self.sdnconnector.get_connectivity_service_status(wimconn_net_id,
                                                                                         conn_info=created_items)
                     sdn_status = wim_status_dict["sdn_status"]
@@ -1235,8 +1236,8 @@ class vim_thread(threading.Thread):
                         error_list.append(wim_status_dict.get("error_msg"))
                     if wim_status_dict.get("sdn_info"):
                         sdn_info = str(wim_status_dict.get("sdn_info"))
-                except Exception as e:
-                    self._proccess_sdn_exception(e)
+            except Exception as e:
+                self._proccess_sdn_exception(e)
 
             task["status"] = "DONE"
             task["extra"]["vim_info"] = {}
@@ -1258,6 +1259,7 @@ class vim_thread(threading.Thread):
             # task["extra"]["sdn_net_id"] = sdn_net_id
             instance_element_update = {"wim_internal_id": wimconn_net_id, "status": "WIM_ERROR",
                                        "error_msg": task["error_msg"]}
+
         if sdn_info:
             instance_element_update["wim_info"] = sdn_info
         return instance_element_update

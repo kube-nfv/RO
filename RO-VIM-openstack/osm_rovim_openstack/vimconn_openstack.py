@@ -1665,7 +1665,7 @@ class vimconnector(vimconn.vimconnector):
                         #if network is of type vlan and port is of type direct (sr-iov) then set vlan id
                         network = self.neutron.show_network(port["network_id"])
                         if network['network'].get('provider:network_type') == 'vlan' and \
-                            port.get("binding:vnic_type") == "direct":
+                            port.get("binding:vnic_type") in ("direct", "direct-physical"):
                             interface["vlan"] = network['network'].get('provider:segmentation_id')
                         ips=[]
                         #look for floating ip address
