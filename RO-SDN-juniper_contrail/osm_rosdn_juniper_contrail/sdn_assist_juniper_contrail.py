@@ -20,6 +20,7 @@
 import logging
 import json
 import yaml
+import random
 
 from osm_ro.wim.sdnconn import SdnConnectorBase, SdnConnectorError
 from osm_rosdn_juniper_contrail.rest_lib import ContrailHttp
@@ -151,7 +152,8 @@ class JuniperContrail(SdnConnectorBase):
         for vlanID_range in self.vni_range:
             try:
                 start_vni , end_vni = map(int, vlanID_range.replace(" ", "").split("-"))
-                for vni in range(start_vni, end_vni + 1):
+                for i in range(start_vni, end_vni + 1):
+                    vni = random.randrange(start_vni, end_vni, 1)
                     if vni not in self.used_vni:
                         return vni
             except Exception as exp:
@@ -722,167 +724,78 @@ if __name__ == '__main__':
         vni = juniper_contrail._generate_vni()
         juniper_contrail.used_vni.add(vni)
     print(juniper_contrail.used_vni)
-    juniper_contrail.used_vni.remove(1000003)
+    #juniper_contrail.used_vni.remove(1000003)
     print(juniper_contrail.used_vni)
     for i in range(2):
         vni = juniper_contrail._generate_vni()
         juniper_contrail.used_vni.add(vni)
     print(juniper_contrail.used_vni)
+
+
     # 0. Check credentials
     print('0. Check credentials')
-    juniper_contrail.check_credentials()
+    #juniper_contrail.check_credentials()
 
-    underlay_url = juniper_contrail.get_url()
-    overlay_url = juniper_contrail.get_overlay_url()
-    # Generate VNI
-    for i in range(5):
-        vni = juniper_contrail._generate_vni()
-        juniper_contrail.used_vni.add(vni)
-    print(juniper_contrail.used_vni)
-    juniper_contrail.used_vni.remove(1000003)
-    print(juniper_contrail.used_vni)
-    for i in range(2):
-        vni = juniper_contrail._generate_vni()
-        juniper_contrail.used_vni.add(vni)
-    print(juniper_contrail.used_vni)
-    # 1. Read virtual networks from overlay controller
-    print('1. Read virtual networks from overlay controller')
-    try:
-        vnets = juniper_contrail._get_virtual_networks(overlay_url)
-        logger.debug(yaml.safe_dump(vnets, indent=4, default_flow_style=False))
-        print('OK')
-    except Exception as e:
-        logger.error('Exception reading virtual networks from overlay controller: %s', e)
-        print('FAILED')    
-    # 2. Read virtual networks from underlay controller
-    print('2. Read virtual networks from underlay controller')
-    vnets = juniper_contrail._get_virtual_networks(underlay_url)
-    logger.debug(yaml.safe_dump(vnets, indent=4, default_flow_style=False))
-    print('OK')
-    # 3. Delete virtual networks gerardoX from underlay controller
-    print('3. Delete virtual networks gerardoX from underlay controller')
-    for vn in vnets:
-        name = vn['fq_name'][2]
-        logger.debug('Virtual network: {}'.format(name))
-    for vn in vnets:
-        name = vn['fq_name'][2]
-        if 'gerardo' in name:
-            logger.info('Virtual Network *gerardo*: {}, {}'.format(name,vn['uuid']))
-            if name != "gerardo":
-                print('Deleting Virtual Network: {}, {}'.format(name,vn['uuid']))
-                logger.info('Deleting Virtual Network: {}, {}'.format(name,vn['uuid']))
-                juniper_contrail._delete_virtual_network(underlay_url, vn['uuid'])
-                print('OK')
-    # 4. Get virtual network (gerardo) from underlay controller
-    print('4. Get virtual network (gerardo) from underlay controller')
-    vnet1_info = juniper_contrail._get_virtual_network(underlay_url, 'c5d332f7-420a-4e2b-a7b1-b56a59f20c97')
-    print(yaml.safe_dump(vnet1_info, indent=4, default_flow_style=False))
-    print('OK')
-    # 5. Create virtual network in underlay controller
-    print('5. Create virtual network in underlay controller')
-    myname = 'gerardo4'
-    myvni = 20004
-    vnet2_id, _ = juniper_contrail._create_virtual_network(underlay_url, myname, myvni)
-    vnet2_info = juniper_contrail._get_virtual_network(underlay_url, vnet2_id)
-    print(yaml.safe_dump(vnet2_info, indent=4, default_flow_style=False))
-    print('OK')
-    # 6. Delete virtual network in underlay controller
-    print('6. Delete virtual network in underlay controller')
-    juniper_contrail._delete_virtual_network(underlay_url, vnet2_id)
-    print('OK')
-    # 7. Read previously deleted virtual network in underlay controller
-    print('7. Read previously deleted virtual network in underlay controller')
-    try:
-        vnet2_info = juniper_contrail._get_virtual_network(underlay_url, vnet2_id)
-        if vnet2_info:
-            print('FAILED. Network {} exists'.format(vnet2_id))
-        else:
-            print('OK. Network {} does not exist because it has been deleted'.format(vnet2_id))
-    except Exception as e:
-        logger.info('Exception reading virtual networks from overlay controller: %s', e)
-    exit(0)
+    # 1 - Create and delete connectivity service
+    conn_point_0 = {
+        "service_endpoint_id": "0000:83:11.4",
+        "service_endpoint_encapsulation_type": "dot1q",
+        "service_endpoint_encapsulation_info": {
+            "switch_dpid": "LEAF-1",
+            "switch_port": "xe-0/0/17",
+            "vlan": "501"
+        }
+    }
+    conn_point_1 = {
+        "service_endpoint_id": "0000:81:10.3",
+        "service_endpoint_encapsulation_type": "dot1q",
+        "service_endpoint_encapsulation_info": {
+            "switch_dpid": "LEAF-2",
+            "switch_port": "xe-0/0/16",
+            "vlan": "501"
+        }
+    }
+    conn_point_2 = {
+        "service_endpoint_id": "0000:08:11.7",
+        "service_endpoint_encapsulation_type": "dot1q",
+        "service_endpoint_encapsulation_info": {
+            "switch_dpid": "LEAF-2",
+            "switch_port": "xe-0/0/16",
+            "vlan": "502"
+        }
+    }
+    conn_point_3 = {
+        "service_endpoint_id": "0000:83:10.4",
+        "service_endpoint_encapsulation_type": "dot1q",
+        "service_endpoint_encapsulation_info": {
+            "switch_dpid": "LEAF-1",
+            "switch_port": "xe-0/0/17",
+            "vlan": "502"
+        }
+    }
 
-    # Test CRUD:
-    net_name = "gerardo"
-    net_vni = "2000"
-    net_vlan = "501"
-    switch_1 = "LEAF-2"
-    port_1 = "xe-0/0/18"
-    switch_2 = "LEAF-1"
-    port_2 = "xe-0/0/18"
+    # 1 - Define connection points
+    logger.debug("create first connection service")
+    print("Create connectivity service")
+    connection_points = [conn_point_0, conn_point_1]
+    service_id, conn_info = juniper_contrail.create_connectivity_service("ELAN", connection_points)
+    logger.info("Created connectivity service 1")
+    logger.info(service_id)
+    logger.info(yaml.safe_dump(conn_info, indent=4, default_flow_style=False))
 
-    # 1 - Create a new virtual network
-    vnet2_id, vnet2_created = juniper_contrail._create_virtual_network(underlay_url, net_name, net_vni)
-    print("Created virtual network:")
-    print(vnet2_id)
-    print(yaml.safe_dump(vnet2_created, indent=4, default_flow_style=False))
-    print("Get virtual network:")
-    vnet2_info = juniper_contrail._get_virtual_network(underlay_url, vnet2_id)
-    print(json.dumps(vnet2_info, indent=4))
-    print('OK')
+    logger.debug("create second connection service")
+    print("Create connectivity service")
+    connection_points = [conn_point_2, conn_point_3]
+    service_id2, conn_info2 = juniper_contrail.create_connectivity_service("ELAN", connection_points)
+    logger.info("Created connectivity service 2")
+    logger.info(service_id2)
+    logger.info(yaml.safe_dump(conn_info2, indent=4, default_flow_style=False))
 
-    # 2 - Create a new virtual port group
-    vpg_id, vpg_info = juniper_contrail._create_vpg(underlay_url, switch_1, port_1, net_name, net_vlan)
-    print("Created virtual port group:")
-    print(vpg_id)
-    print(json.dumps(vpg_info, indent=4))
+    logger.debug("Delete connectivity service 1")
+    juniper_contrail.delete_connectivity_service(service_id, conn_info)
+    logger.debug("Delete Ok")
 
-    print("Get virtual network:")
-    vnet2_info = juniper_contrail._get_virtual_network(underlay_url, vnet2_id)
-    print(yaml.safe_dump(vnet2_info, indent=4, default_flow_style=False))
-    print('OK')
+    logger.debug("Delete connectivity service 2")
+    juniper_contrail.delete_connectivity_service(service_id2, conn_info2)
+    logger.debug("Delete Ok")
 
-    # 3 - Create a new virtual machine interface
-    vmi_id, vmi_info = juniper_contrail._create_vmi(underlay_url, switch_1, port_1, net_name, net_vlan)
-    print("Created virtual machine interface:")
-    print(vmi_id)
-    print(yaml.safe_dump(vmi_info, indent=4, default_flow_style=False))
-
-    # 4 - Create a second virtual port group
-    # 5 - Create a second virtual machine interface
-
-    ### Test rapido de modificación de requests:
-    # Ver que metodos siguen funcionando y cuales no e irlos corrigiendo
-
-    """
-    vnets = juniper_contrail._get_virtual_networks(underlay_url)
-    logger.debug("Virtual networks:")
-    logger.debug(json.dumps(vnets, indent=2))
-
-    vpgs = juniper_contrail._get_vpgs(underlay_url)
-    logger.debug("Virtual port groups:")
-    logger.debug(json.dumps(vpgs, indent=2))
-    """
-    # Get by uuid
-
-    """
-    # 3 - Get vmi
-    vmi_uuid = "dbfd2099-b895-459e-98af-882d77d968c1"
-    vmi = juniper_contrail._get_vmi(underlay_url, vmi_uuid)
-    logger.debug("Virtual machine interface:")
-    logger.debug(json.dumps(vmi, indent=2))
-
-    # Delete vmi    
-    logger.debug("Delete vmi")
-    juniper_contrail._delete_vmi(underlay_url, vmi_uuid)
-    """
-
-    """
-    # 2 - Get vpg
-    vpg_uuid = "85156474-d1a5-44c0-9d8b-8f690f39d27e"
-    vpg = juniper_contrail._get_vpg(underlay_url, vpg_uuid)
-    logger.debug("Virtual port group:")
-    logger.debug(json.dumps(vpg, indent=2))
-    # Delete vpg
-    vpg = juniper_contrail._delete_vpg(underlay_url, vpg_uuid)
-    """
-
-    # 1 - Obtain virtual network
-    """
-    vnet_uuid = "68457d61-6558-4d38-a03d-369a9de803ea"
-    vnet = juniper_contrail._get_virtual_network(underlay_url, vnet_uuid)
-    logger.debug("Virtual network:")
-    logger.debug(json.dumps(vnet, indent=2))
-    # Delete virtual network
-    juniper_contrail._delete_virtual_network(underlay_url, vnet_uuid)
-    """
