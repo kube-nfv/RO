@@ -121,7 +121,7 @@ class OnosVpls(SdnConnectorBase):
 
         # Obtain current configuration
         onos_config_orig = self._get_onos_netconfig()
-        #self.logger.debug("onos config: %s",  onos_config_orig)
+        # self.logger.debug("onos config: %s",  onos_config_orig)
         onos_config = copy.deepcopy(onos_config_orig)
 
         try:
@@ -165,13 +165,13 @@ class OnosVpls(SdnConnectorBase):
                         }
                     }
                 }
-            #self.logger.debug("original config: %s", onos_config_orig)
-            #self.logger.debug("original config: %s", onos_config)
+            # self.logger.debug("original config: %s", onos_config_orig)
+            # self.logger.debug("original config: %s", onos_config)
             self._post_onos_netconfig(onos_config)
 
             self.logger.debug("created connectivity_service, service_uuid: {}, created_items: {}".
                               format(service_uuid, created_items))
-            return service_uuid, created_items
+            return service_uuid, {"interfaces": created_items}
         except Exception as e:
             self.logger.error('Exception add connection_service: %s', e)
             # try to rollback push original config
@@ -199,11 +199,13 @@ class OnosVpls(SdnConnectorBase):
                 break
         return encapsulation
 
-    def edit_connectivity_service(self, service_uuid, conn_info = None, connection_points = None, **kwargs):
+    def edit_connectivity_service(self, service_uuid, conn_info=None, connection_points=None, **kwargs):
         self.logger.debug("edit connectivity service, service_uuid: {}, conn_info: {}, "
                           "connection points: {} ".format(service_uuid, conn_info, connection_points))
 
-        conn_info = conn_info or []
+        conn_info = conn_info or {}
+        created_ifs = conn_info.get("interfaces", [])
+
         # Obtain current configuration
         onos_config_orig = self._get_onos_netconfig()
         onos_config = copy.deepcopy(onos_config_orig)
@@ -222,7 +224,7 @@ class OnosVpls(SdnConnectorBase):
         self.logger.debug("current encapsulation: {}".format(curr_encapsulation))
 
         # new interfaces names
-        new_interfaces = [port['service_endpoint_id'] for port in new_connection_points]
+        new_interfaces = [port['service_endpoint_id'] for port in connection_points]
 
         # obtain interfaces to delete, list will contain port
         ifs_delete = list(set(curr_interfaces) - set(new_interfaces))
@@ -238,7 +240,7 @@ class OnosVpls(SdnConnectorBase):
                 # check if there are some changes
                 curr_port_name, curr_vlan = self._get_current_port_data(onos_config, port['service_endpoint_id'])
                 new_port_name = 'of:{}/{}'.format(port['service_endpoint_encapsulation_info']['switch_dpid'],
-                                        port['service_endpoint_encapsulation_info']['switch_port'])
+                                                  port['service_endpoint_encapsulation_info']['switch_port'])
                 new_vlan = port['service_endpoint_encapsulation_info']['vlan']
                 if (curr_port_name != new_port_name or curr_vlan != new_vlan):
                     self.logger.debug("TODO: must update data interface: {}".format(port['service_endpoint_id']))
@@ -255,22 +257,22 @@ class OnosVpls(SdnConnectorBase):
                     for port_interface in port['interfaces']:
                         interface_name = port_interface['name']
                         self.logger.debug("interface name: {}".format(port_interface['name']))
-                        if interface_name in ifs_delete and interface_name in conn_info:
+                        if interface_name in ifs_delete and interface_name in created_ifs:
                             self.logger.debug("delete interface name: {}".format(interface_name))
                             port['interfaces'].remove(port_interface)
-                            conn_info.remove(interface_name)
+                            created_ifs.remove(interface_name)
 
             # Add new interfaces
             for port in connection_points:
                 if port['service_endpoint_id'] in ifs_add:
                     created_ifz = self._append_port_to_onos_config(port, onos_config)
                     if created_ifz:
-                        conn_info.append(created_ifz[1])
+                        created_ifs.append(created_ifz[1])
             self._pop_last_update_time(onos_config)
             self._post_onos_netconfig(onos_config)
 
             self.logger.debug("onos config after updating interfaces: {}".format(onos_config))
-            self.logger.debug("conn_info after updating interfaces: {}".format(conn_info))
+            self.logger.debug("created_ifs after updating interfaces: {}".format(created_ifs))
 
             # Update interfaces list in vpls service
             for vpls in onos_config.get('apps', {}).get('org.onosproject.vpls', {}).get('vpls', {}).get('vplsList', {}):
@@ -280,7 +282,7 @@ class OnosVpls(SdnConnectorBase):
 
             self._pop_last_update_time(onos_config)
             self._post_onos_netconfig(onos_config)
-            return conn_info
+            return {"interfaces": created_ifs}
         except Exception as e:
             self.logger.error('Exception add connection_service: %s', e)
             # try to rollback push original config
@@ -297,7 +299,8 @@ class OnosVpls(SdnConnectorBase):
     def delete_connectivity_service(self, service_uuid, conn_info=None):
         self.logger.debug("delete_connectivity_service uuid: {}".format(service_uuid))
 
-        conn_info = conn_info or []
+        conn_info = conn_info or {}
+        created_ifs = conn_info.get("interfaces", [])
         # Obtain current config
         onos_config = self._get_onos_netconfig()
 
@@ -311,7 +314,7 @@ class OnosVpls(SdnConnectorBase):
                             for port_interface in port['interfaces']:
                                 if port_interface['name'] == interface:
                                     # Delete only created ifzs
-                                    if port_interface['name'] in conn_info:
+                                    if port_interface['name'] in created_ifs:
                                         self.logger.debug("Delete ifz: {}".format(port_interface['name']))
                                         port['interfaces'].remove(port_interface)
                     onos_config['apps']['org.onosproject.vpls']['vpls']['vplsList'].remove(vpls)
@@ -343,7 +346,7 @@ class OnosVpls(SdnConnectorBase):
     def _append_port_to_onos_config(self, port, onos_config):
         created_item = None
         port_name = 'of:{}/{}'.format(port['service_endpoint_encapsulation_info']['switch_dpid'],
-                                        port['service_endpoint_encapsulation_info']['switch_port'])
+                                      port['service_endpoint_encapsulation_info']['switch_port'])
         interface_config = {'name': port['service_endpoint_id']}
         if 'vlan' in port['service_endpoint_encapsulation_info'] \
                 and port['service_endpoint_encapsulation_info']['vlan']:
@@ -402,13 +405,13 @@ if __name__ == '__main__':
         }
     }
     connection_points = [conn_point_0, conn_point_1]
-    #service_uuid, created_items = onos_vpls.create_connectivity_service(service_type, connection_points)
+    #service_uuid, conn_info = onos_vpls.create_connectivity_service(service_type, connection_points)
     #print(service_uuid)
-    #print(created_items)
+    #print(conn_info)
 
-    conn_info = None
-    conn_info = ['switch1:ifz1', 'switch3_ifz3']
-    onos_vpls.delete_connectivity_service("f7afc4de-556d-4b5a-8a12-12b5ef97d269", conn_info)
+    #conn_info = None
+    conn_info = {"interfaces": ['switch1:ifz1', 'switch3:ifz1']}
+    #onos_vpls.delete_connectivity_service("70248a41-11cb-44f3-9039-c41387394a30", conn_info)
 
     conn_point_0 = {
         "service_endpoint_id": "switch1:ifz1",
@@ -429,14 +432,18 @@ if __name__ == '__main__':
         }
     }
     conn_point_3 = {
-        "service_endpoint_id": "switch3_ifz3",
+        "service_endpoint_id": "switch2:ifz2",
         "service_endpoint_encapsulation_type": "dot1q",
         "service_endpoint_encapsulation_info": {
-            "switch_dpid": "0000000000000033",
-            "switch_port": "3",
+            "switch_dpid": "0000000000000022",
+            "switch_port": "2",
             "vlan": "500"
         }
     }
-    new_connection_points = [conn_point_0, conn_point_3]
-    #conn_info = onos_vpls.edit_connectivity_service("f7afc4de-556d-4b5a-8a12-12b5ef97d269", conn_info, new_connection_points)
+    connection_points_2 = [conn_point_0, conn_point_3]
+    #conn_info = onos_vpls.edit_connectivity_service("c65d88be-73aa-4933-927d-57ec6bee6b41", conn_info, connection_points_2)
     #print(conn_info)
+
+    service_status = onos_vpls.get_connectivity_service_status("c65d88be-73aa-4933-927d-57ec6bee6b41", conn_info)
+    print("service status")
+    print(service_status)
