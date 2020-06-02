@@ -398,6 +398,8 @@ class JuniperContrail(SdnConnectorBase):
             if len(vlans) == 1:
                 vlan = vlans.pop()
                 self.logger.debug("Provided vlan: {}".format(vlan))
+                if not vlan:
+                    raise SdnConnectorError("No vlan provided")
             else:
                 raise SdnConnectorError("Provided more than one vlan")
 
