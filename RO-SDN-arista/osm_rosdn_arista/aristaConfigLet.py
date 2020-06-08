@@ -29,56 +29,75 @@
 
 
 class AristaSDNConfigLet:
-    _configLet_SRIOV = """
+    _VLAN = "VLAN"
+    _VXLAN = "VXLAN"
+    _VLAN_MLAG = "VLAN-MLAG"
+    _VXLAN_MLAG = "VXLAN-MLAG"
+    topology = _VXLAN_MLAG
+
+    def __init__(self, topology=_VXLAN_MLAG):
+        self.topology = topology
+
+    _basic_int ="""
 interface {interface}
    !! service: {uuid}
    switchport
-   switchport mode trunk
-   switchport trunk group {service}{vlan_id}
+   switchport mode {type}
+   switchport {switchport_def}
 !
 """
+    _int_SRIOV = "trunk group {service}{vlan_id}"
+    _int_PASSTROUGH = "access vlan {vlan_id}"
 
-    def _get_sriov(self, uuid, interface, vlan_id, s_type, index):
-        return self._configLet_SRIOV.format(uuid=uuid, interface=interface, service=s_type, vlan_id=vlan_id)
+    def _get_interface(self, uuid, interface, vlan_id, s_type, index, i_type):
+        if i_type == "trunk":
+            switchport_def = self._int_SRIOV.format(service=s_type, vlan_id=vlan_id)
+        else:
+            switchport_def = self._int_PASSTROUGH.format(vlan_id=vlan_id)
+        return self._basic_int.format(uuid=uuid,
+                                      interface=interface,
+                                      type=i_type,
+                                      switchport_def=switchport_def)
 
     def getElan_sriov(self, uuid, interface, vlan_id, index):
-        return self._get_sriov(uuid, interface, vlan_id, "ELAN", index)
+        return self._get_interface(uuid, interface, vlan_id, "ELAN", index, "trunk")
 
     def getEline_sriov(self, uuid, interface, vlan_id, index):
-        return self._get_sriov(uuid, interface, vlan_id, "ELINE", index)
-
-    _configLet_PASSTROUGH = """
-interface {interface}
-   !! service: {uuid}
-   switchport
-   switchport mode dot1q-tunnel
-   switchport access vlan {vlan_id}
-!
-"""
-
-    def _get_passthrough(self, uuid, interface, vlan_id, s_type, index):
-        return self._configLet_PASSTROUGH.format(uuid=uuid, interface=interface, vlan_id=vlan_id)
+        return self._get_interface(uuid, interface, vlan_id, "ELINE", index, "trunk")
 
     def getElan_passthrough(self, uuid, interface, vlan_id, index):
-        return self._get_passthrough(uuid, interface, vlan_id, "ELAN", index)
+        return self._get_interface(uuid, interface, vlan_id, "ELAN", index, "dot1q-tunnel")
 
     def getEline_passthrough(self, uuid, interface, vlan_id, index):
-        return self._get_passthrough(uuid, interface, vlan_id, "ELINE", index)
+        return self._get_interface(uuid, interface, vlan_id, "ELINE", index, "dot1q-tunnel")
 
-    _configLet_VLAN = """
+    _basic_vlan ="""
 vlan {vlan}
    !! service: {service} {vlan} {uuid}
    name {service}{vlan}
    trunk group {service}{vlan}
-   trunk group MLAGPEER
-
-interface VXLAN1
-   VXLAN vlan {vlan} vni {vni}
-!
 """
+    _basic_mlag ="""   trunk group MLAGPEER
+"""
+    _basic_vxlan ="""interface VXLAN1
+   VXLAN vlan {vlan} vni {vni}
+"""
+    _basic_end ="!"
+
+    _configLet_VLAN = _basic_vlan + _basic_end
+    _configLet_VXLAN = _basic_vlan + _basic_vxlan + _basic_end
+    _configLet_VLAN_MLAG = _basic_vlan + _basic_mlag + _basic_end
+    _configLet_VXLAN_MLAG = _basic_vlan + _basic_mlag + _basic_vxlan + _basic_end
 
     def _get_vlan(self, uuid, vlan_id, vni_id, s_type):
-        return self._configLet_VLAN.format(service=s_type, vlan=vlan_id, uuid=uuid, vni=vni_id)
+        if self.topology == self._VLAN:
+            return self._configLet_VLAN.format(service=s_type, vlan=vlan_id, uuid=uuid)
+        if self.topology == self._VLAN_MLAG:
+            return self._configLet_VLAN_MLAG.format(service=s_type, vlan=vlan_id, uuid=uuid)
+        if self.topology == self._VXLAN:
+            return self._configLet_VXLAN.format(service=s_type, vlan=vlan_id, uuid=uuid, vni=vni_id)
+        if self.topology == self._VXLAN_MLAG:
+            return self._configLet_VXLAN_MLAG.format(service=s_type, vlan=vlan_id, uuid=uuid, vni=vni_id)
 
     def getElan_vlan(self, uuid, vlan_id, vni_id):
         return self._get_vlan(uuid, vlan_id, vni_id, "ELAN")
@@ -97,7 +116,13 @@ router bgp {bgp}
 """
 
     def _get_bgp(self, uuid, vlan_id, vni_id, loopback0, bgp, s_type):
-        return self._configLet_BGP.format(uuid=uuid, bgp=bgp, vlan=vlan_id, loopback=loopback0, vni=vni_id)
+        if self.topology == self._VXLAN or self.topology == self._VXLAN_MLAG:
+            return self._configLet_BGP.format(uuid=uuid,
+                                              bgp=bgp,
+                                              vlan=vlan_id,
+                                              loopback=loopback0,
+                                              vni=vni_id)
+
 
     def getElan_bgp(self, uuid, vlan_id, vni_id, loopback0, bgp):
         return self._get_bgp(uuid, vlan_id, vni_id, loopback0, bgp, "ELAN")

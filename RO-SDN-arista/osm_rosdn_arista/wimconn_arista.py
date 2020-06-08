@@ -130,6 +130,10 @@ class AristaSdnConnector(SdnConnectorBase):
     __SWITCH_TAG_NAME = 'topology_type'
     __SWITCH_TAG_VALUE = 'leaf'
     __LOOPBACK_INTF = "Loopback0"
+    _VLAN = "VLAN"
+    _VXLAN = "VXLAN"
+    _VLAN_MLAG = "VLAN-MLAG"
+    _VXLAN_MLAG = "VXLAN-MLAG"
 
 
     def __init__(self, wim, wim_account, config=None, logger=None):
@@ -181,15 +185,32 @@ class AristaSdnConnector(SdnConnectorBase):
                           format(wim, cvprac_version, self.__user,
                                  self.delete_keys_from_dict(config, ('passwd',))))
         self.allDeviceFacts = []
-        self.clC = AristaSDNConfigLet()
         self.taskC = None
         try:
+            self.__load_topology()
             self.__load_switches()
         except SdnConnectorError as sc:
             raise sc
         except Exception as e:
             raise SdnConnectorError(message="Unable to load switches from CVP",
                                     http_code=500) from e
+        self.logger.debug("Using topology {} in Arista Leaf switches: {}".format(
+                self.topology,
+                self.delete_keys_from_dict(self.switches, ('passwd',))))
+        self.clC = AristaSDNConfigLet(self.topology)
+
+    def __load_topology(self):
+        self.topology = self._VXLAN_MLAG
+        if self.__config and self.__config.get('topology'):
+            topology = self.__config.get('topology')
+            if topology == "VLAN":
+                self.topology = self._VLAN
+            elif topology == "VXLAN":
+                self.topology = self._VXLAN
+            elif topology == "VLAN-MLAG":
+                self.topology = self._VLAN_MLAG
+            elif topology == "VXLAN-MLAG":
+                self.topology = self._VXLAN_MLAG
 
     def __load_switches(self):
         """ Retrieves the switches to configure in the following order
@@ -200,11 +221,8 @@ class AristaSdnConnector(SdnConnectorBase):
         1.2 from 'switches' parameter,
               if any parameter is not present
                 Lo0 and AS - it will be requested to the switch
-                usr and pass - from WIM configuration
         2.  Looking in the CloudVision inventory if not in configuration parameters
         2.1 using the switches with the topology_type tag set to 'leaf'
-        2.2 using the switches whose parent container is 'leaf'
-        2.3 using the switches whose hostname contains with 'leaf'
 
         All the search methods will be used
         """
@@ -218,7 +236,8 @@ class AristaSdnConnector(SdnConnectorBase):
                                                   'usr': self.__user,
                                                   'lo0': None,
                                                   'AS': None,
-                                                  'serialNumber': None}
+                                                  'serialNumber': None,
+                                                  'mlagPeerDevice': None}
 
         if self.__config and self.__config.get('switches'):
             # Not directly from json, complete one by one
@@ -230,31 +249,29 @@ class AristaSdnConnector(SdnConnectorBase):
                                          'usr': self.__user,
                                          'lo0': None,
                                          'AS': None,
-                                         'serialNumber': None}
+                                         'serialNumber': None,
+                                         'mlagPeerDevice': None}
                 if cs_content:
                     self.switches[cs].update(cs_content)
 
         # Load the rest of the data
-        if self.client is None:
+        if self.client == None:
             self.client = self.__connect()
         self.__load_inventory()
         if not self.switches:
             self.__get_tags(self.__SWITCH_TAG_NAME, self.__SWITCH_TAG_VALUE)
             for device in self.allDeviceFacts:
-                # get the switches whose container parent is 'leaf',
-                # or the topology_tag is 'leaf'
-                # or the hostname contains 'leaf'
-                if ((device['serialNumber'] in self.cvp_tags) or
-                    (self.__SWITCH_TAG_VALUE in device['containerName'].lower()) or 
-                    (self.__SWITCH_TAG_VALUE in device['hostname'].lower())):
-                        if not self.switches.get(device['hostname']):
-                            switch_data = {'passwd': self.__passwd,
-                                           'ip': device['ipAddress'],
-                                           'usr': self.__user,
-                                           'lo0': None,
-                                           'AS': None,
-                                           'serialNumber': None}
-                            self.switches[device['hostname']] = switch_data
+                # get the switches whose topology_tag is 'leaf'
+                if device['serialNumber'] in self.cvp_tags:
+                    if not self.switches.get(device['hostname']):
+                        switch_data = {'passwd': self.__passwd,
+                                       'ip': device['ipAddress'],
+                                       'usr': self.__user,
+                                       'lo0': None,
+                                       'AS': None,
+                                       'serialNumber': None,
+                                       'mlagPeerDevice': None}
+                        self.switches[device['hostname']] = switch_data
         if len(self.switches) == 0:
             self.logger.error("Unable to load Leaf switches from CVP")
             return
@@ -268,15 +285,18 @@ class AristaSdnConnector(SdnConnectorBase):
                         self.switches[s]['ip'] = device['ipAddress']
                     self.switches[s]['serialNumber'] = device['serialNumber']
                     break
-                            
+
             # Each switch has a different loopback address,
             # so it's a different configLet
             if not self.switches[s].get('lo0'):
-                self.switches[s]["lo0"] = self.__get_interface_ip(self.switches[s]['serialNumber'], self.__LOOPBACK_INTF)
+                inf = self.__get_interface_ip(self.switches[s]['serialNumber'], self.__LOOPBACK_INTF)
+                self.switches[s]["lo0"] = inf.split('/')[0]
             if not self.switches[s].get('AS'):
                 self.switches[s]["AS"] = self.__get_device_ASN(self.switches[s]['serialNumber'])
-        self.logger.debug("Using Arista Leaf switches: {}".format(
-                self.delete_keys_from_dict(self.switches, ('passwd',))))
+        if self.topology in (self._VXLAN_MLAG, self._VLAN_MLAG):
+            for s in self.switches:
+                if not self.switches[s].get('mlagPeerDevice'):
+                    self.switches[s]['mlagPeerDevice'] = self.__get_peer_MLAG(self.switches[s]['serialNumber'])
 
     def __check_service(self, service_type, connection_points,
                         check_vlan=True, check_num_cp=True, kwargs=None):
@@ -288,10 +308,10 @@ class AristaSdnConnector(SdnConnectorBase):
                             self.__supported_service_types))
 
         if check_num_cp:
-            if (len(connection_points) < 2):
+            if len(connection_points) < 2:
                 raise Exception(SdnError.CONNECTION_POINTS_SIZE)
-            if ((len(connection_points) != self.__ELINE_num_connection_points) and
-               (service_type == self.__service_types_ELINE)):
+            if (len(connection_points) != self.__ELINE_num_connection_points and
+               service_type == self.__service_types_ELINE):
                 raise Exception(SdnError.CONNECTION_POINTS_SIZE)
 
         if check_vlan:
@@ -328,7 +348,7 @@ class AristaSdnConnector(SdnConnectorBase):
         for testing the access to CloudVision API
         """
         try:
-            if self.client is None:
+            if self.client == None:
                 self.client = self.__connect()
             result = self.client.api.get_cvp_info()
             self.logger.debug(result)
@@ -386,7 +406,7 @@ class AristaSdnConnector(SdnConnectorBase):
                                         http_code=500)
 
             self.__get_Connection()
-            if conn_info is None:
+            if conn_info == None:
                 raise SdnConnectorError(message='No connection information for service UUID {}'.format(service_uuid),
                                         http_code=500)
 
@@ -404,7 +424,7 @@ class AristaSdnConnector(SdnConnectorBase):
             t_isPending = False
             failed_switches = []
             for s in self.switches:
-                if (len(cls_perSw[s]) > 0):
+                if len(cls_perSw[s]) > 0:
                     for cl in cls_perSw[s]:
                         # Fix 1030 SDN-ARISTA Key error note when deploy a NS
                         # Added protection to check that 'note' exists and additionally
@@ -532,6 +552,11 @@ class AristaSdnConnector(SdnConnectorBase):
                                     http_code=401) from e
         except SdnConnectorError as sde:
             raise sde
+        except ValueError as err:
+            self.client = None
+            self.logger.error(str(err), exc_info=True)
+            raise SdnConnectorError(message=str(err),
+                                    http_code=500) from err
         except Exception as ex:
             self.client = None
             self.logger.error(str(ex), exc_info=True)
@@ -636,22 +661,32 @@ class AristaSdnConnector(SdnConnectorBase):
                            s +
                            self.__SEPARATOR + service_type + str(vlan_id) +
                            self.__SEPARATOR + service_uuid)
-                # apply VLAN and BGP configLet to all Leaf switches
-                if service_type == self.__service_types_ELAN:
-                    cl_bgp[s] = self.clC.getElan_bgp(service_uuid,
-                                                     vlan_id,
-                                                     vni_id,
-                                                     self.switches[s]['lo0'],
-                                                     self.switches[s]['AS'])
+                cl_config = ''
+                # Apply BGP configuration only for VXLAN topologies
+                if self.topology in (self._VXLAN_MLAG, self._VXLAN):
+                    if service_type == self.__service_types_ELAN:
+                        cl_bgp[s] = self.clC.getElan_bgp(service_uuid,
+                                                         vlan_id,
+                                                         vni_id,
+                                                         self.switches[s]['lo0'],
+                                                         self.switches[s]['AS'])
+                    else:
+                        cl_bgp[s] = self.clC.getEline_bgp(service_uuid,
+                                                          vlan_id,
+                                                          vni_id,
+                                                          self.switches[s]['lo0'],
+                                                          self.switches[s]['AS'])
                 else:
-                    cl_bgp[s] = self.clC.getEline_bgp(service_uuid,
-                                                      vlan_id,
-                                                      vni_id,
-                                                      self.switches[s]['lo0'],
-                                                      self.switches[s]['AS'])
+                    cl_bgp[s] = ''
 
                 if not cls_cp.get(s):
-                    cl_config = ''
+                    # Apply VLAN configuration to peer MLAG switch,
+                    # only necessary when there are no connection points in the switch
+                    if self.topology in (self._VXLAN_MLAG, self._VLAN_MLAG):
+                        for p in self.switches:
+                            if self.switches[p]['mlagPeerDevice'] == s:
+                                if cls_cp.get(p):
+                                    cl_config = str(cl_vlan)
                 else:
                     cl_config = str(cl_vlan) + str(cl_bgp[s]) + str(cls_cp[s])
 
@@ -789,7 +824,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 self.__configlet_modify(cls_perSw[s], delete=True)
 
     def __exec_task(self, tasks, tout=10):
-        if self.taskC is None:
+        if self.taskC == None:
             self.__connect()
         data = self.taskC.update_all_tasks(tasks).values()
         self.taskC.task_action(data, tout, 'executed')
@@ -806,7 +841,7 @@ class AristaSdnConnector(SdnConnectorBase):
         newTasks = []
 
         if (len(new_configlets) == 0 or
-                device_to_update is None or
+                device_to_update == None or
                 len(device_to_update) == 0):
             data = {'updated': updated, 'tasks': newTasks}
             return [changed, data]
@@ -1078,7 +1113,7 @@ class AristaSdnConnector(SdnConnectorBase):
                                         http_code=500)
 
             self.__get_Connection()
-            if conn_info is None:
+            if conn_info == None:
                 raise SdnConnectorError(message='No connection information for service UUID {}'.format(service_uuid),
                                         http_code=500)
             c_info = None
@@ -1211,7 +1246,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 raise SdnConnectorError(message='Unable to perform operation, missing or empty connection information',
                                         http_code=500)
 
-            if connection_points is None:
+            if connection_points == None:
                 return None
 
             self.__get_Connection()
@@ -1407,7 +1442,7 @@ class AristaSdnConnector(SdnConnectorBase):
             invoking the version retrival as test
         """
         try:
-            if self.client is None:
+            if self.client == None:
                 self.client = self.__connect()
             self.client.api.get_cvp_info()
         except (CvpSessionLogOutError, RequestException) as e:
@@ -1481,7 +1516,6 @@ class AristaSdnConnector(SdnConnectorBase):
         self.logger.debug('Available devices with tag_name {} - value {}: {} '.format(name, value, self.cvp_tags))
 
     def __get_interface_ip(self, device_id, interface):
-        ip = None
         url = '/api/v1/rest/{}/Sysdb/ip/config/ipIntfConfig/{}/'.format(device_id, interface)
         self.logger.debug('get_interface_ip: URL {}'.format(url))
         try:
@@ -1496,6 +1530,50 @@ class AristaSdnConnector(SdnConnectorBase):
         try:
             data = self.client.get(url, timeout=self.__API_REQUEST_TOUT)
             return data['notifications'][0]['updates']['asNumber']['value']['value']['int']
+        except Exception:
+            raise SdnConnectorError("Invalid response from url {}: data {}".format(url, data))
+
+    def __get_peer_MLAG(self, device_id):
+        peer = None
+        url = '/api/v1/rest/{}/Sysdb/mlag/status/'.format(device_id)
+        self.logger.debug('get_MLAG_status: URL {}'.format(url))
+        try:
+            data = self.client.get(url, timeout=self.__API_REQUEST_TOUT)
+            if data['notifications']:
+                found = False
+                for notification in data['notifications']:
+                    for update in notification['updates']:
+                        if update == 'systemId':
+                            mlagSystemId = notification['updates'][update]['value']
+                            found = True
+                            break
+                    if found:
+                        break
+                # search the MLAG System Id
+                if found:
+                    for s in self.switches:
+                        if self.switches[s]['serialNumber'] == device_id:
+                            continue
+                        url = '/api/v1/rest/{}/Sysdb/mlag/status/'.format(self.switches[s]['serialNumber'])
+                        self.logger.debug('Searching for MLAG system id {} in switch {}'.format(mlagSystemId, s))
+                        data = self.client.get(url, timeout=self.__API_REQUEST_TOUT)
+                        found = False
+                        for notification in data['notifications']:
+                            for update in notification['updates']:
+                                if update == 'systemId':
+                                    if mlagSystemId == notification['updates'][update]['value']:
+                                        peer = s
+                                        found = True
+                                        break
+                            if found:
+                                break
+                        if found:
+                            break
+            if peer == None:
+                self.logger.error('No Peer device found for device {} with MLAG address {}'.format(device_id, mlagSystemId))
+            else:
+                self.logger.debug('Peer MLAG for device {} - value {}'.format(device_id, peer))
+            return peer
         except Exception:
             raise SdnConnectorError("Invalid response from url {}: data {}".format(url, data))
 
@@ -1534,7 +1612,7 @@ class AristaSdnConnector(SdnConnectorBase):
         return True
 
     def delete_keys_from_dict(self, dict_del, lst_keys):
-        if dict_del is None:
+        if dict_del == None:
             return dict_del
         dict_copy = {k: v for k, v in dict_del.items() if k not in lst_keys}
         for k, v in dict_copy.items():
