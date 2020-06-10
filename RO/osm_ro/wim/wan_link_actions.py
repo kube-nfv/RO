@@ -315,7 +315,9 @@ class WanLinkCreate(RefreshMixin, CreateAction):
         if details.get('encapsulation_type') == 'vlan':
             point['service_endpoint_encapsulation_type'] = 'dot1q'
             point['service_endpoint_encapsulation_info'] = {
-                'vlan': details['encapsulation_id']
+                'vlan': details['encapsulation_id'],
+                'switch_dpid': wan_info['switch_dpid'],
+                'switch_port': wan_info['switch_port']
             }
         else:
             point['service_endpoint_encapsulation_type'] = 'none'

@@ -113,8 +113,8 @@ class OnosVpls(SdnConnectorBase):
     def create_connectivity_service(self, service_type, connection_points, **kwargs):
         self.logger.debug("create_connectivity_service, service_type: {}, connection_points: {}".
                           format(service_type, connection_points))
-        if service_type.lower() != 'elan':
-            raise SdnConnectorError('Only ELAN network type is supported by ONOS VPLS.')
+        if service_type.lower() == 'etree':
+            raise SdnConnectorError('Only ELINE/ELAN network type is supported by ONOS VPLS.')
 
         # FIXME ¿must check number of connection_points?
         service_uuid = str(uuid.uuid4())
