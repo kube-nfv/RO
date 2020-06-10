@@ -221,18 +221,18 @@ def instance_nets(num_datacenters=2, num_links=2, status='BUILD'):
     them (e.g M = 2 -> back and forth)
     """
     return [
-        {'uuid': uuid('net%d%d' % (k, l)),
+        {'uuid': uuid('net%d%d' % (k, li)),
          'datacenter_id': uuid('dc%d' % k),
          'datacenter_tenant_id': uuid('dc-account0%d' % k),
          'instance_scenario_id': uuid('nsr0'),
          # ^  instance_scenario_id == NS Record id
-         'sce_net_id': uuid('vld%d' % l),
+         'sce_net_id': uuid('vld%d' % li),
          # ^  scenario net id == VLD id
          'status': status,
          'vim_net_id': None,
          'created': True}
         for k in range(num_datacenters)
-        for l in range(num_links)
+        for li in range(num_links)
     ]
 
 
@@ -289,17 +289,17 @@ def instance_wim_nets(instance=0, wim=0, num_links=1,
     VIM nets
     """
     return [
-        {'uuid': uuid('wim-net%d%d%d' % (wim, instance, l)),
+        {'uuid': uuid('wim-net%d%d%d' % (wim, instance, li)),
          'wim_id': uuid('wim%d' % wim),
          'wim_account_id': uuid('wim-account%d' % wim),
-         'wim_internal_id': uuid('-net%d%d' % (wim, l)),
+         'wim_internal_id': uuid('-net%d%d' % (wim, li)),
          'instance_scenario_id': uuid('nsr%d' % instance),
          # ^  instance_scenario_id == NS Record id
-         'sce_net_id': uuid('vld%d' % l),
+         'sce_net_id': uuid('vld%d' % li),
          # ^  scenario net id == VLD id
          'status': status,
          'created': False}
-        for l in range(num_links)
+        for li in range(num_links)
     ]
 
 

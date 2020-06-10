@@ -410,7 +410,7 @@ class WimEngine(object):
 
     def create_actions(self, wan_links):
         """For an array of wan_links, create all the corresponding actions"""
-        return [self.create_action(l) for l in wan_links]
+        return [self.create_action(li) for li in wan_links]
 
     def delete_action(self, wan_link):
         """For a single wan_link create the corresponding create action"""
@@ -431,7 +431,7 @@ class WimEngine(object):
         if instance_scenario_id:
             wan_links = self.persist.get_wan_links(
                 instance_scenario_id=instance_scenario_id, sdn='false')
-        return [self.delete_action(l) for l in wan_links]
+        return [self.delete_action(li) for li in wan_links]
 
     def incorporate_actions(self, wim_actions, instance_action):
         """Make the instance action consider new WIM actions and make the WIM

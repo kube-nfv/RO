@@ -169,7 +169,7 @@ class TestWimEngine(unittest.TestCase):
         for link in wan_links:
             self.assertEqual(link['instance_scenario_id'], uuid('nsr0'))
         # Each VLD needs a network to be created in each datacenter
-        self.assertItemsEqual([l['sce_net_id'] for l in wan_links],
+        self.assertItemsEqual([li['sce_net_id'] for li in wan_links],
                               [uuid('vld0'), uuid('vld1')])
 
 
