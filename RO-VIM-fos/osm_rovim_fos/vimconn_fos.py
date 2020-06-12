@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ##
-# Copyright 2019 ADLINK Technology Inc..
+# Copyright 2020 ADLINK Technology Inc.
 # This file is part of ETSI OSM
 # All Rights Reserved.
 #
@@ -20,7 +20,7 @@
 #
 
 """
-Eclipse fog05 connector, implements methods to interact with fog05 using REST Client + REST Proxy
+Eclipse fog05 connector, implements methods to interact with Eclipse fog05
 
 Manages LXD containers on x86_64 by default, currently missing EPA and VF/PF
 Support config dict:
@@ -32,17 +32,17 @@ Support config dict:
 
 """
 __author__="Gabriele Baldoni"
-__date__ ="$13-may-2019 10:35:12$"
+__date__ ="$2-june-2020 10:35:12$"
 
 import uuid
 import socket
 import struct
 from osm_ro import vimconn
-import random
-import yaml
+import json
 from functools import partial
-from fog05rest import FIMAPI
-from fog05rest import fimerrors
+from fog05 import FIMAPI
+from fog05 import fimapi
+from fog05_sdk.interfaces.FDU import FDU
 
 
 class vimconnector(vimconn.vimconnector):
@@ -76,7 +76,6 @@ class vimconnector(vimconn.vimconnector):
         self.fdu_node_map = {}
         self.fos_api = FIMAPI(locator=self.url)
 
-
     def __get_ip_range(self, first, count):
         int_first = struct.unpack('!L', socket.inet_aton(first))[0]
         int_last = int_first + count
@@ -103,9 +102,9 @@ class vimconnector(vimconn.vimconnector):
         Returns None if success or raised vimconnConnectionException, vimconnAuthException, ...
         """
         try:
-            self.fos_api.check()
+            self.fos_api.node.list()
             return None
-        except fimerrors.FIMAuthExcetpion as fae:
+        except fimapi.FIMAuthExcetpion as fae:
             raise vimconn.vimconnAuthException("Unable to authenticate to the VIM. Error {}".format(fae))
         except Exception as e:
             raise vimconn.vimconnConnectionException("VIM not reachable. Error {}".format(e))
@@ -159,7 +158,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug('VIM new_network args: {} - Generated Eclipse fog05 Descriptor {}'.format(locals(), desc))
         try:
             self.fos_api.network.add_network(desc)
-        except fimerrors.FIMAResouceExistingException as free:
+        except fimapi.FIMAResouceExistingException as free:
             raise vimconn.vimconnConflictException("Network already exists at VIM. Error {}".format(free))
         except Exception as e:
             raise vimconn.vimconnException("Unable to create network {}. Error {}".format(net_name, e))
@@ -240,7 +239,7 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug('delete_network: {}'.format(net_id))
         try:
             self.fos_api.network.remove_network(net_id)
-        except fimerrors.FIMNotFoundException as fnfe:
+        except fimapi.FIMNotFoundException as fnfe:
             raise vimconn.vimconnNotFoundException("Network {} not found at VIM (already deleted?). Error {}".format(net_id, fnfe))
         except Exception as e:
             raise vimconn.vimconnException("Cannot delete network {} from VIM. Error {}".format(net_id, e))
@@ -338,25 +337,24 @@ class vimconnector(vimconn.vimconnector):
             'name':flavor_data.get('name'),
             'cpu_arch': self.arch,
             'cpu_min_count': flavor_data.get('vcpus'),
-            'cpu_min_freq': 0.0,
+            'cpu_min_freq': 0,
             'ram_size_mb':float(flavor_data.get('ram')),
             'storage_size_gb':float(flavor_data.get('disk'))
         }
         try:
             self.fos_api.flavor.add(desc)
-        except fimerrors.FIMAResouceExistingException as free:
+        except fimapi.FIMAResouceExistingException as free:
             raise vimconn.vimconnConflictException("Flavor {} already exist at VIM. Error {}".format(flv_id, free))
         except Exception as e:
             raise vimconn.vimconnConnectionException("VIM not reachable. Error {}".format(e))
         return flv_id
-
 
     def delete_flavor(self, flavor_id):
         """Deletes a tenant flavor from VIM identify by its id
         Returns the used id or raise an exception"""
         try:
             self.fos_api.flavor.remove(flavor_id)
-        except fimerrors.FIMNotFoundException as fnfe:
+        except fimapi.FIMNotFoundException as fnfe:
             raise vimconn.vimconnNotFoundException("Flavor {} not found at VIM (already deleted?). Error {}".format(flavor_id, fnfe))
         except Exception as e:
             raise vimconn.vimconnConnectionException("VIM not reachable. Error {}".format(e))
@@ -376,11 +374,12 @@ class vimconnector(vimconn.vimconnector):
         desc = {
             'name':image_dict.get('name'),
             'uuid':img_id,
-            'uri':image_dict.get('location')
+            'uri':image_dict.get('location'),
+            'format':image_dict.get('disk_format')
         }
         try:
             self.fos_api.image.add(desc)
-        except fimerrors.FIMAResouceExistingException as free:
+        except fimapi.FIMAResouceExistingException as free:
             raise vimconn.vimconnConflictException("Image {} already exist at VIM. Error {}".format(img_id, free))
         except Exception as e:
             raise vimconn.vimconnConnectionException("VIM not reachable. Error {}".format(e))
@@ -501,7 +500,7 @@ class vimconnector(vimconn.vimconnector):
             Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
         """
-        self.logger.debug('new_vminstance with rgs: {}'.format(locals()))
+        self.logger.debug('new_vminstance with args: {}'.format(locals()))
         fdu_uuid = '{}'.format(uuid.uuid4())
 
         flv = self.fos_api.flavor.get(flavor_id)
@@ -520,6 +519,7 @@ class vimconnector(vimconn.vimconnector):
 
         fdu_desc = {
             'name':name,
+            'id':fdu_uuid,
             'uuid':fdu_uuid,
             'computation_requirements':flv,
             'image':img,
@@ -528,7 +528,8 @@ class vimconnector(vimconn.vimconnector):
             'interfaces':[],
             'io_ports':[],
             'connection_points':[],
-            'depends_on':[]
+            'depends_on':[],
+            'storage':[]
         }
 
         nets = []
@@ -540,8 +541,9 @@ class vimconnector(vimconn.vimconnector):
             pair_id = n.get('net_id')
 
             cp_d = {
-                'uuid':cp_id,
-                'pair_id':pair_id
+                'id':cp_id,
+                'name': cp_id,
+                'vld_ref': pair_id
             }
             intf_d = {
                 'name':n.get('name','eth{}'.format(intf_id)),
@@ -551,7 +553,8 @@ class vimconnector(vimconn.vimconnector):
                     'intf_type':n.get('model','VIRTIO'),
                     'vpci':n.get('vpci','0:0:0'),
                     'bandwidth':int(n.get('bw', 100))
-                }
+                },
+                'cp_id': cp_id
             }
             if n.get('mac_address', None) is not None:
                 intf_d['mac_address'] = n['mac_address']
@@ -574,99 +577,57 @@ class vimconnector(vimconn.vimconnector):
             if 'script' in configuration:
                 fdu_desc.update({'configuration':configuration})
 
-        ### NODE Selection ###
-        # Infrastructure info
-        #   nodes dict with
-        #        uuid -> node uuid
-        #        computational capabilities -> cpu, ram, and disk available
-        #        hypervisors -> list of available hypervisors (eg. KVM, LXD, BARE)
-        #
-        #
+        self.logger.debug('Eclipse fog05 FDU Descriptor: {}'.format(fdu_desc))
 
-        # UPDATING AVAILABLE INFRASTRUCTURE
-
-        if len(self.nodes) == 0:
-            nodes_id = self.fos_api.node.list()
-        else:
-            nodes_id = self.nodes
-        nodes = []
-        for n in nodes_id:
-            n_info = self.fos_api.node.info(n)
-            if n_info is None:
-                continue
-            n_plugs = []
-            for p in self.fos_api.node.plugins(n):
-                n_plugs.append(self.fos_api.plugin.info(n,p))
-
-            n_cpu_number =  len(n_info.get('cpu'))
-            n_cpu_arch = n_info.get('cpu')[0].get('arch')
-            n_cpu_freq = n_info.get('cpu')[0].get('frequency')
-            n_ram = n_info.get('ram').get('size')
-            n_disk_size = sorted(list(filter(lambda x: 'sda' in x['local_address'], n_info.get('disks'))), key= lambda k: k['dimension'])[-1].get('dimension')
-
-            hvs = []
-            for p in n_plugs:
-                if p.get('type') == 'runtime':
-                    hvs.append(p.get('name'))
-
-            ni = {
-                'uuid':n,
-                'computational_capabilities':{
-                    'cpu_count':n_cpu_number,
-                    'cpu_arch':n_cpu_arch,
-                    'cpu_freq':n_cpu_freq,
-                    'ram_size':n_ram,
-                    'disk_size':n_disk_size
-                },
-                'hypervisors':hvs
-            }
-            nodes.append(ni)
-
-        # NODE SELECTION
-        compatible_nodes = []
-        for n in nodes:
-            if fdu_desc.get('hypervisor') in n.get('hypervisors'):
-                n_comp = n.get('computational_capabilities')
-                f_comp = fdu_desc.get('computation_requirements')
-                if f_comp.get('cpu_arch') == n_comp.get('cpu_arch'):
-                    if f_comp.get('cpu_min_count') <= n_comp.get('cpu_count') and f_comp.get('ram_size_mb') <= n_comp.get('ram_size'):
-                        if f_comp.get('disk_size_gb') <= n_comp.get('disk_size'):
-                            compatible_nodes.append(n)
-
-        if len(compatible_nodes) == 0:
-            raise vimconn.vimconnConflictException("No available nodes at VIM")
-        selected_node = random.choice(compatible_nodes)
-
-        created_items.update({'fdu_id':fdu_uuid, 'node_id': selected_node.get('uuid')})
-
-        self.logger.debug('FOS Node {} FDU Descriptor: {}'.format(selected_node.get('uuid'), fdu_desc))
+        fdu = FDU(fdu_desc)
 
         try:
-            self.fos_api.fdu.onboard(fdu_desc)
-            instanceid = self.fos_api.fdu.instantiate(fdu_uuid, selected_node.get('uuid'))
-            created_items.update({'instance_id':instanceid})
+            self.fos_api.fdu.onboard(fdu)
+            instance = self.fos_api.fdu.define(fdu_uuid)
+            instance_list = self.fos_api.fdu.instance_list(fdu_uuid)
+            selected_node = ''
+            for n in instance_list:
+                instances = instance_list[n]
+                if instance.uuid in instances:
+                    selected_node = n
+            if selected_node == '':
+                raise ValueError("Unable to find node for network creation")
 
-            self.fdu_node_map.update({instanceid: selected_node.get('uuid')})
-            self.logger.debug('new_vminstance return: {}'.format((fdu_uuid, created_items)))
-            return (instanceid, created_items)
-        except fimerrors.FIMAResouceExistingException as free:
+            self.logger.debug('Selected node by VIM: {}'.format(selected_node))
+            created_items.update({'fdu_id':fdu_uuid, 'node_id': selected_node})
+
+            for cp in fdu_desc['connection_points']:
+                nets = self.fos_api.network.list()
+                for net in nets:
+                    if net.get('uuid') == cp['vld_ref']:
+                        self.fos_api.network.add_network_to_node(net, selected_node)
+
+            self.fos_api.fdu.configure(instance.uuid)
+            self.fos_api.fdu.start(instance.uuid)
+
+            self.logger.debug('Eclipse fog05 FDU Started {}'.format(instance.uuid))
+
+            created_items.update({'instance_id': str(instance.uuid)})
+
+            self.fdu_node_map.update({instance.uuid: selected_node})
+            self.logger.debug('new_vminstance returns: {} {}'.format( instance.uuid, created_items))
+            return str(instance.uuid), created_items
+        except fimapi.FIMAResouceExistingException as free:
             raise vimconn.vimconnConflictException("VM already exists at VIM. Error {}".format(free))
         except Exception as e:
             raise vimconn.vimconnException("Error while instantiating VM {}. Error {}".format(name, e))
-
 
     def get_vminstance(self,vm_id):
         """Returns the VM instance information from VIM"""
         self.logger.debug('VIM get_vminstance with args: {}'.format(locals()))
 
         try:
-            intsinfo = self.fos_api.fdu.instance_info(vm_id)
+            instance = self.fos_api.fdu.instance_info(vm_id)
         except Exception as e:
             raise vimconn.vimconnConnectionException("VIM not reachable. Error {}".format(e))
-        if intsinfo is None:
+        if instance is None:
             raise vimconn.vimconnNotFoundException('VM with id {} not found!'.format(vm_id))
-        return intsinfo
-
+        return instance.to_json()
 
     def delete_vminstance(self, vm_id, created_items=None):
         """
@@ -679,7 +640,27 @@ class vimconnector(vimconn.vimconnector):
         self.logger.debug('FOS delete_vminstance with args: {}'.format(locals()))
         fduid =  created_items.get('fdu_id')
         try:
-            self.fos_api.fdu.terminate(vm_id)
+            instance = self.fos_api.fdu.instance_info(vm_id)
+            instance_list = self.fos_api.fdu.instance_list(instance.fdu_id)
+            selected_node = ''
+            for n in instance_list:
+                instances = instance_list[n]
+                if instance.uuid in instances:
+                    selected_node = n
+            if selected_node == '':
+                raise ValueError("Unable to find node for the given Instance")
+
+            self.fos_api.fdu.stop(vm_id)
+
+            for cp in instance.to_json()['connection_points']:
+                nets = self.fos_api.network.list()
+                for net in nets:
+                    if net.get('uuid') == cp['vld_ref']:
+                        self.fos_api.network.remove_network_from_node(net.get('uuid'), selected_node)
+
+            self.fos_api.fdu.clean(vm_id)
+            self.fos_api.fdu.undefine(vm_id)
+
             self.fos_api.fdu.offload(fduid)
         except Exception as e:
             raise vimconn.vimconnException("Error on deletting VM with id {}. Error {}".format(vm_id,e))
@@ -749,8 +730,11 @@ class vimconnector(vimconn.vimconnector):
                 r.update({vm:{'status':'DELETED'}})
                 continue
 
+            desc = self.fos_api.fdu.info(str(vm_info.fdu_id))
 
-            desc = self.fos_api.fdu.info(vm_info['fdu_uuid'])
+            vm_info = vm_info.to_json()
+            desc = desc.to_json()
+
             osm_status = fos2osm_status.get(vm_info.get('status'))
 
             self.logger.debug('FOS status info {}'.format(vm_info))
@@ -758,14 +742,15 @@ class vimconnector(vimconn.vimconnector):
             info.update({'status':osm_status})
             if vm_info.get('status') == 'ERROR':
                 info.update({'error_msg':vm_info.get('error_code')})
-            info.update({'vim_info':yaml.safe_dump(vm_info)})
+            # yaml.safe_dump(json.loads(json.dumps(vm_info)))
+            # info.update({'vim_info':''})
             faces = []
             i = 0
             for intf_name in vm_info.get('hypervisor_info').get('network',[]):
                 intf_info = vm_info.get('hypervisor_info').get('network').get(intf_name)
                 face = {}
                 face['compute_node'] = nid
-                face['vim_info'] = yaml.safe_dump(intf_info)
+                # face['vim_info'] = '' #yaml.safe_dump(json.loads(json.dumps(intf_info)))
                 face['mac_address'] = intf_info.get('hwaddr')
                 addrs = []
                 for a in intf_info.get('addresses'):
@@ -775,18 +760,18 @@ class vimconnector(vimconn.vimconnector):
                 else:
                     face['ip_address'] = ''
                 face['pci'] = '0:0:0.0'
-                # getting net id by CP
+
                 try:
                     cp_info = vm_info.get('connection_points')[i]
                 except IndexError:
                     cp_info = None
                 if cp_info is not None:
-                    cp_id = cp_info['cp_uuid']
+                    cp_id = cp_info['cp_id']
                     cps_d = desc['connection_points']
-                    matches = [x for x in cps_d if x['uuid'] == cp_id]
+                    matches = [x for x in cps_d if x['id'] == cp_id]
                     if len(matches) > 0:
                         cpd = matches[0]
-                        face['vim_net_id'] = cpd.get('pair_id','')
+                        face['vim_net_id'] = cpd.get('vld_ref','')
                     else:
                         face['vim_net_id'] = ''
                     face['vim_interface_id'] = cp_id
@@ -797,16 +782,11 @@ class vimconnector(vimconn.vimconnector):
                 faces.append(face)
                 i += 1
 
-
-
             info.update({'interfaces':faces})
             r.update({vm:info})
             self.logger.debug('FOS refresh_vms_status res for {} is {}'.format(vm, info))
         self.logger.debug('FOS refresh_vms_status res is {}'.format(r))
         return r
-
-
-        #raise vimconnNotImplemented( "Should have implemented this" )
 
     def action_vminstance(self, vm_id, action_dict, created_items={}):
         """
@@ -825,54 +805,54 @@ class vimconnector(vimconn.vimconnector):
         if nid is None:
             raise vimconn.vimconnNotFoundException('No node for this VM')
         try:
-            fdu_info = self.fos_api.fdu.instance_info(vm_id)
+            instance = self.fos_api.fdu.instance_info(vm_id)
             if "start" in action_dict:
-                if fdu_info.get('status') == 'CONFIGURE':
+                if instance.get('status') == 'CONFIGURE':
                     self.fos_api.fdu.start(vm_id)
-                elif fdu_info.get('status') == 'PAUSE':
+                elif instance.get('status') == 'PAUSE':
                     self.fos_api.fdu.resume(vm_id)
                 else:
-                    raise vimconn.vimconnConflictException("Cannot start from this state")
+                    raise vimconn.vimconnConflictException('Cannot start from current state: {}'.format(instance.get('status')))
             elif "pause" in action_dict:
-                if fdu_info.get('status') == 'RUN':
+                if instance.get('status') == 'RUN':
                     self.fos_api.fdu.pause(vm_id)
                 else:
-                    raise vimconn.vimconnConflictException("Cannot pause from this state")
+                    raise vimconn.vimconnConflictException('Cannot pause from current state: {}'.format(instance.get('status')))
             elif "resume" in action_dict:
-                if fdu_info.get('status') == 'PAUSE':
+                if instance.get('status') == 'PAUSE':
                     self.fos_api.fdu.resume(vm_id)
                 else:
-                    raise vimconn.vimconnConflictException("Cannot resume from this state")
+                    raise vimconn.vimconnConflictException('Cannot resume from current state: {}'.format(instance.get('status')))
             elif "shutoff" in action_dict or "shutdown" or "forceOff" in action_dict:
-                if fdu_info.get('status') == 'RUN':
+                if instance.get('status') == 'RUN':
                     self.fos_api.fdu.stop(vm_id)
                 else:
-                    raise vimconn.vimconnConflictException("Cannot shutoff from this state")
+                    raise vimconn.vimconnConflictException('Cannot shutoff from current state: {}'.format(instance.get('status')))
             elif "terminate" in action_dict:
-                if fdu_info.get('status') == 'RUN':
+                if instance.get('status') == 'RUN':
                     self.fos_api.fdu.stop(vm_id)
                     self.fos_api.fdu.clean(vm_id)
                     self.fos_api.fdu.undefine(vm_id)
                     # self.fos_api.fdu.offload(vm_id)
-                elif fdu_info.get('status') == 'CONFIGURE':
+                elif instance.get('status') == 'CONFIGURE':
                     self.fos_api.fdu.clean(vm_id)
                     self.fos_api.fdu.undefine(vm_id)
                     # self.fos_api.fdu.offload(vm_id)
-                elif fdu_info.get('status') == 'PAUSE':
+                elif instance.get('status') == 'PAUSE':
                     self.fos_api.fdu.resume(vm_id)
                     self.fos_api.fdu.stop(vm_id)
                     self.fos_api.fdu.clean(vm_id)
                     self.fos_api.fdu.undefine(vm_id)
                     # self.fos_api.fdu.offload(vm_id)
                 else:
-                    raise vimconn.vimconnConflictException("Cannot terminate from this state")
+                    raise vimconn.vimconnConflictException('Cannot terminate from current state: {}'.format(instance.get('status')))
             elif "rebuild" in action_dict:
-                raise vimconnNotImplemented("Rebuild not implememnted")
+                raise vimconn.vimconnNotImplemented("Rebuild not implememnted")
             elif "reboot" in action_dict:
-                if fdu_info.get('status') == 'RUN':
+                if instance.get('status') == 'RUN':
                     self.fos_api.fdu.stop(vm_id)
                     self.fos_api.fdu.start(vm_id)
                 else:
-                    raise vimconn.vimconnConflictException("Cannot reboot from this state")
+                    raise vimconn.vimconnConflictException('Cannot reboot from current state: {}'.format(instance.get('status')))
         except Exception as e:
             raise vimconn.vimconnConnectionException("VIM not reachable. Error {}".format(e))

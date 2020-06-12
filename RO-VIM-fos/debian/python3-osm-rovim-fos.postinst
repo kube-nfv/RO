@@ -19,6 +19,8 @@
 
 echo "POST INSTALL OSM-ROVIM-FOS"
 
-#Pip packages required for vmware connector
-python3 -m pip install fog05rest>=0.0.4
+#Pip packages required for Eclipse fog05 connector
+curl -Lo /tmp/libzenohc.so https://github.com/eclipse-fog05/fog05/releases/download/v0.1.0/libzenohc.so
+mv /tmp/libzenohc.so /usr/local/lib/libzenohc.so
+python3 -m pip install pyangbind sphinx zenoh==0.3.0 yaks==0.3.0.post1 fog05-sdk==0.2.0 fog05==0.2.0
 

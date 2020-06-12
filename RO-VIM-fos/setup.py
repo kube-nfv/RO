@@ -25,12 +25,12 @@ README = """
 osm-rovim_fos
 ===========
 
-osm-ro pluging for fos VIM
+osm-ro pluging for Eclipse fog05 VIM
 """
 
 setup(
     name=_name,
-    description='OSM ro vim plugin for fos',
+    description='OSM ro vim plugin for Eclipse fog05',
     long_description=README,
     version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
     # version=VERSION,
@@ -48,7 +48,12 @@ setup(
         "requests",
         "netaddr",
         "PyYAML",
-        "fog05rest>=0.0.4",
+        "zenoh==0.3.0",
+        "yaks==0.3.0.post1",
+        "fog05-sdk==0.2.0",
+        "fog05==0.2.0",
+        "pyangbind",
+        "sphinx",
         "osm-ro @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro&subdirectory=RO"
     ],
     setup_requires=['setuptools-version-command'],
