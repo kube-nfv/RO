@@ -17,10 +17,10 @@
 import requests
 import json
 import copy
-import logging
 
 from time import time
 from requests.exceptions import ConnectionError
+
 
 class HttpException(Exception):
     pass
@@ -97,16 +97,16 @@ class ContrailHttp(object):
 
     def _get_token(self, headers):
         if self.auth_url:
-            self._logger.debug('Current Token:'.format(self.token))
+            self._logger.debug('Current Token: {}'.format(self.token))
             auth_url = self.auth_url + 'auth/tokens'
             if self.token is None or self._token_expired():
                 if not self.auth_url:
                     self.token = ""
                 resp = self._request_noauth(url=auth_url, op="POST", headers=headers,
-                                                     data=self.auth_dict)
+                                            data=self.auth_dict)
                 self.token = resp.headers.get('x-subject-token')
                 self.last_token_time = time.time()
-                self._logger.debug('Obtained token: '.format(self.token))
+                self._logger.debug('Obtained token: {}'.format(self.token))
 
                 return self.token
 
@@ -121,8 +121,8 @@ class ContrailHttp(object):
         headers = http_headers.copy()
 
         # Get authorization (include authentication headers)
-        # todo - añadir token de nuevo
-        #token = self._get_token(headers)
+        # TODO add again token
+        # token = self._get_token(headers)
         token = None
         if token:
             headers['X-Auth-Token'] = token
@@ -148,13 +148,13 @@ class ContrailHttp(object):
             # Execute operation
             try:
                 self._logger.info("Request METHOD: {} URL: {}".format(op, url))
-                if (op == "GET"):
+                if op == "GET":
                     resp = self._http_get(url, headers, query_params=data)
-                elif (op == "POST"):
+                elif op == "POST":
                     resp = self._http_post(url, headers, json_data=data)
-                elif (op == "POST_HEADERS"):
+                elif op == "POST_HEADERS":
                     resp = self._http_post_headers(url, headers, json_data=data)
-                elif (op == "DELETE"):
+                elif op == "DELETE":
                     resp = self._http_delete(url, headers, json_data=data)
                 else:
                     raise HttpException("Unsupported operation: {}".format(op))
@@ -201,4 +201,3 @@ class ContrailHttp(object):
 
     def _http_delete(self, url, headers, json_data=None):
         return requests.delete(url, json=json_data, headers=headers)
-

@@ -20,8 +20,9 @@ import json
 from osm_ro.wim.sdnconn import SdnConnectorError
 from osm_rosdn_juniper_contrail.rest_lib import ContrailHttp
 from osm_rosdn_juniper_contrail.rest_lib import NotFound
-from osm_rosdn_juniper_contrail.rest_lib import DuplicateFound
-from osm_rosdn_juniper_contrail.rest_lib import HttpException
+# from osm_rosdn_juniper_contrail.rest_lib import DuplicateFound
+# from osm_rosdn_juniper_contrail.rest_lib import HttpException
+
 
 class UnderlayApi:
     """ Class with CRUD operations for the underlay API """
@@ -61,7 +62,7 @@ class UnderlayApi:
 
         self.logger.debug("Config parameters for the underlay controller: auth_url: {}, project: {},"
                           " domain: {}, user: {}, password: {}".format(self.auth_url, self.project,
-                            self.domain, self.user, self.password))
+                                                                       self.domain, self.user, self.password))
 
         auth_dict = {}
         auth_dict['auth'] = {}
@@ -142,9 +143,7 @@ class UnderlayApi:
             "operation": "DELETE"
         }
         endpoint = self.controller_url + "ref-update"
-        resp = self.http.post_cmd(url=endpoint,
-                                headers=self.http_header,
-                                post_fields_dict=payload)
+        resp = self.http.post_cmd(url=endpoint, headers=self.http_header, post_fields_dict=payload)
         return resp
 
     # Aux methods to avoid code duplication of name conventions
@@ -230,11 +229,10 @@ class UnderlayApi:
         return self.get_by_uuid(self.controller_url, "virtual-port-group", vpg_id)
 
     def get_vpg_by_name(self, vpg_name):
-        fq_name = [
-                    "default-global-system-config",
-                    self.fabric,
-                    vpg_name
-                ]
+        fq_name = ["default-global-system-config",
+                   self.fabric,
+                   vpg_name
+                   ]
         return self.get_by_fq_name("virtual-port-group", fq_name)
 
     def delete_vpg(self, vpg_id):
@@ -321,4 +319,3 @@ class UnderlayApi:
 
     def unref_vmi_vpg(self, vpg_id, vmi_id, vmi_fq_name):
         self.delete_ref("virtual-port-group", vpg_id, "virtual-machine-interface", vmi_id, vmi_fq_name)
-
