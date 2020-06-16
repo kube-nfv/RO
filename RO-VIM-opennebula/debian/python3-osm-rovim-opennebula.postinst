@@ -21,6 +21,6 @@ echo "POST INSTALL OSM-ROVIM-OPENNEBULA"
 
 #Pip packages required for opennebula connector
 python3 -m pip install -e git+https://github.com/python-oca/python-oca#egg=oca
-python3 -m pip install untangle
+# python3 -m pip install untangle
 python3 -m pip install pyone
 

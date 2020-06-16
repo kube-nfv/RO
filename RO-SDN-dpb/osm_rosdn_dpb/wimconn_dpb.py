@@ -30,7 +30,7 @@ import logging
 import paramiko
 import requests
 import struct
-import sys
+# import sys
 from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 
 
@@ -66,7 +66,7 @@ class DpbSshInterface():
           ro is restarted
         """
         self._check_connection()
-        if data == None:
+        if data is None:
             data = {}
         url_ext_info = url_params.split('/')
         for i in range(0, len(url_ext_info)):
@@ -321,9 +321,9 @@ class DpbConnector(SdnConnectorBase):
         try:
             self.__post(self.__ACTIONS_MAP.get("RELEASE"),
                         "/service/"+service_uuid, get_response=False)
-        except:
+        except Exception as e:
             raise SdnConnectorError(
-                "Could not delete service id:{} (could be an issue with the DPB)".format(service_uuid), 500)
+                "Could not delete service id:{} (could be an issue with the DPB): {}".format(service_uuid, e), 500)
         self.logger.debug(
             "Deleted connectivity service id:{}".format(service_uuid))
         return None
@@ -371,6 +371,6 @@ class DpbConnector(SdnConnectorBase):
         return conn_info
 
     def __check_service(self, serv_type, points, kwargs):
-        if not serv_type in self.__SUPPORTED_SERV_TYPES:
+        if serv_type not in self.__SUPPORTED_SERV_TYPES:
             raise SdnConnectorError("Service type no supported", 400)
         # Future: BW Checks here

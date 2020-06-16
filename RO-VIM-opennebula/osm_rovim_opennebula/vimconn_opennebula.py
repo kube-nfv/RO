@@ -30,12 +30,13 @@ __author__ = "Jose Maria Carmona Perez,Juan Antonio Hernando Labajo, Emilio Abra
 __date__ = "$13-dec-2017 11:09:29$"
 from osm_ro_plugin import vimconn
 import requests
-import logging
+# import logging
 import oca
-import untangle
+# import untangle
 import math
 import random
 import pyone
+
 
 class vimconnector(vimconn.VimConnector):
     def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
@@ -154,7 +155,7 @@ class vimconnector(vimconn.VimConnector):
                    </methodCall>'.format(self.user, self.passwd, (str(id_user)), (str(id_group)))
         requests.post(self.url, params)
 
-    def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):  # , **vim_specific):
+    def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
         """Adds a tenant network to VIM
         Params:
             'net_name': name of the network
@@ -200,30 +201,31 @@ class vimconnector(vimconn.VimConnector):
                     size = int(math.pow(2, 32 - prefix))
                 if "dhcp_start_address" in ip_profile and ip_profile["dhcp_start_address"] is not None:
                     ip_start = str(ip_profile["dhcp_start_address"])
-                if ip_profile["ip_version"] == "IPv6":
-                    ip_prefix_type = "GLOBAL_PREFIX"
+                # if ip_profile["ip_version"] == "IPv6":
+                #     ip_prefix_type = "GLOBAL_PREFIX"
 
             if vlan is not None:
                 vlan_id = vlan
             else:
                 vlan_id = str(random.randint(100, 4095))
-            #if "internal" in net_name:
+            # if "internal" in net_name:
             # OpenNebula not support two networks with same name
             random_net_name = str(random.randint(1, 1000000))
             net_name = net_name + random_net_name
             net_id = one.vn.allocate({
-                        'NAME': net_name,
-                        'VN_MAD': '802.1Q',
-                        'PHYDEV': self.config["network"]["phydev"],
-                        'VLAN_ID': vlan_id
-                    }, self.config["cluster"]["id"])
-            arpool = {'AR_POOL': {
-                        'AR': {
-                            'TYPE': 'IP4',
-                            'IP': ip_start,
-                            'SIZE': size
-                        }
+                'NAME': net_name,
+                'VN_MAD': '802.1Q',
+                'PHYDEV': self.config["network"]["phydev"],
+                'VLAN_ID': vlan_id
+            }, self.config["cluster"]["id"])
+            arpool = {
+                'AR_POOL': {
+                    'AR': {
+                        'TYPE': 'IP4',
+                        'IP': ip_start,
+                        'SIZE': size
                     }
+                }
             }
             one.vn.add_ar(net_id, arpool)
             return net_id, created_items
@@ -233,14 +235,13 @@ class vimconnector(vimconn.VimConnector):
 
     def get_network_list(self, filter_dict={}):
         """Obtain tenant networks of VIM
-        Params:
-            'filter_dict' (optional) contains entries to return only networks that matches ALL entries:
-                name: string  => returns only networks with this name
-                id:   string  => returns networks with this VIM id, this imply returns one network at most
-                shared: boolean >= returns only networks that are (or are not) shared
-                tenant_id: sting => returns only networks that belong to this tenant/project
-                ,#(not used yet) admin_state_up: boolean => returns only networks that are (or are not) in admin state active
-                #(not used yet) status: 'ACTIVE','ERROR',... => filter networks that are on this status
+        :params filter_dict: (optional) contains entries to return only networks that matches ALL entries:
+            name: string  => returns only networks with this name
+            id:   string  => returns networks with this VIM id, this imply returns one network at most
+            shared: boolean >= returns only networks that are (or are not) shared
+            tenant_id: sting => returns only networks that belong to this tenant/project
+            (not used yet) admin_state_up: boolean => returns only networks that are (or are not) in admin state active
+            (not used yet) status: 'ACTIVE','ERROR',... => filter networks that are on this status
         Returns the network list of dictionaries. each dictionary contains:
             'id': (mandatory) VIM network id
             'name': (mandatory) VIM network name
@@ -384,9 +385,9 @@ class vimconnector(vimconn.VimConnector):
                 vpcus: cpus (cloud type)
                 extended: EPA parameters
                   - numas: #items requested in same NUMA
-                        memory: number of 1G huge pages memory
-                        paired-threads|cores|threads: number of paired hyperthreads, complete cores OR individual threads
-                        interfaces: # passthrough(PT) or SRIOV interfaces attached to this numa
+                      memory: number of 1G huge pages memory
+                      paired-threads|cores|threads: number of paired hyperthreads, complete cores OR individual threads
+                      interfaces: # passthrough(PT) or SRIOV interfaces attached to this numa
                           - name: interface name
                             dedicated: yes|no|yes:sriov;  for PT, SRIOV or only one SRIOV for the physical NIC
                             bandwidth: X Gbps; requested guarantee bandwidth
@@ -472,60 +473,65 @@ class vimconnector(vimconn.VimConnector):
 
     def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
                        availability_zone_index=None, availability_zone_list=None):
-
-        """Adds a VM instance to VIM
-            Params:
-                'start': (boolean) indicates if VM must start or created in pause mode.
-                'image_id','flavor_id': image and flavor VIM id to use for the VM
-                'net_list': list of interfaces, each one is a dictionary with:
-                    'name': (optional) name for the interface.
-                    'net_id': VIM network id where this interface must be connect to. Mandatory for type==virtual
-                    'vpci': (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM capabilities
-                    'model': (optional and only have sense for type==virtual) interface model: virtio, e1000, ...
-                    'mac_address': (optional) mac address to assign to this interface
-                    'ip_address': (optional) IP address to assign to this interface
-                    #TODO: CHECK if an optional 'vlan' parameter is needed for VIMs when type if VF and net_id is not provided,
-                        the VLAN tag to be used. In case net_id is provided, the internal network vlan is used for tagging VF
-                    'type': (mandatory) can be one of:
-                        'virtual', in this case always connected to a network of type 'net_type=bridge'
-                        'PCI-PASSTHROUGH' or 'PF' (passthrough): depending on VIM capabilities it can be connected to a data/ptp network ot it
-                            can created unconnected
-                        'SR-IOV' or 'VF' (SRIOV with VLAN tag): same as PF for network connectivity.
-                        'VFnotShared'(SRIOV without VLAN tag) same as PF for network connectivity. VF where no other VFs
-                                are allocated on the same physical NIC
-                    'bw': (optional) only for PF/VF/VFnotShared. Minimal Bandwidth required for the interface in GBPS
-                    'port_security': (optional) If False it must avoid any traffic filtering at this interface. If missing
-                                    or True, it must apply the default VIM behaviour
-                    After execution the method will add the key:
-                    'vim_id': must be filled/added by this method with the VIM identifier generated by the VIM for this
-                            interface. 'net_list' is modified
-                'cloud_config': (optional) dictionary with:
-                    'key-pairs': (optional) list of strings with the public key to be inserted to the default user
-                    'users': (optional) list of users to be inserted, each item is a dict with:
-                        'name': (mandatory) user name,
-                        'key-pairs': (optional) list of strings with the public key to be inserted to the user
-                    'user-data': (optional) can be a string with the text script to be passed directly to cloud-init,
-                        or a list of strings, each one contains a script to be passed, usually with a MIMEmultipart file
-                    'config-files': (optional). List of files to be transferred. Each item is a dict with:
-                        'dest': (mandatory) string with the destination absolute path
-                        'encoding': (optional, by default text). Can be one of:
-                            'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
-                        'content' (mandatory): string with the content of the file
-                        'permissions': (optional) string with file permissions, typically octal notation '0644'
-                        'owner': (optional) file owner, string with the format 'owner:group'
-                    'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk)
-                'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
-                    'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
-                    'size': (mandatory) string with the size of the disk in GB
-                availability_zone_index: Index of availability_zone_list to use for this this VM. None if not AV required
-                availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
+        """
+        Adds a VM instance to VIM
+        :param name:
+        :param description:
+        :param start: (boolean) indicates if VM must start or created in pause mode.
+        :param image_id: image VIM id to use for the VM
+        :param flavor_id: flavor VIM id to use for the VM
+        :param net_list:  list of interfaces, each one is a dictionary with:
+            'name': (optional) name for the interface.
+            'net_id': VIM network id where this interface must be connect to. Mandatory for type==virtual
+            'vpci': (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM
+                 capabilities
+            'model': (optional and only have sense for type==virtual) interface model: virtio, e1000, ...
+            'mac_address': (optional) mac address to assign to this interface
+            'ip_address': (optional) IP address to assign to this interface
+            #TODO: CHECK if an optional 'vlan' parameter is needed for VIMs when type if VF and net_id is not
+                 provided, the VLAN tag to be used. In case net_id is provided, the internal network vlan is
+                  used for tagging VF
+            'type': (mandatory) can be one of:
+                'virtual', in this case always connected to a network of type 'net_type=bridge'
+                'PCI-PASSTHROUGH' or 'PF' (passthrough): depending on VIM capabilities it can be connected to
+                    a data/ptp network ot itcan created unconnected
+                'SR-IOV' or 'VF' (SRIOV with VLAN tag): same as PF for network connectivity.
+                'VFnotShared'(SRIOV without VLAN tag) same as PF for network connectivity. VF where no other VFs
+                        are allocated on the same physical NIC
+            'bw': (optional) only for PF/VF/VFnotShared. Minimal Bandwidth required for the interface in GBPS
+            'port_security': (optional) If False it must avoid any traffic filtering at this interface. If missing
+                            or True, it must apply the default VIM behaviour
+            After execution the method will add the key:
+            'vim_id': must be filled/added by this method with the VIM identifier generated by the VIM for this
+                    interface. 'net_list' is modified
+        :param cloud_config: (optional) dictionary with:
+            'key-pairs': (optional) list of strings with the public key to be inserted to the default user
+            'users': (optional) list of users to be inserted, each item is a dict with:
+                'name': (mandatory) user name,
+                'key-pairs': (optional) list of strings with the public key to be inserted to the user
+            'user-data': (optional) can be a string with the text script to be passed directly to cloud-init,
+                or a list of strings, each one contains a script to be passed, usually with a MIMEmultipart file
+            'config-files': (optional). List of files to be transferred. Each item is a dict with:
+                'dest': (mandatory) string with the destination absolute path
+                'encoding': (optional, by default text). Can be one of:
+                    'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
+                'content' (mandatory): string with the content of the file
+                'permissions': (optional) string with file permissions, typically octal notation '0644'
+                'owner': (optional) file owner, string with the format 'owner:group'
+            'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk)
+        :param disk_list: (optional) list with additional disks to the VM. Each item is a dict with:
+            'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
+            'size': (mandatory) string with the size of the disk in GB
+        :param availability_zone_index:  Index of availability_zone_list to use for this this VM. None if not AV
+            required
+        :param availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
                     availability_zone_index is None
-            Returns a tuple with the instance identifier and created_items or raises an exception on error
-                created_items can be None or a dictionary where this method can include key-values that will be passed to
-                the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
-                Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
-                as not present.
-            """
+        :return: a tuple with the instance identifier and created_items or raises an exception on error
+            created_items can be None or a dictionary where this method can include key-values that will be passed to
+            the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
+            Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
+            as not present.
+        """
         self.logger.debug(
             "new_vminstance input: image='{}' flavor='{}' nics='{}'".format(image_id, flavor_id, str(net_list)))
         try:
@@ -593,7 +599,7 @@ class vimconnector(vimconn.VimConnector):
                 else:
                     vm = one.vm.info(int(vm_id))
 
-        except pyone.OneNoExistsException as e:
+        except pyone.OneNoExistsException:
             self.logger.info("The vm " + str(vm_id) + " does not exist or is already deleted")
             raise vimconn.VimConnNotFoundException("The vm {} does not exist or is already deleted".format(vm_id))
         except Exception as e:
@@ -667,9 +673,9 @@ class vimconnector(vimconn.VimConnector):
                     interface = {'vim_info': None, "mac_address": str(net["MAC"]), "vim_net_id": str(net["NETWORK_ID"]),
                                  "vim_interface_id": str(net["NETWORK_ID"])}
                     # maybe it should be 2 different keys for ip_address if an interface has ipv4 and ipv6
-                    if u'IP' in net:
+                    if 'IP' in net:
                         interface["ip_address"] = str(net["IP"])
-                    if u'IP6_GLOBAL' in net:
+                    if 'IP6_GLOBAL' in net:
                         interface["ip_address"] = str(net["IP6_GLOBAL"])
                     interfaces.append(interface)
             else:
@@ -677,11 +683,11 @@ class vimconnector(vimconn.VimConnector):
                 interface = {'vim_info': None, "mac_address": str(net["MAC"]), "vim_net_id": str(net["NETWORK_ID"]),
                              "vim_interface_id": str(net["NETWORK_ID"])}
                 # maybe it should be 2 different keys for ip_address if an interface has ipv4 and ipv6
-                if u'IP' in net:
+                if 'IP' in net:
                     interface["ip_address"] = str(net["IP"])
-                if u'IP6_GLOBAL' in net:
+                if 'IP6_GLOBAL' in net:
                     interface["ip_address"] = str(net["IP6_GLOBAL"])
                 interfaces.append(interface)
             return interfaces
-        except Exception as e:
+        except Exception:
             self.logger.error("Error getting vm interface_information of vm_id: " + str(vm_element.ID))

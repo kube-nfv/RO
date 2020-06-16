@@ -175,7 +175,7 @@ class vimconnector(vimconn.VimConnector):
         try:
             location = self.conn.resource_groups.get(resource_group_name).location
             return location
-        except Exception as e:
+        except Exception:
             raise vimconn.VimConnNotFoundException("Location '{}' not found".format(resource_group_name))
 
     def _get_resource_group_name_from_resource_id(self, resource_id):
@@ -183,7 +183,7 @@ class vimconnector(vimconn.VimConnector):
         try:
             rg = str(resource_id.split('/')[4])
             return rg
-        except Exception as e:
+        except Exception:
             raise vimconn.VimConnException("Unable to get resource group from invalid resource_id format '{}'".
                                            format(resource_id))
 
@@ -192,7 +192,7 @@ class vimconnector(vimconn.VimConnector):
         try:
             net_name = str(resource_id.split('/')[8])
             return net_name
-        except Exception as e:
+        except Exception:
             raise vimconn.VimConnException("Unable to get azure net_name from invalid resource_id format '{}'".
                                            format(resource_id))
 
@@ -374,7 +374,8 @@ class vimconnector(vimconn.VimConnector):
             if mac_address:
                 net_ifz['mac_address'] = mac_address
 
-            async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(self.resource_group, nic_name,                                                                                    net_ifz)
+            async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(self.resource_group, nic_name,
+                                                                                    net_ifz)
             nic_data = async_nic_creation.result()
             created_items[nic_data.id] = True
             self.logger.debug('created nic name %s', nic_name)
@@ -613,8 +614,6 @@ class vimconnector(vimconn.VimConnector):
         # image_id are several fields of the image_id
         image_reference = self._get_image_reference(image_id)
 
-
-
         try:
             virtual_machine = None
             created_items = {}
@@ -629,7 +628,7 @@ class vimconnector(vimconn.VimConnector):
                 nic_name = vm_name + '-nic-' + str(idx)
                 vm_nic, nic_items = self._create_nic(net, nic_name, net.get('ip_address'), created_items)
                 vm_nics.append({'id': str(vm_nic.id)})
-                #net['vim_id'] = vm_nic.id
+                # net['vim_id'] = vm_nic.id
 
             # cloud-init configuration
             # cloud config
@@ -853,7 +852,7 @@ class vimconnector(vimconn.VimConnector):
             'disk_size_gb': disk.get('size')
         })
         self.logger.debug("attach disk name: %s", disk_name)
-        async_disk_attach = self.conn_compute.virtual_machines.create_or_update(
+        self.conn_compute.virtual_machines.create_or_update(
             self.resource_group,
             virtual_machine.name,
             virtual_machine
@@ -886,7 +885,7 @@ class vimconnector(vimconn.VimConnector):
                 'sku': sku,
                 'version': version
             }
-        except Exception as e:
+        except Exception:
             raise vimconn.VimConnException(
                 "Unable to get image_reference from invalid image_id format: '{}'".format(image_id))
 
@@ -1109,7 +1108,7 @@ class vimconnector(vimconn.VimConnector):
             if not v:  # skip already deleted
                 continue
 
-            #self.logger.debug("Must delete item id: %s", item_id)
+            # self.logger.debug("Must delete item id: %s", item_id)
 
             # Obtain type, supported nic, disk or public ip
             parsed_id = azure_tools.parse_resource_id(item_id)

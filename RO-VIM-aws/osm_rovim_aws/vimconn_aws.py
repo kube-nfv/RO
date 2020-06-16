@@ -145,7 +145,8 @@ class vimconnector(vimconn.VimConnector):
                                                    aws_secret_access_key=self.a_creds['aws_secret_access_key'])
             self.conn_vpc = boto.vpc.connect_to_region(self.region, aws_access_key_id=self.a_creds['aws_access_key_id'],
                                                        aws_secret_access_key=self.a_creds['aws_secret_access_key'])
-            # client = boto3.client("sts", aws_access_key_id=self.a_creds['aws_access_key_id'], aws_secret_access_key=self.a_creds['aws_secret_access_key'])
+            # client = boto3.client("sts", aws_access_key_id=self.a_creds['aws_access_key_id'],
+            # aws_secret_access_key=self.a_creds['aws_secret_access_key'])
             # self.account_id = client.get_caller_identity()["Account"]
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -309,11 +310,13 @@ class vimconnector(vimconn.VimConnector):
             subnet = None
             vpc_id = self.vpc_id
             if self.vpc_data.get(vpc_id, None):
-                cidr_block = list(set(self.vpc_data[vpc_id]['subnets']) - set(self.get_network_details({'tenant_id': vpc_id}, detail='cidr_block')))[0]
+                cidr_block = list(set(self.vpc_data[vpc_id]['subnets']) -
+                                  set(self.get_network_details({'tenant_id': vpc_id}, detail='cidr_block')))[0]
             else:
                 vpc = self.get_tenant_list({'id': vpc_id})[0]
                 subnet_list = self.subnet_sizes(len(self.get_availability_zones_list()), vpc['cidr_block'])
-                cidr_block = list(set(subnet_list) - set(self.get_network_details({'tenant_id': vpc['id']}, detail='cidr_block')))[0]
+                cidr_block = list(set(subnet_list) - set(self.get_network_details({'tenant_id': vpc['id']},
+                                                                                  detail='cidr_block')))[0]
             subnet = self.conn_vpc.create_subnet(vpc_id, cidr_block)
             return subnet.id, created_items
         except Exception as e:
@@ -336,7 +339,8 @@ class vimconnector(vimconn.VimConnector):
                 id:   string  => returns networks with this VIM id, this imply returns one network at most
                 shared: boolean >= returns only networks that are (or are not) shared
                 tenant_id: sting => returns only networks that belong to this tenant/project
-                ,#(not used yet) admin_state_up: boolean => returns only networks that are (or are not) in admin state active
+                ,#(not used yet) admin_state_up: boolean => returns only networks that are (or are not) in admin
+                    state active
                 #(not used yet) status: 'ACTIVE','ERROR',... => filter networks that are on this status
         Returns the network list of dictionaries. each dictionary contains:
             'id': (mandatory) VIM network id
@@ -435,13 +439,13 @@ class vimconnector(vimconn.VimConnector):
                     else:
                         subnet_dict['status'] = 'ERROR'
                     subnet_dict['error_msg'] = ''
-                except Exception as e:
+                except Exception:
                     subnet_dict['status'] = 'DELETED'
                     subnet_dict['error_msg'] = 'Network not found'
                 finally:
                     try:
                         subnet_dict['vim_info'] = yaml.safe_dump(subnet, default_flow_style=True, width=256)
-                    except yaml.YAMLError as e:
+                    except yaml.YAMLError:
                         subnet_dict['vim_info'] = str(subnet)
                 dict_entry[net_id] = subnet_dict
             return dict_entry
@@ -479,16 +483,16 @@ class vimconnector(vimconn.VimConnector):
             flavor = None
             for key, values in self.flavor_info.items():
                 if (values["ram"], values["cpus"], values["disk"]) == (
-                flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"]):
+                        flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"]):
                     flavor = (key, values)
                     break
                 elif (values["ram"], values["cpus"], values["disk"]) >= (
-                flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"]):
+                        flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"]):
                     if not flavor:
                         flavor = (key, values)
                     else:
                         if (flavor[1]["ram"], flavor[1]["cpus"], flavor[1]["disk"]) >= (
-                        values["ram"], values["cpus"], values["disk"]):
+                                values["ram"], values["cpus"], values["disk"]):
                             flavor = (key, values)
             if flavor:
                 return flavor[0]
@@ -499,17 +503,21 @@ class vimconnector(vimconn.VimConnector):
     def new_image(self, image_dict):
         """ Adds a tenant image to VIM
         Params: image_dict
-                    name (string) - The name of the AMI. Valid only for EBS-based images.
-                    description (string) - The description of the AMI.
-                    image_location (string) - Full path to your AMI manifest in Amazon S3 storage. Only used for S3-based AMI’s.
-                    architecture (string) - The architecture of the AMI. Valid choices are: * i386 * x86_64
-                    kernel_id (string) -  The ID of the kernel with which to launch the instances
-                    root_device_name (string) - The root device name (e.g. /dev/sdh)
-                    block_device_map (boto.ec2.blockdevicemapping.BlockDeviceMapping) - A BlockDeviceMapping data structure describing the EBS volumes associated with the Image.
-                    virtualization_type (string) - The virutalization_type of the image. Valid choices are: * paravirtual * hvm
-                    sriov_net_support (string) - Advanced networking support. Valid choices are: * simple
-                    snapshot_id (string) - A snapshot ID for the snapshot to be used as root device for the image. Mutually exclusive with block_device_map, requires root_device_name
-                    delete_root_volume_on_termination (bool) - Whether to delete the root volume of the image after instance termination. Only applies when creating image from snapshot_id. Defaults to False. Note that leaving volumes behind after instance termination is not free
+            name (string) - The name of the AMI. Valid only for EBS-based images.
+            description (string) - The description of the AMI.
+            image_location (string) - Full path to your AMI manifest in Amazon S3 storage. Only used for S3-based AMI’s.
+            architecture (string) - The architecture of the AMI. Valid choices are: * i386 * x86_64
+            kernel_id (string) -  The ID of the kernel with which to launch the instances
+            root_device_name (string) - The root device name (e.g. /dev/sdh)
+            block_device_map (boto.ec2.blockdevicemapping.BlockDeviceMapping) - A BlockDeviceMapping data structure
+                describing the EBS volumes associated with the Image.
+            virtualization_type (string) - The virutalization_type of the image. Valid choices are: * paravirtual * hvm
+            sriov_net_support (string) - Advanced networking support. Valid choices are: * simple
+            snapshot_id (string) - A snapshot ID for the snapshot to be used as root device for the image. Mutually
+                exclusive with block_device_map, requires root_device_name
+            delete_root_volume_on_termination (bool) - Whether to delete the root volume of the image after instance
+                termination. Only applies when creating image from snapshot_id. Defaults to False. Note that leaving
+                    volumes behind after instance termination is not free
         Returns: image_id - image ID of the newly created image
         """
 
@@ -607,19 +615,23 @@ class vimconnector(vimconn.VimConnector):
                 net_list
                     name
                     net_id - subnet_id from AWS
-                    vpci - (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM capabilities
+                    vpci - (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM
+                         capabilities
                     model: (optional and only have sense for type==virtual) interface model: virtio, e1000, ...
                     mac_address: (optional) mac address to assign to this interface
                     type: (mandatory) can be one of:
                         virtual, in this case always connected to a network of type 'net_type=bridge'
-                        'PCI-PASSTHROUGH' or 'PF' (passthrough): depending on VIM capabilities it can be connected to a data/ptp network ot it
+                        'PCI-PASSTHROUGH' or 'PF' (passthrough): depending on VIM capabilities it can be connected to a
+                             data/ptp network ot it
                            can created unconnected
                         'SR-IOV' or 'VF' (SRIOV with VLAN tag): same as PF for network connectivity.
-                        VFnotShared - (SRIOV without VLAN tag) same as PF for network connectivity. VF where no other VFs
-                            are allocated on the same physical NIC
+                        VFnotShared - (SRIOV without VLAN tag) same as PF for network connectivity. VF where no other
+                            VFs are allocated on the same physical NIC
                     bw': (optional) only for PF/VF/VFnotShared. Minimal Bandwidth required for the interface in GBPS
-                    port_security': (optional) If False it must avoid any traffic filtering at this interface. If missing or True, it must apply the default VIM behaviour
-                    vim_id': must be filled/added by this method with the VIM identifier generated by the VIM for this interface. 'net_list' is modified
+                    port_security': (optional) If False it must avoid any traffic filtering at this interface.
+                         If missing or True, it must apply the default VIM behaviour
+                    vim_id': must be filled/added by this method with the VIM identifier generated by the VIM for this
+                         interface. 'net_list' is modified
                     elastic_ip - True/False to define if an elastic_ip is required
                 cloud_config': (optional) dictionary with:
                     key-pairs': (optional) list of strings with the public key to be inserted to the default user
@@ -688,7 +700,7 @@ class vimconnector(vimconn.VimConnector):
                                     network_interface_id=boto.ec2.networkinterface.NetworkInterfaceCollection(net_intr),
                                     instance_id=instance.id, device_index=0)
                                 break
-                            except:
+                            except Exception:
                                 time.sleep(10)
                     net_list[index]['vim_id'] = reservation.instances[0].interfaces[index].id
 
@@ -762,7 +774,7 @@ class vimconnector(vimconn.VimConnector):
                         interface_dict['vim_interface_id'] = interface.id
                         interface_dict['vim_net_id'] = interface.subnet_id
                         interface_dict['mac_address'] = interface.mac_address
-                        if hasattr(interface, 'publicIp') and interface.publicIp != None:
+                        if hasattr(interface, 'publicIp') and interface.publicIp is not None:
                             interface_dict['ip_address'] = interface.publicIp + ";" + interface.private_ip_address
                         else:
                             interface_dict['ip_address'] = interface.private_ip_address
@@ -774,7 +786,7 @@ class vimconnector(vimconn.VimConnector):
                 finally:
                     try:
                         instance_dict['vim_info'] = yaml.safe_dump(instance, default_flow_style=True, width=256)
-                    except yaml.YAMLError as e:
+                    except yaml.YAMLError:
                         # self.logger.error("Exception getting vm status: %s", str(e), exc_info=True)
                         instance_dict['vim_info'] = str(instance)
                 instances[instance.id] = instance_dict

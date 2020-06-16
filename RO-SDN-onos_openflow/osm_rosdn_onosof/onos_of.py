@@ -22,23 +22,22 @@
 # contact with: alaitz.mendiola@ehu.eus or alaitz.mendiola@gmail.com
 ##
 
-'''
+"""
 ImplementS the pluging for the Open Network Operating System (ONOS) openflow
 controller. It creates the class OF_conn to create dataplane connections
 with static rules based on packet destination MAC address
-'''
-
-__author__="Alaitz Mendiola"
-__date__ ="$22-nov-2016$"
-
+"""
 
 import json
 import requests
 import base64
 import logging
-from osm_ro_plugin.openflow_conn import OpenflowConn, OpenflowConnException, OpenflowConnConnectionException, \
-    OpenflowConnUnexpectedResponse, OpenflowConnAuthException, OpenflowConnNotFoundException, \
-    OpenflowConnConflictException, OpenflowConnNotSupportedException, OpenflowConnNotImplemented
+from osm_ro_plugin.openflow_conn import OpenflowConn, OpenflowConnConnectionException, OpenflowConnUnexpectedResponse
+# OpenflowConnException, OpenflowConnAuthException, OpenflowConnNotFoundException, \
+# OpenflowConnConflictException, OpenflowConnNotSupportedException, OpenflowConnNotImplemented
+
+__author__ = "Alaitz Mendiola"
+__date__ = "$22-nov-2016$"
 
 
 class OfConnOnos(OpenflowConn):
@@ -71,24 +70,24 @@ class OfConnOnos(OpenflowConn):
 
         # internal variables
         self.name = "onosof"
-        self.headers = {'content-type':'application/json','accept':'application/json',}
+        self.headers = {'content-type': 'application/json', 'accept': 'application/json'}
 
-        self.auth="None"
-        self.pp2ofi={}  # From Physical Port to OpenFlow Index
-        self.ofi2pp={}  # From OpenFlow Index to Physical Port
+        self.auth = "None"
+        self.pp2ofi = {}  # From Physical Port to OpenFlow Index
+        self.ofi2pp = {}  # From OpenFlow Index to Physical Port
 
         self.dpid = str(params["of_dpid"])
         self.id = 'of:'+str(self.dpid.replace(':', ''))
 
         # TODO This may not be straightforward
         if params.get("of_user"):
-            of_password=params.get("of_password", "")
+            of_password = params.get("of_password", "")
             self.auth = base64.b64encode(bytes(params["of_user"] + ":" + of_password, "utf-8"))
             self.auth = self.auth.decode()
             self.headers['authorization'] = 'Basic ' + self.auth
 
         self.logger = logging.getLogger('openmano.sdnconn.onosof')
-        #self.logger.setLevel( getattr(logging, params.get("of_debug", "ERROR")) )
+        # self.logger.setLevel( getattr(logging, params.get("of_debug", "ERROR")) )
         self.logger.debug("onosof plugin initialized")
         self.ip_address = None
 
@@ -120,7 +119,7 @@ class OfConnOnos(OpenflowConn):
                     "get_of_switches. Unexpected response, at 'devices', not found or not a list: %s",
                     str(type(node_list)))
                 raise OpenflowConnUnexpectedResponse("Unexpected response, at 'devices', not found "
-                                                                   "or not a list. Wrong version?")
+                                                     "or not a list. Wrong version?")
 
             switch_list = []
             for node in node_list:
@@ -129,7 +128,7 @@ class OfConnOnos(OpenflowConn):
                     self.logger.error("get_of_switches. Unexpected response at 'device':'id', not found: %s",
                                       str(node))
                     raise OpenflowConnUnexpectedResponse("Unexpected response at 'device':'id', "
-                                                                       "not found . Wrong version?")
+                                                         "not found . Wrong version?")
 
                 node_ip_address = node.get('annotations').get('managementAddress')
                 if node_ip_address is None:
@@ -178,7 +177,7 @@ class OfConnOnos(OpenflowConn):
                     "obtain_port_correspondence. Unexpected response at 'ports', not found or not a list: %s",
                     str(node_connector_list))
                 raise OpenflowConnUnexpectedResponse("Unexpected response at 'ports', not found  or not "
-                                                                   "a list. Wrong version?")
+                                                     "a list. Wrong version?")
 
             for node_connector in node_connector_list:
                 if node_connector['port'] != "local":
@@ -191,7 +190,7 @@ class OfConnOnos(OpenflowConn):
                     "obtain_port_correspondence. Unexpected response at 'managementAddress', not found: %s",
                     str(self.id))
                 raise OpenflowConnUnexpectedResponse("Unexpected response at 'managementAddress', "
-                                                                   "not found. Wrong version?")
+                                                     "not found. Wrong version?")
             self.ip_address = node_ip_address
 
             # print self.name, ": obtain_port_correspondence ports:", self.pp2ofi
@@ -247,7 +246,7 @@ class OfConnOnos(OpenflowConn):
             if type(info) != dict:
                 self.logger.error("get_of_rules. Unexpected response, not a dict: %s", str(info))
                 raise OpenflowConnUnexpectedResponse("Unexpected openflow response, not a dict. "
-                                                                   "Wrong version?")
+                                                     "Wrong version?")
 
             flow_list = info.get('flows')
 
@@ -258,15 +257,15 @@ class OfConnOnos(OpenflowConn):
                     "get_of_rules. Unexpected response at 'flows', not a list: %s",
                     str(type(flow_list)))
                 raise OpenflowConnUnexpectedResponse("Unexpected response at 'flows', not a list. "
-                                                                   "Wrong version?")
+                                                     "Wrong version?")
 
             rules = []  # Response list
             for flow in flow_list:
-                if not ('id' in flow and 'selector' in flow and 'treatment' in flow and \
-                                    'instructions' in flow['treatment'] and 'criteria' in \
-                                    flow['selector']):
+                if not ('id' in flow and 'selector' in flow and 'treatment' in flow and
+                        'instructions' in flow['treatment'] and 'criteria' in
+                        flow['selector']):
                     raise OpenflowConnUnexpectedResponse("unexpected openflow response, one or more "
-                                                                       "elements are missing. Wrong version?")
+                                                         "elements are missing. Wrong version?")
 
                 rule = dict()
                 rule['switch'] = self.dpid
@@ -277,9 +276,9 @@ class OfConnOnos(OpenflowConn):
                     if criteria['type'] == 'IN_PORT':
                         in_port = str(criteria['port'])
                         if in_port != "CONTROLLER":
-                            if not in_port in self.ofi2pp:
+                            if in_port not in self.ofi2pp:
                                 raise OpenflowConnUnexpectedResponse("Error: Ingress port {} is not "
-                                                                                   "in switch port list".format(in_port))
+                                                                     "in switch port list".format(in_port))
                             if translate_of_ports:
                                 in_port = self.ofi2pp[in_port]
                         rule['ingress_port'] = in_port
@@ -295,19 +294,19 @@ class OfConnOnos(OpenflowConn):
                     if instruction['type'] == "OUTPUT":
                         out_port = str(instruction['port'])
                         if out_port != "CONTROLLER":
-                            if not out_port in self.ofi2pp:
+                            if out_port not in self.ofi2pp:
                                 raise OpenflowConnUnexpectedResponse("Error: Output port {} is not in "
-                                                                                   "switch port list".format(out_port))
+                                                                     "switch port list".format(out_port))
 
                             if translate_of_ports:
                                 out_port = self.ofi2pp[out_port]
 
-                        actions.append( ('out', out_port) )
+                        actions.append(('out', out_port))
 
                     if instruction['type'] == "L2MODIFICATION" and instruction['subtype'] == "VLAN_POP":
-                        actions.append( ('vlan', 'None') )
+                        actions.append(('vlan', 'None'))
                     if instruction['type'] == "L2MODIFICATION" and instruction['subtype'] == "VLAN_ID":
-                        actions.append( ('vlan', instruction['vlanId']) )
+                        actions.append(('vlan', instruction['vlanId']))
 
                 rule['actions'] = actions
                 rules.append(rule)
@@ -371,12 +370,12 @@ class OfConnOnos(OpenflowConn):
 
             # Build the dictionary with the flow rule information for ONOS
             flow = dict()
-            #flow['id'] = data['name']
+            # flow['id'] = data['name']
             flow['tableId'] = 0
             flow['priority'] = data.get('priority')
             flow['timeout'] = 0
             flow['isPermanent'] = "true"
-            flow['appId'] = 10 # FIXME We should create an appId for OSM
+            flow['appId'] = 10  # FIXME We should create an appId for OSM
             flow['selector'] = dict()
             flow['selector']['criteria'] = list()
 
@@ -410,9 +409,9 @@ class OfConnOnos(OpenflowConn):
 
             for action in data['actions']:
                 new_action = dict()
-                if  action[0] == "vlan":
+                if action[0] == "vlan":
                     new_action['type'] = "L2MODIFICATION"
-                    if action[1] == None:
+                    if action[1] is None:
                         new_action['subtype'] = "VLAN_POP"
                     else:
                         new_action['subtype'] = "VLAN_ID"
@@ -420,7 +419,7 @@ class OfConnOnos(OpenflowConn):
                 elif action[0] == 'out':
                     new_action['type'] = "OUTPUT"
                     if not action[1] in self.pp2ofi:
-                        error_msj = 'Port '+ action[1] + ' is not present in the switch'
+                        error_msj = 'Port ' + action[1] + ' is not present in the switch'
                         raise OpenflowConnUnexpectedResponse(error_msj)
                     new_action['port'] = self.pp2ofi[action[1]]
                 else:
@@ -433,7 +432,7 @@ class OfConnOnos(OpenflowConn):
             self.headers['content-type'] = 'application/json'
             path = self.url + "flows/" + self.id
             self.logger.debug("new_flow post: {}".format(flow))
-            of_response = requests.post(path, headers=self.headers, data=json.dumps(flow) )
+            of_response = requests.post(path, headers=self.headers, data=json.dumps(flow))
 
             error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
             if of_response.status_code != 201:

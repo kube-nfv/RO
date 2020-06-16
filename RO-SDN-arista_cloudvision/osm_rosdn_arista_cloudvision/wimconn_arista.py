@@ -42,7 +42,7 @@ from requests import RequestException
 
 from cvprac.cvp_client import CvpClient
 from cvprac.cvp_api import CvpApi
-from cvprac.cvp_client_errors import CvpLoginError,  CvpSessionLogOutError, CvpApiError
+from cvprac.cvp_client_errors import CvpLoginError, CvpSessionLogOutError, CvpApiError
 from cvprac import __version__ as cvprac_version
 
 from osm_rosdn_arista_cloudvision.aristaConfigLet import AristaSDNConfigLet
@@ -135,7 +135,6 @@ class AristaSdnConnector(SdnConnectorBase):
     _VLAN_MLAG = "VLAN-MLAG"
     _VXLAN_MLAG = "VXLAN-MLAG"
 
-
     def __init__(self, wim, wim_account, config=None, logger=None):
         """
 
@@ -195,8 +194,8 @@ class AristaSdnConnector(SdnConnectorBase):
             raise SdnConnectorError(message="Unable to load switches from CVP",
                                     http_code=500) from e
         self.logger.debug("Using topology {} in Arista Leaf switches: {}".format(
-                self.topology,
-                self.delete_keys_from_dict(self.switches, ('passwd',))))
+            self.topology,
+            self.delete_keys_from_dict(self.switches, ('passwd',))))
         self.clC = AristaSDNConfigLet(self.topology)
 
     def __load_topology(self):
@@ -255,7 +254,7 @@ class AristaSdnConnector(SdnConnectorBase):
                     self.switches[cs].update(cs_content)
 
         # Load the rest of the data
-        if self.client == None:
+        if self.client is None:
             self.client = self.__connect()
         self.__load_inventory()
         if not self.switches:
@@ -348,7 +347,7 @@ class AristaSdnConnector(SdnConnectorBase):
         for testing the access to CloudVision API
         """
         try:
-            if self.client == None:
+            if self.client is None:
                 self.client = self.__connect()
             result = self.client.api.get_cvp_info()
             self.logger.debug(result)
@@ -406,7 +405,7 @@ class AristaSdnConnector(SdnConnectorBase):
                                         http_code=500)
 
             self.__get_Connection()
-            if conn_info == None:
+            if conn_info is None:
                 raise SdnConnectorError(message='No connection information for service UUID {}'.format(service_uuid),
                                         http_code=500)
 
@@ -535,13 +534,13 @@ class AristaSdnConnector(SdnConnectorBase):
             self.logger.info("Service with uuid {} created.".
                              format(service_uuid))
             s_uid, s_connInf = self.__processConnection(
-                                        service_uuid,
-                                        service_type,
-                                        connection_points,
-                                        kwargs)
+                service_uuid,
+                service_type,
+                connection_points,
+                kwargs)
             try:
                 self.__addMetadata(s_uid, service_type, s_connInf['vlan_id'])
-            except Exception as e:
+            except Exception:
                 pass
 
             return (s_uid, s_connInf)
@@ -626,8 +625,9 @@ class AristaSdnConnector(SdnConnectorBase):
                 processed_connection_points += switches
                 for switch in switches:
                     if not interface:
-                        raise SdnConnectorError(message="Connection point switch port empty for switch_dpid {}".format(switch_id),
-                                                http_code=406)
+                        raise SdnConnectorError(
+                            message="Connection point switch port empty for switch_dpid {}".format(switch_id),
+                            http_code=406)
                     # it should be only one switch where the mac is attached
                     if encap_type == 'dot1q':
                         # SRIOV configLet for Leaf switch mac's attached to
@@ -760,9 +760,9 @@ class AristaSdnConnector(SdnConnectorBase):
                         continue
                     cl = cls_perSw[s]
                 res = self.__device_modify(
-                                           device_to_update=s,
-                                           new_configlets=cl,
-                                           delete=toDelete_in_cvp)
+                    device_to_update=s,
+                    new_configlets=cl,
+                    delete=toDelete_in_cvp)
                 if "errorMessage" in str(res):
                     raise Exception(str(res))
                 self.logger.info("Device {} modify result {}".format(s, res))
@@ -773,10 +773,10 @@ class AristaSdnConnector(SdnConnectorBase):
                                                        t_id,
                                                        self.__SEPARATOR)
                         self.client.api.add_note_to_configlet(
-                                cls_perSw[s][0]['key'],
-                                note_msg)
+                            cls_perSw[s][0]['key'],
+                            note_msg)
                         cls_perSw[s][0]['note'] = note_msg
-                    tasks = { t_id : {'workOrderId': t_id} }
+                    tasks = {t_id: {'workOrderId': t_id}}
                     self.__exec_task(tasks, self.__EXC_TASK_EXEC_WAIT)
                 # with just one configLet assigned to a device,
                 # delete all if there are errors in next loops
@@ -793,7 +793,7 @@ class AristaSdnConnector(SdnConnectorBase):
                                           allLeafModified)
             except Exception as e:
                 self.logger.error("Exception rolling back in updating  connection: {}".
-                                 format(e), exc_info=True)
+                                  format(e), exc_info=True)
             raise ex
 
     def __rollbackConnection(self,
@@ -824,7 +824,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 self.__configlet_modify(cls_perSw[s], delete=True)
 
     def __exec_task(self, tasks, tout=10):
-        if self.taskC == None:
+        if self.taskC is None:
             self.__connect()
         data = self.taskC.update_all_tasks(tasks).values()
         self.taskC.task_action(data, tout, 'executed')
@@ -833,15 +833,14 @@ class AristaSdnConnector(SdnConnectorBase):
         """ Updates the devices (switches) adding or removing the configLet,
         the tasks Id's associated to the change are returned
         """
-        self.logger.info('Enter in __device_modify delete: {}'.format(
-                            delete))
+        self.logger.info('Enter in __device_modify delete: {}'.format(delete))
         updated = []
         changed = False
         # Task Ids that have been identified during device actions
         newTasks = []
 
         if (len(new_configlets) == 0 or
-                device_to_update == None or
+                device_to_update is None or
                 len(device_to_update) == 0):
             data = {'updated': updated, 'tasks': newTasks}
             return [changed, data]
@@ -857,14 +856,14 @@ class AristaSdnConnector(SdnConnectorBase):
             if try_device['hostname'] not in device_to_update:
                 continue
             dev_cvp_configlets = self.client.api.get_configlets_by_device_id(
-                                    try_device['systemMacAddress'])
+                try_device['systemMacAddress'])
             # self.logger.debug(dev_cvp_configlets)
             try_device['deviceSpecificConfiglets'] = []
             for cvp_configlet in dev_cvp_configlets:
                 if int(cvp_configlet['containerCount']) == 0:
                     try_device['deviceSpecificConfiglets'].append(
-                                {'name': cvp_configlet['name'],
-                                 'key': cvp_configlet['key']})
+                        {'name': cvp_configlet['name'],
+                         'key': cvp_configlet['key']})
             # self.logger.debug(device)
             device = try_device
             break
@@ -900,42 +899,41 @@ class AristaSdnConnector(SdnConnectorBase):
         try:
             if delete and len(cl_toDel) > 0:
                 r = self.client.api.remove_configlets_from_device(
-                                                    'OSM',
-                                                    up_device['device'],
-                                                    cl_toDel,
-                                                    create_task=True)
+                    'OSM',
+                    up_device['device'],
+                    cl_toDel,
+                    create_task=True)
                 dev_action = r
                 self.logger.debug("remove_configlets_from_device {} {}".format(dev_action, cl_toDel))
             elif len(cl_toAdd) > 0:
                 r = self.client.api.apply_configlets_to_device(
-                                                    'OSM',
-                                                    up_device['device'],
-                                                    cl_toAdd,
-                                                    create_task=True)
+                    'OSM',
+                    up_device['device'],
+                    cl_toAdd,
+                    create_task=True)
                 dev_action = r
                 self.logger.debug("apply_configlets_to_device {} {}".format(dev_action, cl_toAdd))
 
         except Exception as error:
             errorMessage = str(error)
             msg = "errorMessage: Device {} Configlets couldnot be updated: {}".format(
-                  up_device['hostname'], errorMessage)
+                up_device['hostname'], errorMessage)
             raise SdnConnectorError(msg) from error
         else:
             if "errorMessage" in str(dev_action):
                 m = "Device {} Configlets update fail: {}".format(
-                            up_device['name'], dev_action['errorMessage'])
+                    up_device['name'], dev_action['errorMessage'])
                 raise SdnConnectorError(m)
             else:
                 changed = True
                 if 'taskIds' in str(dev_action):
                     # Fix 1030 SDN-ARISTA Key error note when deploy a NS
                     if not dev_action['data']['taskIds']:
-                        raise SdnConnectorError("No taskIds found: Device {} Configlets couldnot be updated".format(
-                                        up_device['hostname']))
+                        raise SdnConnectorError("No taskIds found: Device {} Configlets could not be updated".format(
+                            up_device['hostname']))
                     for taskId in dev_action['data']['taskIds']:
-                        updated.append({up_device['hostname']:
-                            "Configlets-{}".format(
-                                taskId)})
+                        updated.append({
+                            up_device['hostname']: "Configlets-{}".format(taskId)})
                         newTasks.append(taskId)
                 else:
                     updated.append({up_device['hostname']:
@@ -951,7 +949,7 @@ class AristaSdnConnector(SdnConnectorBase):
         :return: data: dict of module actions and taskIDs
         '''
         self.logger.info('Enter in __configlet_modify delete:{}'.format(
-                            delete))
+            delete))
 
         # Compare configlets against cvp_facts-configlets
         changed = False
@@ -1006,27 +1004,27 @@ class AristaSdnConnector(SdnConnectorBase):
                 if to_delete:
                     operation = 'delete'
                     resp = self.client.api.delete_configlet(
-                                    configlet['data']['name'],
-                                    configlet['data']['key'])
+                        configlet['data']['name'],
+                        configlet['data']['key'])
                 elif to_update:
                     operation = 'update'
                     resp = self.client.api.update_configlet(
-                                    configlet['config'],
-                                    configlet['data']['key'],
-                                    configlet['data']['name'],
-                                    wait_task_ids=True)
+                        configlet['config'],
+                        configlet['data']['key'],
+                        configlet['data']['name'],
+                        wait_task_ids=True)
                 elif to_create:
                     operation = 'create'
                     resp = self.client.api.add_configlet(
-                                    configlet['name'],
-                                    configlet['config'])
+                        configlet['name'],
+                        configlet['config'])
                 else:
                     operation = 'checked'
                     resp = 'checked'
             except Exception as error:
                 errorMessage = str(error).split(':')[-1]
                 message = "Configlet {} cannot be {}: {}".format(
-                            cl['name'], operation, errorMessage)
+                    cl['name'], operation, errorMessage)
                 if to_delete:
                     deleted.append({configlet['name']: message})
                 elif to_update:
@@ -1039,7 +1037,7 @@ class AristaSdnConnector(SdnConnectorBase):
             else:
                 if "error" in str(resp).lower():
                     message = "Configlet {} cannot be deleted: {}".format(
-                            cl['name'], resp['errorMessage'])
+                        cl['name'], resp['errorMessage'])
                     if to_delete:
                         deleted.append({configlet['name']: message})
                     elif to_update:
@@ -1073,7 +1071,7 @@ class AristaSdnConnector(SdnConnectorBase):
             if len(configlet) > 0:
                 configlet['devices'] = []
                 applied_devices = self.client.api.get_applied_devices(
-                                configlet['name'])
+                    configlet['name'])
                 for device in applied_devices['data']:
                     configlet['devices'].append(device['hostName'])
 
@@ -1113,7 +1111,7 @@ class AristaSdnConnector(SdnConnectorBase):
                                         http_code=500)
 
             self.__get_Connection()
-            if conn_info == None:
+            if conn_info is None:
                 raise SdnConnectorError(message='No connection information for service UUID {}'.format(service_uuid),
                                         http_code=500)
             c_info = None
@@ -1246,7 +1244,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 raise SdnConnectorError(message='Unable to perform operation, missing or empty connection information',
                                         http_code=500)
 
-            if connection_points == None:
+            if connection_points is None:
                 return None
 
             self.__get_Connection()
@@ -1261,10 +1259,10 @@ class AristaSdnConnector(SdnConnectorBase):
                                  kwargs=kwargs)
 
             s_uid, s_connInf = self.__processConnection(
-                                                        service_uuid,
-                                                        service_type,
-                                                        connection_points,
-                                                        kwargs)
+                service_uuid,
+                service_type,
+                connection_points,
+                kwargs)
             self.logger.info("Service with uuid {} configuration updated".
                              format(s_uid))
             return s_connInf
@@ -1281,8 +1279,8 @@ class AristaSdnConnector(SdnConnectorBase):
                 # TODO check if there are pending task, and cancel them before restoring
                 self.__updateConnection(cls_currentPerSw)
             except Exception as e:
-                self.logger.error("Unable to restore configuration in service {} after an error in the configuration updated: {}".
-                                  format(service_uuid, str(e)))
+                self.logger.error("Unable to restore configuration in service {} after an error in the configuration"
+                                  " updated: {}".format(service_uuid, str(e)))
             if self.raiseException:
                 raise ex
             raise SdnConnectorError(message=str(ex),
@@ -1442,7 +1440,7 @@ class AristaSdnConnector(SdnConnectorBase):
             invoking the version retrival as test
         """
         try:
-            if self.client == None:
+            if self.client is None:
                 self.client = self.__connect()
             self.client.api.get_cvp_info()
         except (CvpSessionLogOutError, RequestException) as e:
@@ -1569,8 +1567,9 @@ class AristaSdnConnector(SdnConnectorBase):
                                 break
                         if found:
                             break
-            if peer == None:
-                self.logger.error('No Peer device found for device {} with MLAG address {}'.format(device_id, mlagSystemId))
+            if peer is None:
+                self.logger.error('No Peer device found for device {} with MLAG address {}'.format(device_id,
+                                                                                                   mlagSystemId))
             else:
                 self.logger.debug('Peer MLAG for device {} - value {}'.format(device_id, peer))
             return peer
@@ -1612,7 +1611,7 @@ class AristaSdnConnector(SdnConnectorBase):
         return True
 
     def delete_keys_from_dict(self, dict_del, lst_keys):
-        if dict_del == None:
+        if dict_del is None:
             return dict_del
         dict_copy = {k: v for k, v in dict_del.items() if k not in lst_keys}
         for k, v in dict_copy.items():

@@ -26,7 +26,7 @@ from uuid import uuid4
 from copy import deepcopy
 
 __author__ = "Alfonso Tierno"
-__date__  = "2020-04-20"
+__date__ = "2020-04-20"
 
 
 class VimDummyConnector(vimconn.VimConnector):
@@ -131,7 +131,7 @@ class VimDummyConnector(vimconn.VimConnector):
             else:
                 net = self.nets[net_id].copy()
                 net["vim_info"] = yaml.dump({"status": "ACTIVE", "name": net["name"]},
-                                                 default_flow_style=True, width=256)
+                                            default_flow_style=True, width=256)
             nets[net_id] = net
 
         return nets
@@ -222,7 +222,7 @@ class VimDummyConnector(vimconn.VimConnector):
         return images
 
     def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
-        availability_zone_index=None, availability_zone_list=None):
+                       availability_zone_index=None, availability_zone_list=None):
         vm_id = str(uuid4())
         interfaces = []
         for iface_index, iface in enumerate(net_list):
@@ -268,7 +268,7 @@ class VimDummyConnector(vimconn.VimConnector):
             else:
                 vm = deepcopy(self.vms[vm_id])
                 vm["vim_info"] = yaml.dump({"status": "ACTIVE", "name": vm["name"]},
-                                            default_flow_style=True, width=256)
+                                           default_flow_style=True, width=256)
             vms[vm_id] = vm
         return vms
 

@@ -60,8 +60,8 @@ class OnosVpls(SdnConnectorBase):
         except Exception as e:
             if onos_config_req:
                 status_code = onos_config_req.status_code
-            self.logger.exception('Error checking credentials')
-            raise SdnConnectorError('Error checking credentials', http_code=status_code)
+            self.logger.exception('Error checking credentials: {}'.format(e))
+            raise SdnConnectorError('Error checking credentials: {}'.format(e), http_code=status_code)
 
     def get_connectivity_service_status(self, service_uuid, conn_info=None):
         try:
@@ -354,17 +354,17 @@ class OnosVpls(SdnConnectorBase):
         if port_name in onos_config['ports'] and 'interfaces' in onos_config['ports'][port_name]:
             for interface in onos_config['ports'][port_name]['interfaces']:
                 if interface['name'] == port['service_endpoint_id']:
-                    #self.logger.debug("interface with same name and port exits")
+                    # self.logger.debug("interface with same name and port exits")
                     # interface already exists TODO ¿check vlan? ¿delete and recreate?
                     # by the moment use and do not touch
-                    #onos_config['ports'][port_name]['interfaces'].remove(interface)
+                    # onos_config['ports'][port_name]['interfaces'].remove(interface)
                     break
             else:
-                #self.logger.debug("port with same name exits but not interface")
+                # self.logger.debug("port with same name exits but not interface")
                 onos_config['ports'][port_name]['interfaces'].append(interface_config)
                 created_item = (port_name, port['service_endpoint_id'])
         else:
-            #self.logger.debug("create port and interface")
+            # self.logger.debug("create port and interface")
             onos_config['ports'][port_name] = {
                 'interfaces': [interface_config]
             }
@@ -383,8 +383,8 @@ if __name__ == '__main__':
     wim = {'wim_url': wim_url}
     wim_account = {'user': user, 'password': password}
     onos_vpls = OnosVpls(wim=wim, wim_account=wim_account, logger=logger)
-    #conn_service = onos_vpls.get_connectivity_service_status("4e1f4c8a-a874-425d-a9b5-955cb77178f8")
-    #print(conn_service)
+    # conn_service = onos_vpls.get_connectivity_service_status("4e1f4c8a-a874-425d-a9b5-955cb77178f8")
+    # print(conn_service)
     service_type = 'ELAN'
     conn_point_0 = {
         "service_endpoint_id": "switch1:ifz1",
@@ -405,13 +405,13 @@ if __name__ == '__main__':
         }
     }
     connection_points = [conn_point_0, conn_point_1]
-    #service_uuid, conn_info = onos_vpls.create_connectivity_service(service_type, connection_points)
-    #print(service_uuid)
-    #print(conn_info)
+    # service_uuid, conn_info = onos_vpls.create_connectivity_service(service_type, connection_points)
+    # print(service_uuid)
+    # print(conn_info)
 
-    #conn_info = None
+    # conn_info = None
     conn_info = {"interfaces": ['switch1:ifz1', 'switch3:ifz1']}
-    #onos_vpls.delete_connectivity_service("70248a41-11cb-44f3-9039-c41387394a30", conn_info)
+    # onos_vpls.delete_connectivity_service("70248a41-11cb-44f3-9039-c41387394a30", conn_info)
 
     conn_point_0 = {
         "service_endpoint_id": "switch1:ifz1",
@@ -441,8 +441,9 @@ if __name__ == '__main__':
         }
     }
     connection_points_2 = [conn_point_0, conn_point_3]
-    #conn_info = onos_vpls.edit_connectivity_service("c65d88be-73aa-4933-927d-57ec6bee6b41", conn_info, connection_points_2)
-    #print(conn_info)
+    # conn_info = onos_vpls.edit_connectivity_service("c65d88be-73aa-4933-927d-57ec6bee6b41",
+    # conn_info, connection_points_2)
+    # print(conn_info)
 
     service_status = onos_vpls.get_connectivity_service_status("c65d88be-73aa-4933-927d-57ec6bee6b41", conn_info)
     print("service status")

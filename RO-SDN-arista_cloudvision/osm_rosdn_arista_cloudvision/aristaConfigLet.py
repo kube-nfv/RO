@@ -38,7 +38,7 @@ class AristaSDNConfigLet:
     def __init__(self, topology=_VXLAN_MLAG):
         self.topology = topology
 
-    _basic_int ="""
+    _basic_int = """
 interface {interface}
    !! service: {uuid}
    switchport
@@ -71,18 +71,18 @@ interface {interface}
     def getEline_passthrough(self, uuid, interface, vlan_id, index):
         return self._get_interface(uuid, interface, vlan_id, "ELINE", index, "dot1q-tunnel")
 
-    _basic_vlan ="""
+    _basic_vlan = """
 vlan {vlan}
    !! service: {service} {vlan} {uuid}
    name {service}{vlan}
    trunk group {service}{vlan}
 """
-    _basic_mlag ="""   trunk group MLAGPEER
+    _basic_mlag = """   trunk group MLAGPEER
 """
-    _basic_vxlan ="""interface VXLAN1
+    _basic_vxlan = """interface VXLAN1
    VXLAN vlan {vlan} vni {vni}
 """
-    _basic_end ="!"
+    _basic_end = "!"
 
     _configLet_VLAN = _basic_vlan + _basic_end
     _configLet_VXLAN = _basic_vlan + _basic_vxlan + _basic_end
@@ -122,7 +122,6 @@ router bgp {bgp}
                                               vlan=vlan_id,
                                               loopback=loopback0,
                                               vni=vni_id)
-
 
     def getElan_bgp(self, uuid, vlan_id, vni_id, loopback0, bgp):
         return self._get_bgp(uuid, vlan_id, vni_id, loopback0, bgp, "ELAN")

@@ -13,5 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-tox -c RO/tox.ini
+for tox_file in `ls */tox.ini` ; do
+    [ "$tox_file" = "RO-client/tox.ini" ] || [ "$tox_file" = "RO-VIM-vmware/tox.ini" ] ||
+    [ "$tox_file" = "RO-VIM-openvim/tox.ini" ] || [ "$tox_file" = "build/tox.ini" ] && continue
+    echo
+    echo launching "$tox_file"
+    tox -c "$tox_file" --recreate || exit 1
+done
 

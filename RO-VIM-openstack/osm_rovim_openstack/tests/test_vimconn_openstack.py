@@ -424,7 +424,7 @@ class TestSfcOperations(unittest.TestCase):
         # translated and returned the OpenStack result
         self.assertEqual(result, [
             {'sfis': ['08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2',
-                           '0d63799c-82d6-11e7-8deb-a746bb3ae9f5'],
+                      '0d63799c-82d6-11e7-8deb-a746bb3ae9f5'],
              'description': '',
              'tenant_id': '8f3019ef06374fa880a0144ad4bc1d7b',
              'project_id': '8f3019ef06374fa880a0144ad4bc1d7b',
