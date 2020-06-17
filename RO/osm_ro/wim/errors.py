@@ -141,7 +141,7 @@ class UndefinedUuidOrName(DbBaseException):
 
 
 class UndefinedWanMappingType(InvalidParameters):
-    """The dict wan_service_mapping_info MUST contain a `type` field"""
+    """The dict service_mapping_info MUST contain a `type` field"""
 
     def __init__(self, given):
         super(UndefinedWanMappingType, self).__init__(

@@ -129,16 +129,16 @@ _PORT_MAPPING_SELECT = ('wim_port_mapping.*', )
 _CONFIDENTIAL_FIELDS = ('password', 'passwd')
 
 _SERIALIZED_FIELDS = ('config', 'vim_info', 'wim_info', 'conn_info', 'extra',
-                      'wan_service_mapping_info')
+                      'service_mapping_info')
 
 UNIQUE_PORT_MAPPING_INFO_FIELDS = {
-    'dpid-port': ('wan_switch_dpid', 'wan_switch_port')
+    'dpid-port': ('switch_dpid', 'switch_port')
 }
 """Fields that should be unique for each port mapping that relies on
-wan_service_mapping_info.
+service_mapping_info.
 
 For example, for port mappings of type 'dpid-port', each combination of
-wan_switch_dpid and wan_switch_port should be unique (the same switch cannot
+switch_dpid and switch_port should be unique (the same switch cannot
 be connected to two different places using the same port)
 """
 
@@ -514,14 +514,14 @@ class WimPersistence(object):
         return self.get_datacenters_by(datacenter, tenant, **kwargs)[0]
 
     def _create_single_port_mapping(self, properties):
-        info = properties.setdefault('wan_service_mapping_info', {})
-        endpoint_id = properties.get('wan_service_endpoint_id')
+        info = properties.setdefault('service_mapping_info', {})
+        endpoint_id = properties.get('service_endpoint_id')
 
         if info.get('mapping_type') and not endpoint_id:
-            properties['wan_service_endpoint_id'] = (
+            properties['service_endpoint_id'] = (
                 self._generate_port_mapping_id(info))
 
-        properties['wan_service_mapping_info'] = _serialize(info)
+        properties['service_mapping_info'] = _serialize(info)
 
         try:
             self.db.new_row('wim_port_mappings', properties,
@@ -531,9 +531,9 @@ class WimPersistence(object):
             ex = InvalidParameters(
                 "The mapping must contain the "
                 "'device_id', 'device_interface_id',  and "
-                "wan_service_mapping_info: "
-                "('wan_switch_dpid' and 'wan_switch_port') or "
-                "'wan_service_endpoint_id}'")
+                "service_mapping_info: "
+                "('switch_dpid' and 'switch_port') or "
+                "'service_endpoint_id}'")
             raise ex from old_exception
 
         return properties
@@ -634,12 +634,12 @@ class WimPersistence(object):
         original = self.query_one('wim_port_mappings', WHERE={'id': id})
 
         mapping_info = remove_none_items(merge_dicts(
-            original.get('wan_service_mapping_info') or {},
-            properties.get('wan_service_mapping_info') or {}))
+            original.get('service_mapping_info') or {},
+            properties.get('service_mapping_info') or {}))
 
         updates = preprocess_record(
             merge_dicts(original, remove_none_items(properties),
-                        wan_service_mapping_info=mapping_info))
+                        service_mapping_info=mapping_info))
 
         num_changes = self.db.update_rows('wim_port_mappings',
                                           UPDATE=updates, WHERE={'id': id})
@@ -916,8 +916,8 @@ def _postprocess_wim_account(wim_account, hide=_CONFIDENTIAL_FIELDS):
 
 def _postprocess_wim_port_mapping(mapping, hide=_CONFIDENTIAL_FIELDS):
     mapping = _postprocess_record(mapping, hide=hide)
-    mapping_info = mapping.get('wan_service_mapping_info', None) or {}
-    mapping['wan_service_mapping_info'] = mapping_info
+    mapping_info = mapping.get('service_mapping_info', None) or {}
+    mapping['service_mapping_info'] = mapping_info
     return mapping
 
 
