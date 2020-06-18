@@ -1655,11 +1655,16 @@ class vimconnector(vimconn.vimconnector):
                                 # interface["pci"] = pci[:-4] + "00." + str(int(pci[-1]) % 2)
                                 interface["pci"] = pci
                         interface["vlan"] = None
-                        #if network is of type vlan and port is of type direct (sr-iov) then set vlan id
-                        network = self.neutron.show_network(port["network_id"])
-                        if network['network'].get('provider:network_type') == 'vlan' and \
-                            port.get("binding:vnic_type") in ("direct", "direct-physical"):
-                            interface["vlan"] = network['network'].get('provider:segmentation_id')
+                        if port.get('binding:vif_details'):
+                            interface["vlan"] = port['binding:vif_details'].get('vlan')
+                        # Get vlan from network in case not present in port for those old openstacks and cases where
+                        # it is needed vlan at PT
+                        if not interface["vlan"]:
+                            # if network is of type vlan and port is of type direct (sr-iov) then set vlan id
+                            network = self.neutron.show_network(port["network_id"])
+                            if network['network'].get('provider:network_type') == 'vlan':
+                                # and port.get("binding:vnic_type") in ("direct", "direct-physical"):
+                                interface["vlan"] = network['network'].get('provider:segmentation_id')
                         ips=[]
                         #look for floating ip address
                         try:
