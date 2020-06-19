@@ -149,10 +149,10 @@ class UnderlayApi:
 
     # Aux methods to avoid code duplication of name conventions
     def get_vpg_name(self, switch_id, switch_port):
-        return "{}_{}".format(switch_id, switch_port)
+        return "{}_{}".format(switch_id, switch_port).replace(":","_")
 
     def get_vmi_name(self, switch_id, switch_port, vlan):
-        return "{}_{}-{}".format(switch_id, switch_port, vlan)
+        return "{}_{}-{}".format(switch_id, switch_port, vlan).replace(":","_")
 
     # Virtual network operations
 
