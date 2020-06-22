@@ -250,8 +250,8 @@ class UnderlayApi:
         profile_dict = {
             "local_link_information": [
                 {
-                    "port_id": switch_port,
-                    "switch_id": switch_port,
+                    "port_id": switch_port.replace(":","_"),
+                    "switch_id": switch_port.replace(":","_"),
                     "switch_info": switch_id,
                     "fabric": self.fabric
                 }
