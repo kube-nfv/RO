@@ -120,8 +120,8 @@ class VimDummyConnector(vimconn.VimConnector):
     def delete_network(self, net_id, created_items=None):
         if net_id not in self.nets:
             raise vimconn.VimConnNotFoundException("network with id {} not found".format(net_id))
-        return net_id
         self.nets.pop(net_id)
+        return net_id
 
     def refresh_nets_status(self, net_list):
         nets = {}
