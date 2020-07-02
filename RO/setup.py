@@ -67,7 +67,6 @@ setup(
     scripts=['osm_ro/scripts/RO-start.sh'
       #'openmanod', 'openmano', 'osm_ro/scripts/service-openmano', 'osm_ro/scripts/openmano-report',
       ],
-    # dependency_links=["git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm_im"],
     install_requires=_requirements,
     include_package_data=True,
     setup_requires=['setuptools-version-command'],
