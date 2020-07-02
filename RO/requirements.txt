@@ -20,4 +20,4 @@ paramiko
 requests==2.18.*
 netaddr
 logutils
-osm-im @ git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm-im
+osm-im @ git+https://osm.etsi.org/gerrit/osm/IM.git@v8.0#egg=osm-im

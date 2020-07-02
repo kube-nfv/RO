@@ -47,7 +47,7 @@ setup(
     install_requires=[
         "python-openstackclient", "python-neutronclient", 
         "requests", "netaddr", "PyYAML",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git@v8.0#egg=osm-ro-plugin&subdirectory=RO-plugin"
         # TODO py3 "networking-l2gw"
         # "python-novaclient", "python-keystoneclient", "python-glanceclient", "python-cinderclient",
     ],

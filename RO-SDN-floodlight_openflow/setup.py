@@ -46,7 +46,7 @@ setup(
     include_package_data=True,
     install_requires=[
         "requests",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git@v8.0#egg=osm-ro-plugin&subdirectory=RO-plugin"
     ],
     setup_requires=['setuptools-version-command'],
     entry_points={

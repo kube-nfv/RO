@@ -28,16 +28,14 @@ _maintainer_email = 'gerardo.garciadeblas@telefonica.com'
 _license = 'Apache 2.0'
 _url = 'https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary'
 _requirements = [
-    # TODO py3 revise
-    "osm-im @ git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm-im",
+    "osm-im @ git+https://osm.etsi.org/gerrit/osm/IM.git@v8.0#egg=osm-im",
     "PyYAML",
     "bottle",
     "logutils",
     "jsonschema",
     "paramiko",
     "mysqlclient",
-    #"MySQLdb",
-
+    # "MySQLdb",
     # common to  VIMS
     "requests",
     "netaddr",  # openstack, aws, vmware
