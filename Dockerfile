@@ -17,15 +17,14 @@
 #
 # Use Dockerfile-local for running osm/RO in a docker container from source
 
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 RUN  apt-get update && \
-  DEBIAN_FRONTEND=noninteractive apt-get --yes install git tox make python-all python3 python3-pip debhelper wget && \
-  DEBIAN_FRONTEND=noninteractive apt-get --yes install python3-all libssl-dev apt-utils && \
-  DEBIAN_FRONTEND=noninteractive python3 -m pip install -U setuptools setuptools-version-command stdeb && \
-  DEBIAN_FRONTEND=noninteractive apt-get --yes install libmysqlclient-dev mysql-client
+    DEBIAN_FRONTEND=noninteractive apt-get --yes install git tox make python3 python3-pip debhelper wget \
+      python3-all apt-utils libmysqlclient-dev mysql-client  && \
+    DEBIAN_FRONTEND=noninteractive python3 -m pip install -U setuptools setuptools-version-command stdeb
+    # needed for tests:  libmysqlclient-dev mysql-client tox
 
-  # needed for tests:  libmysqlclient-dev mysql-client tox  
-
+    # TODO remove apt # libssl-dev
 # TODO py3 comment
 # Uncomment this block to generate automatically a debian package and show info
 # # Set the working directory to /app
@@ -33,4 +32,3 @@ RUN  apt-get update && \
 # # Copy the current directory contents into the container at /app
 # ADD . /app
 # CMD /app/devops-stages/stage-build.sh && find deb_dist -name "*.deb" -exec dpkg -I  {} ";"
-

@@ -17,7 +17,7 @@ rm -rf deb_dist/*
 mkdir -p deb_dist
 
 # main RO module
-make -C RO clean package BRANCH=master
+make -C RO clean package
 cp RO/deb_dist/python3-osm-ro_*.deb deb_dist/
 
 # RO client
@@ -27,6 +27,10 @@ cp RO-client/deb_dist/python3-osm-roclient_*.deb deb_dist/
 # RO plugin
 make -C RO-plugin clean package
 cp RO-plugin/deb_dist/python3-osm-ro-plugin_*.deb deb_dist/
+
+# NG-RO
+make -C NG-RO clean package
+cp NG-RO/deb_dist/python3-osm-ng-ro_*.deb deb_dist/
 
 # VIM plugings:  vmware, openstack, AWS, fos, azure, Opennebula,
 for vim_plugin in RO-VIM-*

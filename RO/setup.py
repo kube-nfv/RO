@@ -36,7 +36,6 @@ _requirements = [
     "jsonschema",
     "paramiko",
     "mysqlclient",
-    #"MySQLdb",
 
     # common to  VIMS
     "requests",

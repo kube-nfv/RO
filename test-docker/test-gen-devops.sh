@@ -26,7 +26,7 @@ Options:
   --no-cache    Use if found problems looking for packages
   --update      Use to update OSM, RO docker with this image" && exit 0
 
-[[ "$*" == *--no-cache* ]] && no_cache="--no_cache" || no_cache=""
+[[ "$*" == *--no-cache* ]] && no_cache="--no-cache" || no_cache=""
 [[ "$*" == *--update* ]] && update_osm="k8s" || update_osm=""
 
 HERE=$(dirname $(readlink -f ${BASH_SOURCE[0]}))

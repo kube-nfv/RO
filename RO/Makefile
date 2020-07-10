@@ -28,6 +28,7 @@ package:
 #	apt-get install -y python-stdeb
 	python3 setup.py --command-packages=stdeb.command sdist_dsc
 	cp debian/python3-osm-ro.postinst deb_dist/osm-ro*/debian/
+	# cd deb_dist/osm-nbi*/debian && echo "cryptography python3-cryptography (>= 1.9)" > py3dist-overrides
 	cd deb_dist/osm-ro*/ && dpkg-buildpackage -rfakeroot -uc -us
 	# mkdir -p .build
 	# cp build/deb_dist/python-*.deb .build/
