@@ -18,4 +18,5 @@
 ##
 
 echo "POST INSTALL OSM-RO"
-# nothing to do
+# Ensure a proper version of cryptography, needed by paramiko
+python3 -m pip install "cryptography>=2.5" -U

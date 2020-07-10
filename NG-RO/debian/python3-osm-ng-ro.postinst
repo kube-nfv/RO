@@ -21,5 +21,4 @@ echo "POST INSTALL OSM-RO-NG"
 echo "Installing python dependencies via pip..."
 
 # python3 -m pip install -U pip
-python3 -m pip install cherrypy==18.1.2
-
+python3 -m pip install -U "cherrypy==18.1.2"  "cryptography>=2.5"
