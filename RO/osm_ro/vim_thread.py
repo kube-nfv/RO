@@ -1114,7 +1114,7 @@ class vim_thread(threading.Thread):
         connected_ports = task["extra"].get("connected_ports", [])
         new_connected_ports = []
         last_update = task["extra"].get("last_update", 0)
-        sdn_status = "BUILD"
+        sdn_status = task["extra"].get("vim_status", "BUILD")
         sdn_info = None
 
         task_id = task["instance_action_id"] + "." + str(task["task_index"])
@@ -1212,18 +1212,21 @@ class vim_thread(threading.Thread):
 
             # if there are more ports to connect or they have been modified, call create/update
             try:
-                if (set(connected_ports) != set(new_connected_ports) or sdn_need_update) and len(sdn_ports) >= 2:
+                if set(connected_ports) != set(new_connected_ports) or sdn_need_update:
                     last_update = time.time()
                     if not wimconn_net_id:
-                        if params[0] == "data":
-                            net_type = "ELAN"
-                        elif params[0] == "ptp":
-                            net_type = "ELINE"
+                        if len(sdn_ports) < 2:
+                            if not pending_ports:
+                                sdn_status = "ACTIVE"
                         else:
-                            net_type = "L3"
-
-                        wimconn_net_id, created_items = self.sdnconnector.create_connectivity_service(
-                            net_type, sdn_ports)
+                            if params[0] == "data":
+                                net_type = "ELAN"
+                            elif params[0] == "ptp":
+                                net_type = "ELINE"
+                            else:
+                                net_type = "L3"
+                            wimconn_net_id, created_items = self.sdnconnector.create_connectivity_service(
+                                net_type, sdn_ports)
                     else:
                         created_items = self.sdnconnector.edit_connectivity_service(
                             wimconn_net_id, conn_info=created_items, connection_points=sdn_ports)
