@@ -55,7 +55,7 @@ __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes"
 __date__ = "$26-aug-2014 11:09:29$"
 __version__ = "8.0.0.post1"
 version_date = "Jul 2020"
-database_version = 40      # expected database schema version
+database_version = 41      # expected database schema version
 
 global global_config
 global logger
