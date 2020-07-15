@@ -35,8 +35,8 @@ DBNAME="mano_db"
 QUIET_MODE=""
 BACKUP_DIR=""
 BACKUP_FILE=""
-#TODO update it with the last database version
-LAST_DB_VERSION=40
+# TODO update it with the last database version
+LAST_DB_VERSION=41
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -198,7 +198,8 @@ fi
 #[ $OPENMANO_VER_NUM -ge 6011 ] && DB_VERSION=38  #0.6.11 =>  38
 #[ $OPENMANO_VER_NUM -ge 6020 ] && DB_VERSION=39  #0.6.20 =>  39
 #[ $OPENMANO_VER_NUM -ge 6000004 ] && DB_VERSION=40  #6.0.4 =>  40
-#TODO ... put next versions here
+#[ $OPENMANO_VER_NUM -ge 8000000 ] && DB_VERSION=41  #8.0.0 =>  41
+# TODO ... put next versions here
 
 function upgrade_to_1(){
     # echo "    upgrade database from version 0.0 to version 0.1"
@@ -1511,6 +1512,19 @@ function downgrade_from_40(){
     sql "DELETE FROM schema_version WHERE version_int='40';"
 }
 
+function upgrade_to_41(){
+    echo "      Removing unique name at 'wims' 'wim_accounts'"
+    sql "ALTER TABLE wims	DROP INDEX name;"
+    sql "ALTER TABLE wim_accounts	DROP INDEX wim_name;"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) " \
+        "VALUES (41, '0.41', '8.0.0', 'Removing unique name for wims/wim_accounts', '2020-07-16');"
+}
+function downgrade_from_41(){
+    echo "      Adding back unique name at 'wims' 'wim_accounts'"
+    sql "ALTER TABLE wims	ADD UNIQUE INDEX name (name);"
+    sql "ALTER TABLE wim_accounts	ADD UNIQUE INDEX wim_name (name);"
+    sql "DELETE FROM schema_version WHERE version_int='41';"
+}
 
 #TODO ... put functions here
 

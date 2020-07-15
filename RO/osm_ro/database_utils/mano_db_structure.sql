@@ -19,11 +19,11 @@
 * contact with: nfvlabs@tid.es
 **/
 
--- MySQL dump 10.13  Distrib 5.7.24, for Linux (x86_64)
+-- MySQL dump 10.13  Distrib 5.7.30, for Linux (x86_64)
 --
 -- Host: localhost    Database: {{mano_db}}
 -- ------------------------------------------------------
--- Server version	5.7.24
+-- Server version	5.7.27
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -56,7 +56,7 @@ DROP TABLE IF EXISTS `datacenter_nets`;
 CREATE TABLE `datacenter_nets` (
   `uuid` varchar(36) NOT NULL,
   `name` varchar(255) NOT NULL,
-  `vim_net_id` varchar(36) NOT NULL,
+  `vim_net_id` varchar(300) NOT NULL,
   `datacenter_id` varchar(36) NOT NULL,
   `type` enum('bridge','data','ptp') NOT NULL DEFAULT 'data' COMMENT 'Type of network',
   `multipoint` enum('true','false') NOT NULL DEFAULT 'true',
@@ -113,8 +113,7 @@ CREATE TABLE `datacenters` (
   `config` varchar(4000) DEFAULT NULL COMMENT 'extra config information in json',
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
-  PRIMARY KEY (`uuid`),
-  UNIQUE KEY `name` (`name`)
+  PRIMARY KEY (`uuid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='Datacenters managed by the NFVO.';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -129,7 +128,7 @@ CREATE TABLE `datacenters_flavors` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `flavor_id` varchar(36) NOT NULL,
   `datacenter_vim_id` varchar(36) NOT NULL,
-  `vim_id` varchar(36) NOT NULL,
+  `vim_id` varchar(300) NOT NULL,
   `status` enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
   `vim_info` text,
   `created` enum('true','false') NOT NULL DEFAULT 'false' COMMENT 'Indicates if it has been created by openmano, or already existed',
@@ -139,7 +138,7 @@ CREATE TABLE `datacenters_flavors` (
   KEY `FK_datacenters_flavors_datacenter_tenants` (`datacenter_vim_id`),
   CONSTRAINT `FK__flavors` FOREIGN KEY (`flavor_id`) REFERENCES `flavors` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `FK_datacenters_flavors_datacenter_tenants` FOREIGN KEY (`datacenter_vim_id`) REFERENCES `datacenter_tenants` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -153,7 +152,7 @@ CREATE TABLE `datacenters_images` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `image_id` varchar(36) NOT NULL,
   `datacenter_vim_id` varchar(36) NOT NULL,
-  `vim_id` varchar(36) NOT NULL,
+  `vim_id` varchar(300) NOT NULL,
   `status` enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
   `vim_info` text,
   `created` enum('true','false') NOT NULL DEFAULT 'false' COMMENT 'Indicates if it has been created by openmano, or already existed',
@@ -162,7 +161,7 @@ CREATE TABLE `datacenters_images` (
   KEY `FK_datacenters_images_datacenter_tenants` (`datacenter_vim_id`),
   CONSTRAINT `FK__images` FOREIGN KEY (`image_id`) REFERENCES `images` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `FK_datacenters_images_datacenter_tenants` FOREIGN KEY (`datacenter_vim_id`) REFERENCES `datacenter_tenants` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -238,13 +237,14 @@ DROP TABLE IF EXISTS `instance_classifications`;
 CREATE TABLE `instance_classifications` (
   `uuid` varchar(36) NOT NULL,
   `instance_scenario_id` varchar(36) NOT NULL,
-  `vim_classification_id` varchar(36) DEFAULT NULL,
+  `vim_classification_id` varchar(300) DEFAULT NULL,
   `sce_classifier_match_id` varchar(36) DEFAULT NULL,
   `datacenter_id` varchar(36) DEFAULT NULL,
   `datacenter_tenant_id` varchar(36) DEFAULT NULL,
   `status` enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
   `error_msg` varchar(1024) DEFAULT NULL,
   `vim_info` text,
+  `related` varchar(36) DEFAULT NULL,
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
   PRIMARY KEY (`uuid`),
@@ -270,18 +270,22 @@ CREATE TABLE `instance_interfaces` (
   `uuid` varchar(36) NOT NULL,
   `instance_vm_id` varchar(36) NOT NULL,
   `instance_net_id` varchar(36) NOT NULL,
+  `instance_wim_net_id` varchar(36) DEFAULT NULL,
   `interface_id` varchar(36) DEFAULT NULL,
-  `vim_interface_id` varchar(128) DEFAULT NULL,
+  `vim_interface_id` varchar(300) DEFAULT NULL,
   `mac_address` varchar(32) DEFAULT NULL,
   `ip_address` varchar(64) DEFAULT NULL,
   `vim_info` text,
   `type` enum('internal','external') NOT NULL COMMENT 'Indicates if this interface is external to a vnf, or internal',
+  `model` varchar(12) DEFAULT NULL,
   `floating_ip` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Indicates if a floating_ip must be associated to this interface',
   `port_security` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Indicates if port security must be enabled or disabled. By default it is enabled',
   `sdn_port_id` varchar(36) DEFAULT NULL COMMENT 'Port id in ovim',
   `compute_node` varchar(100) DEFAULT NULL COMMENT 'Compute node id used to specify the SDN port mapping',
   `pci` varchar(50) DEFAULT NULL COMMENT 'PCI of the  physical port in the host',
   `vlan` smallint(5) unsigned DEFAULT NULL COMMENT 'VLAN tag used by the port',
+  `created_at` double DEFAULT NULL,
+  `modified_at` double DEFAULT NULL,
   PRIMARY KEY (`uuid`),
   KEY `FK_instance_vms` (`instance_vm_id`),
   KEY `FK_instance_nets` (`instance_net_id`),
@@ -301,7 +305,8 @@ DROP TABLE IF EXISTS `instance_nets`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `instance_nets` (
   `uuid` varchar(36) NOT NULL,
-  `vim_net_id` varchar(128) DEFAULT NULL,
+  `osm_id` varchar(255) DEFAULT NULL,
+  `vim_net_id` varchar(300) DEFAULT NULL,
   `vim_name` varchar(255) DEFAULT NULL,
   `instance_scenario_id` varchar(36) DEFAULT NULL,
   `sce_net_id` varchar(36) DEFAULT NULL,
@@ -311,6 +316,7 @@ CREATE TABLE `instance_nets` (
   `status` enum('ACTIVE','INACTIVE','DOWN','BUILD','ERROR','VIM_ERROR','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
   `error_msg` varchar(1024) DEFAULT NULL,
   `vim_info` text,
+  `related` varchar(36) DEFAULT NULL,
   `multipoint` enum('true','false') NOT NULL DEFAULT 'true',
   `created` enum('true','false') NOT NULL DEFAULT 'false' COMMENT 'Created or already exists at VIM',
   `created_at` double NOT NULL,
@@ -370,13 +376,14 @@ DROP TABLE IF EXISTS `instance_sfis`;
 CREATE TABLE `instance_sfis` (
   `uuid` varchar(36) NOT NULL,
   `instance_scenario_id` varchar(36) NOT NULL,
-  `vim_sfi_id` varchar(36) DEFAULT NULL,
+  `vim_sfi_id` varchar(300) DEFAULT NULL,
   `sce_rsp_hop_id` varchar(36) DEFAULT NULL,
   `datacenter_id` varchar(36) DEFAULT NULL,
   `datacenter_tenant_id` varchar(36) DEFAULT NULL,
   `status` enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
   `error_msg` varchar(1024) DEFAULT NULL,
   `vim_info` text,
+  `related` varchar(36) DEFAULT NULL,
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
   PRIMARY KEY (`uuid`),
@@ -401,13 +408,14 @@ DROP TABLE IF EXISTS `instance_sfps`;
 CREATE TABLE `instance_sfps` (
   `uuid` varchar(36) NOT NULL,
   `instance_scenario_id` varchar(36) NOT NULL,
-  `vim_sfp_id` varchar(36) DEFAULT NULL,
+  `vim_sfp_id` varchar(300) DEFAULT NULL,
   `sce_rsp_id` varchar(36) DEFAULT NULL,
   `datacenter_id` varchar(36) DEFAULT NULL,
   `datacenter_tenant_id` varchar(36) DEFAULT NULL,
   `status` enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
   `error_msg` varchar(1024) DEFAULT NULL,
   `vim_info` text,
+  `related` varchar(36) DEFAULT NULL,
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
   PRIMARY KEY (`uuid`),
@@ -432,13 +440,14 @@ DROP TABLE IF EXISTS `instance_sfs`;
 CREATE TABLE `instance_sfs` (
   `uuid` varchar(36) NOT NULL,
   `instance_scenario_id` varchar(36) NOT NULL,
-  `vim_sf_id` varchar(36) DEFAULT NULL,
+  `vim_sf_id` varchar(300) DEFAULT NULL,
   `sce_rsp_hop_id` varchar(36) DEFAULT NULL,
   `datacenter_id` varchar(36) DEFAULT NULL,
   `datacenter_tenant_id` varchar(36) DEFAULT NULL,
   `status` enum('ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
   `error_msg` varchar(1024) DEFAULT NULL,
   `vim_info` text,
+  `related` varchar(36) DEFAULT NULL,
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
   PRIMARY KEY (`uuid`),
@@ -463,16 +472,16 @@ DROP TABLE IF EXISTS `instance_vms`;
 CREATE TABLE `instance_vms` (
   `uuid` varchar(36) NOT NULL,
   `instance_vnf_id` varchar(36) NOT NULL,
+  `vim_vm_id` varchar(300) DEFAULT NULL,
   `vm_id` varchar(36) DEFAULT NULL,
-  `vim_vm_id` varchar(128) DEFAULT NULL,
   `vim_name` varchar(255) DEFAULT NULL,
   `status` enum('ACTIVE:NoMgmtIP','ACTIVE','INACTIVE','BUILD','ERROR','VIM_ERROR','PAUSED','SUSPENDED','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
   `error_msg` varchar(1024) DEFAULT NULL,
   `vim_info` text,
+  `related` varchar(36) DEFAULT NULL,
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
   PRIMARY KEY (`uuid`),
-  UNIQUE KEY `vim_vm_id` (`vim_vm_id`),
   KEY `FK_instance_vms_vms` (`vm_id`),
   KEY `FK_instance_vms_instance_vnfs` (`instance_vnf_id`),
   CONSTRAINT `FK_instance_vms_instance_vnfs` FOREIGN KEY (`instance_vnf_id`) REFERENCES `instance_vnfs` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -519,7 +528,7 @@ DROP TABLE IF EXISTS `instance_wim_nets`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `instance_wim_nets` (
   `uuid` varchar(36) NOT NULL,
-  `wim_internal_id` varchar(128) DEFAULT NULL COMMENT 'Internal ID used by the WIM to refer to the network',
+  `wim_internal_id` varchar(300) DEFAULT NULL COMMENT 'Internal ID used by the WIM to refer to the network',
   `instance_scenario_id` varchar(36) DEFAULT NULL,
   `sce_net_id` varchar(36) DEFAULT NULL,
   `wim_id` varchar(36) DEFAULT NULL,
@@ -527,8 +536,10 @@ CREATE TABLE `instance_wim_nets` (
   `status` enum('ACTIVE','INACTIVE','DOWN','BUILD','ERROR','WIM_ERROR','DELETED','SCHEDULED_CREATION','SCHEDULED_DELETION') NOT NULL DEFAULT 'BUILD',
   `error_msg` varchar(1024) DEFAULT NULL,
   `wim_info` text,
+  `related` varchar(36) DEFAULT NULL,
   `multipoint` enum('true','false') NOT NULL DEFAULT 'false',
   `created` enum('true','false') NOT NULL DEFAULT 'false' COMMENT 'Created or already exists at WIM',
+  `sdn` enum('true','false') NOT NULL DEFAULT 'false',
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
   PRIMARY KEY (`uuid`),
@@ -621,7 +632,7 @@ CREATE TABLE `logs` (
   `level` enum('panic','error','info','debug','verbose') NOT NULL,
   `description` varchar(200) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3423 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -933,7 +944,7 @@ CREATE TABLE `tenants_datacenters` (
   CONSTRAINT `FK_tenants_datacenters_datacenter_tenants` FOREIGN KEY (`datacenter_tenant_id`) REFERENCES `datacenter_tenants` (`uuid`),
   CONSTRAINT `FK_tenants_datacenters_datacenters` FOREIGN KEY (`datacenter_id`) REFERENCES `datacenters` (`uuid`),
   CONSTRAINT `FK_tenants_datacenters_nfvo_tenants` FOREIGN KEY (`nfvo_tenant_id`) REFERENCES `nfvo_tenants` (`uuid`)
-) ENGINE=InnoDB AUTO_INCREMENT=86 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='Scenarios defined by the user';
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='Scenarios defined by the user';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -962,14 +973,16 @@ DROP TABLE IF EXISTS `vim_wim_actions`;
 CREATE TABLE `vim_wim_actions` (
   `instance_action_id` varchar(36) NOT NULL,
   `task_index` int(6) NOT NULL,
+  `worker` varchar(64) DEFAULT NULL,
+  `related` varchar(36) DEFAULT NULL,
   `datacenter_vim_id` varchar(36) DEFAULT NULL,
-  `vim_id` varchar(64) DEFAULT NULL,
+  `vim_id` varchar(300) DEFAULT NULL,
   `wim_account_id` varchar(36) DEFAULT NULL,
   `wim_internal_id` varchar(64) DEFAULT NULL,
   `action` varchar(36) NOT NULL COMMENT 'CREATE,DELETE,START,STOP...',
-  `item` enum('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces','instance_wim_nets') NOT NULL COMMENT 'table where the item is stored',
+  `item` enum('datacenters_flavors','datacenter_images','instance_nets','instance_vms','instance_interfaces','instance_sfis','instance_sfs','instance_classifications','instance_sfps','instance_wim_nets') NOT NULL COMMENT 'table where the item is stored',
   `item_id` varchar(36) DEFAULT NULL COMMENT 'uuid of the entry in the table',
-  `status` enum('SCHEDULED','BUILD','DONE','FAILED','SUPERSEDED') NOT NULL DEFAULT 'SCHEDULED',
+  `status` enum('SCHEDULED','BUILD','DONE','FAILED','SUPERSEDED','FINISHED') NOT NULL DEFAULT 'SCHEDULED',
   `extra` text COMMENT 'json with params:, depends_on: for the task',
   `error_msg` varchar(1024) DEFAULT NULL,
   `created_at` double NOT NULL,
@@ -1059,14 +1072,13 @@ CREATE TABLE `wim_accounts` (
   `uuid` varchar(36) NOT NULL,
   `name` varchar(255) DEFAULT NULL,
   `wim_id` varchar(36) NOT NULL,
-  `created` enum('true','false') NOT NULL DEFAULT 'false',
+  `sdn` enum('true','false') NOT NULL DEFAULT 'false',
   `user` varchar(64) DEFAULT NULL,
   `password` varchar(64) DEFAULT NULL,
   `config` text,
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
   PRIMARY KEY (`uuid`),
-  UNIQUE KEY `wim_name` (`wim_id`,`name`),
   KEY `FK_wim_accounts_wims` (`wim_id`),
   CONSTRAINT `FK_wim_accounts_wims` FOREIGN KEY (`wim_id`) REFERENCES `wims` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='WIM accounts by the user';
@@ -1094,7 +1106,7 @@ CREATE TABLE `wim_nfvo_tenants` (
   CONSTRAINT `FK_nfvo_tenants_wim_accounts` FOREIGN KEY (`nfvo_tenant_id`) REFERENCES `nfvo_tenants` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `FK_wim_accounts_nfvo_tenants` FOREIGN KEY (`wim_account_id`) REFERENCES `wim_accounts` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `FK_wims_nfvo_tenants` FOREIGN KEY (`wim_id`) REFERENCES `wims` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=86 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='WIM accounts mapping to NFVO tenants';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='WIM accounts mapping to NFVO tenants';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1108,15 +1120,16 @@ CREATE TABLE `wim_port_mappings` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `wim_id` varchar(36) NOT NULL,
   `datacenter_id` varchar(36) NOT NULL,
-  `pop_switch_dpid` varchar(64) NOT NULL,
-  `pop_switch_port` varchar(64) NOT NULL,
-  `wan_service_endpoint_id` varchar(256) NOT NULL COMMENT 'this field contains a unique identifier used to check the mapping_info consistency',
-  `wan_service_mapping_info` text,
+  `device_id` varchar(64) DEFAULT NULL,
+  `device_interface_id` varchar(64) DEFAULT NULL,
+  `service_endpoint_id` varchar(256) NOT NULL,
+  `switch_dpid` varchar(64) DEFAULT NULL,
+  `switch_port` varchar(64) DEFAULT NULL,
+  `service_mapping_info` text,
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_datacenter_port_mapping` (`datacenter_id`,`pop_switch_dpid`,`pop_switch_port`),
-  UNIQUE KEY `unique_wim_port_mapping` (`wim_id`,`wan_service_endpoint_id`),
+  UNIQUE KEY `unique_wim_port_mapping` (`wim_id`,`service_endpoint_id`),
   KEY `FK_wims_wim_physical_connections` (`wim_id`),
   KEY `FK_datacenters_wim_port_mappings` (`datacenter_id`),
   CONSTRAINT `FK_datacenters_wim_port_mappings` FOREIGN KEY (`datacenter_id`) REFERENCES `datacenters` (`uuid`) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -1140,8 +1153,7 @@ CREATE TABLE `wims` (
   `config` text,
   `created_at` double NOT NULL,
   `modified_at` double DEFAULT NULL,
-  PRIMARY KEY (`uuid`),
-  UNIQUE KEY `name` (`name`)
+  PRIMARY KEY (`uuid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='WIMs managed by the NFVO.';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1158,17 +1170,17 @@ CREATE TABLE `wims` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2018-12-10  9:58:03
+-- Dump completed on 2020-07-15 22:32:14
 
 
 
 
 
--- MySQL dump 10.13  Distrib 5.7.24, for Linux (x86_64)
+-- MySQL dump 10.13  Distrib 5.7.30, for Linux (x86_64)
 --
 -- Host: localhost    Database: {{mano_db}}
 -- ------------------------------------------------------
--- Server version	5.7.24
+-- Server version	5.7.27
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -1224,7 +1236,12 @@ INSERT INTO `schema_version` VALUES
 (33,'0.33','0.5.82','Add pdu information to vms','2018-11-13'),
 (34,'0.34','0.6.00','Added WIM tables','2018-09-10'),
 (35,'0.35','0.6.02','Adding ingress and egress ports for RSPs','2018-12-11'),
-(36,'0.36','0.6.03','Allow vm without image_id for PDUs','2018-12-19');
+(36,'0.36','0.6.03','Allow vm without image_id for PDUs','2018-12-19'),
+(37,'0.37','0.6.09','Adding the enum tags for SFC','2019-02-07'),
+(38,'0.38','0.6.11','Adding related to vim_wim_actions','2019-03-07'),
+(39,'0.39','0.6.20','Enlarge vim_id to 300 at all places','2019-05-23'),
+(40,'0.40','6.0.4','Chagnes to SDN ','2019-10-23'),
+(41,'0.41','8.0.0','Removing unique name for wims/wim_accounts','2020-07-16');
 /*!40000 ALTER TABLE `schema_version` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -1237,4 +1254,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2018-12-10  9:58:03
+-- Dump completed on 2020-07-15 22:32:14
