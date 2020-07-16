@@ -38,8 +38,7 @@ import difflib
 import logging
 import uuid
 from enum import Enum
-from requests import RequestException
-
+from requests import RequestException, ConnectionError, ConnectTimeout, Timeout
 from cvprac.cvp_client import CvpClient
 from cvprac.cvp_api import CvpApi
 from cvprac.cvp_client_errors import CvpLoginError, CvpSessionLogOutError, CvpApiError
@@ -50,15 +49,16 @@ from osm_rosdn_arista_cloudvision.aristaTask import AristaCVPTask
 
 
 class SdnError(Enum):
-    UNREACHABLE = 'Unable to reach the WIM.',
+    UNREACHABLE = 'Unable to reach the WIM url, connect error.',
+    TIMEOUT = 'Unable to reach the WIM url, timeout.',
     VLAN_INCONSISTENT = \
         'VLAN value inconsistent between the connection points',
     VLAN_NOT_PROVIDED = 'VLAN value not provided',
     CONNECTION_POINTS_SIZE = \
         'Unexpected number of connection points: 2 expected.',
     ENCAPSULATION_TYPE = \
-        'Unexpected service_endpoint_encapsulation_type. \
-         Only "dotq1" is accepted.',
+        'Unexpected service_endpoint_encapsulation_type. ' \
+        'Only "dotq1" is accepted.',
     BANDWIDTH = 'Unable to get the bandwidth.',
     STATUS = 'Unable to get the status for the service.',
     DELETE = 'Unable to delete service.',
@@ -144,15 +144,15 @@ class AristaSdnConnector(SdnConnectorBase):
         :param config: (dict or None): Particular information of plugin. These keys if present have a common meaning:
             'mapping_not_needed': (bool) False by default or if missing, indicates that mapping is not needed.
             'service_endpoint_mapping': (list) provides the internal endpoint mapping. The meaning is:
-                KEY 	    	        meaning for WIM		        meaning for SDN assist
+                KEY                     meaning for WIM                meaning for SDN assist
                 --------                --------                    --------
-                device_id		        pop_switch_dpid		        compute_id
-                device_interface_id		pop_switch_port		        compute_pci_address
-                service_endpoint_id	    wan_service_endpoint_id     SDN_service_endpoint_id
-                service_mapping_info	wan_service_mapping_info    SDN_service_mapping_info
-                    contains extra information if needed. Text in Yaml format
-                switch_dpid		        wan_switch_dpid		        SDN_switch_dpid
-                switch_port		        wan_switch_port		        SDN_switch_port
+                device_id               pop_switch_dpid             compute_id
+                device_interface_id     pop_switch_port             compute_pci_address
+                service_endpoint_id     wan_service_endpoint_id     SDN_service_endpoint_id
+                service_mapping_info    wan_service_mapping_info    SDN_service_mapping_info
+                contains extra information if needed. Text in Yaml format
+                switch_dpid             wan_switch_dpid             SDN_switch_dpid
+                switch_port             wan_switch_port             SDN_switch_port
                 datacenter_id           vim_account                 vim_account
                 id: (internal, do not use)
                 wim_id: (internal, do not use)
@@ -188,10 +188,16 @@ class AristaSdnConnector(SdnConnectorBase):
         try:
             self.__load_topology()
             self.__load_switches()
+        except (ConnectTimeout, Timeout) as ct:
+            raise SdnConnectorError(message=SdnError.TIMEOUT + " " + str(ct), http_code=408)
+        except ConnectionError as ce:
+            raise SdnConnectorError(message=SdnError.UNREACHABLE + " " + str(ce), http_code=404)
         except SdnConnectorError as sc:
             raise sc
+        except CvpLoginError as le:
+            raise SdnConnectorError(message=le.msg, http_code=500) from le
         except Exception as e:
-            raise SdnConnectorError(message="Unable to load switches from CVP",
+            raise SdnConnectorError(message="Unable to load switches from CVP" + " " + str(e),
                                     http_code=500) from e
         self.logger.debug("Using topology {} in Arista Leaf switches: {}".format(
             self.topology,
@@ -354,12 +360,12 @@ class AristaSdnConnector(SdnConnectorBase):
         except CvpLoginError as e:
             self.logger.info(str(e))
             self.client = None
-            raise SdnConnectorError(message=SdnError.UNAUTHORIZED,
+            raise SdnConnectorError(message=SdnError.UNAUTHORIZED + " " + str(e),
                                     http_code=401) from e
         except Exception as ex:
             self.client = None
             self.logger.error(str(ex))
-            raise SdnConnectorError(message=SdnError.INTERNAL_ERROR,
+            raise SdnConnectorError(message=SdnError.INTERNAL_ERROR + " " + str(ex),
                                     http_code=500) from ex
 
     def get_connectivity_service_status(self, service_uuid, conn_info=None):
@@ -463,12 +469,12 @@ class AristaSdnConnector(SdnConnectorBase):
         except CvpLoginError as e:
             self.logger.info(str(e))
             self.client = None
-            raise SdnConnectorError(message=SdnError.UNAUTHORIZED,
+            raise SdnConnectorError(message=SdnError.UNAUTHORIZED + " " + str(e),
                                     http_code=401) from e
         except Exception as ex:
             self.client = None
             self.logger.error(str(ex), exc_info=True)
-            raise SdnConnectorError(message=str(ex),
+            raise SdnConnectorError(message=str(ex) + " " + str(ex),
                                     http_code=500) from ex
 
     def create_connectivity_service(self, service_type, connection_points,
@@ -547,7 +553,7 @@ class AristaSdnConnector(SdnConnectorBase):
         except CvpLoginError as e:
             self.logger.info(str(e))
             self.client = None
-            raise SdnConnectorError(message=SdnError.UNAUTHORIZED,
+            raise SdnConnectorError(message=SdnError.UNAUTHORIZED + " " + str(e),
                                     http_code=401) from e
         except SdnConnectorError as sde:
             raise sde
@@ -686,7 +692,10 @@ class AristaSdnConnector(SdnConnectorBase):
                         for p in self.switches:
                             if self.switches[p]['mlagPeerDevice'] == s:
                                 if cls_cp.get(p):
-                                    cl_config = str(cl_vlan)
+                                    if self.topology == self._VXLAN_MLAG:
+                                        cl_config = str(cl_vlan) + str(cl_bgp[s])
+                                    else:
+                                        cl_config = str(cl_vlan)
                 else:
                     cl_config = str(cl_vlan) + str(cl_bgp[s]) + str(cls_cp[s])
 
@@ -737,7 +746,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 if not (cls_perSw.get(s) and cls_perSw[s][0].get('config')):
                     # when there is no configuration, means that there is no interface
                     # in the switch to be connected, so the configLet has to be removed from CloudVision
-                    # after removing the ConfigLet fron the switch if it was already there
+                    # after removing the ConfigLet from the switch if it was already there
 
                     # get config let name and key
                     cl = cls_perSw[s]
@@ -1141,7 +1150,7 @@ class AristaSdnConnector(SdnConnectorBase):
         except CvpLoginError as e:
             self.logger.info(str(e))
             self.client = None
-            raise SdnConnectorError(message=SdnError.UNAUTHORIZED,
+            raise SdnConnectorError(message=SdnError.UNAUTHORIZED + " " + str(e),
                                     http_code=401) from e
         except SdnConnectorError as sde:
             raise sde
@@ -1150,7 +1159,7 @@ class AristaSdnConnector(SdnConnectorBase):
             self.logger.error(ex)
             if self.raiseException:
                 raise ex
-            raise SdnConnectorError(message=SdnError.INTERNAL_ERROR,
+            raise SdnConnectorError(message=SdnError.INTERNAL_ERROR + " " + str(ex),
                                     http_code=500) from ex
 
     def __addMetadata(self, service_uuid, service_type, vlan_id):
@@ -1269,7 +1278,7 @@ class AristaSdnConnector(SdnConnectorBase):
         except CvpLoginError as e:
             self.logger.info(str(e))
             self.client = None
-            raise SdnConnectorError(message=SdnError.UNAUTHORIZED,
+            raise SdnConnectorError(message=SdnError.UNAUTHORIZED + " " + str(e),
                                     http_code=401) from e
         except SdnConnectorError as sde:
             raise sde
@@ -1305,7 +1314,7 @@ class AristaSdnConnector(SdnConnectorBase):
         except CvpLoginError as e:
             self.logger.info(str(e))
             self.client = None
-            raise SdnConnectorError(message=SdnError.UNAUTHORIZED,
+            raise SdnConnectorError(message=SdnError.UNAUTHORIZED + " " + str(e),
                                     http_code=401) from e
         except SdnConnectorError as sde:
             raise sde
@@ -1314,7 +1323,7 @@ class AristaSdnConnector(SdnConnectorBase):
             self.logger.error(ex)
             if self.raiseException:
                 raise ex
-            raise SdnConnectorError(message=SdnError.INTERNAL_ERROR,
+            raise SdnConnectorError(message=SdnError.INTERNAL_ERROR + " " + str(ex),
                                     http_code=500) from ex
 
     def get_all_active_connectivity_services(self):
@@ -1340,7 +1349,7 @@ class AristaSdnConnector(SdnConnectorBase):
         except CvpLoginError as e:
             self.logger.info(str(e))
             self.client = None
-            raise SdnConnectorError(message=SdnError.UNAUTHORIZED,
+            raise SdnConnectorError(message=SdnError.UNAUTHORIZED + " " + str(e),
                                     http_code=401) from e
         except SdnConnectorError as sde:
             raise sde
@@ -1480,11 +1489,11 @@ class AristaSdnConnector(SdnConnectorBase):
           Score - 1.0 if the sequences are identical, and
                   0.0 if they have nothing in common.
         unified diff list
-          Code	Meaning
-          '- '	line unique to sequence 1
-          '+ '	line unique to sequence 2
-          '  '	line common to both sequences
-          '? '	line not present in either input sequence
+          Code    Meaning
+          '- '    line unique to sequence 1
+          '+ '    line unique to sequence 2
+          '  '    line common to both sequences
+          '? '    line not present in either input sequence
         """
         fromlines = fromText.splitlines(1)
         tolines = toText.splitlines(1)
@@ -1516,20 +1525,33 @@ class AristaSdnConnector(SdnConnectorBase):
     def __get_interface_ip(self, device_id, interface):
         url = '/api/v1/rest/{}/Sysdb/ip/config/ipIntfConfig/{}/'.format(device_id, interface)
         self.logger.debug('get_interface_ip: URL {}'.format(url))
+        data = None
         try:
             data = self.client.get(url, timeout=self.__API_REQUEST_TOUT)
-            return data['notifications'][0]['updates']['addrWithMask']['value'].split('/')[0]
-        except Exception:
-            raise SdnConnectorError("Invalid response from url {}: data {}".format(url, data))
+            if data['notifications']:
+                for notification in data['notifications']:
+                    for update in notification['updates']:
+                        if update == 'addrWithMask':
+                            return notification['updates'][update]['value']
+        except Exception as e:
+            raise SdnConnectorError("Invalid response from url {}: data {} - {}".format(url, data, str(e)))
+        raise SdnConnectorError("Unable to get ip for interface {} in device {}, data {}".
+                                format(interface, device_id, data))
 
     def __get_device_ASN(self, device_id):
         url = '/api/v1/rest/{}/Sysdb/routing/bgp/config/'.format(device_id)
         self.logger.debug('get_device_ASN: URL {}'.format(url))
+        data = None
         try:
             data = self.client.get(url, timeout=self.__API_REQUEST_TOUT)
-            return data['notifications'][0]['updates']['asNumber']['value']['value']['int']
-        except Exception:
-            raise SdnConnectorError("Invalid response from url {}: data {}".format(url, data))
+            if data['notifications']:
+                for notification in data['notifications']:
+                    for update in notification['updates']:
+                        if update == 'asNumber':
+                            return notification['updates'][update]['value']['value']['int']
+        except Exception as e:
+            raise SdnConnectorError("Invalid response from url {}: data {} - {}".format(url, data, str(e)))
+        raise SdnConnectorError("Unable to get AS in device {}, data {}".format(device_id, data))
 
     def __get_peer_MLAG(self, device_id):
         peer = None
