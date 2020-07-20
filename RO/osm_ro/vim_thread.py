@@ -224,9 +224,9 @@ class vim_thread(threading.Thread):
                     self.wim_account_id, self.plugin_name))
             except Exception as e:
                 self.logger.error("Cannot load sdn connector for wim_account={}, plugin={}: {}".format(
-                    self.wim_account_id, self.plugin_name, e))
+                    self.wim_account_id, self.plugin_name, e), exc_info=True)
                 self.sdnconnector = None
-                self.error_status = "Error loading sdn connector: {}".format(e)
+                self.error_status = self._format_vim_error_msg("Error loading sdn connector: {}".format(e))
 
     def _get_db_task(self):
         """
@@ -723,7 +723,8 @@ class vim_thread(threading.Thread):
                 self.logger.error("Error executing task={}: {}".format(task_id, e), exc_info=True)
             task["error_msg"] = str(e)
             task["status"] = "FAILED"
-            database_update = {"status": "VIM_ERROR", "error_msg": task["error_msg"]}
+            database_update = {"status": "VIM_ERROR" if task["item"] != "instance_wim_nets" else "WIM_ERROR",
+                               "error_msg": task["error_msg"]}
             # if task["item"] == 'instance_vms':
             #     database_update["vim_vm_id"] = None
             # elif task["item"] == 'instance_nets':
