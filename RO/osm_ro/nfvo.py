@@ -2971,6 +2971,7 @@ def unify_cloud_config(cloud_config_preserve, cloud_config):
 
 
 def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_id=None):
+    global plugins
     datacenter_id = None
     datacenter_name = None
     thread = None
@@ -2990,7 +2991,7 @@ def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_i
             if datacenter_tenant_id:
                 where_["dt.uuid"] = datacenter_tenant_id
             datacenters = mydb.get_rows(
-                SELECT=("dt.uuid as datacenter_tenant_id, d.name as datacenter_name",),
+                SELECT=("dt.uuid as datacenter_tenant_id, d.name as datacenter_name", "d.type as type"),
                 FROM="datacenter_tenants as dt join tenants_datacenters as td on dt.uuid=td.datacenter_tenant_id "
                      "join datacenters as d on d.uuid=dt.datacenter_id",
                 WHERE=where_)
@@ -3001,6 +3002,10 @@ def get_vim_thread(mydb, tenant_id, datacenter_id_name=None, datacenter_tenant_i
                 datacenter_name = datacenters[0]["datacenter_name"]
                 thread = vim_threads["running"].get(thread_id)
                 if not thread:
+                    datacenter_type = datacenters[0]["type"]
+                    plugin_name = "rovim_" + datacenter_type
+                    if plugin_name not in plugins:
+                        _load_plugin(plugin_name, type="vim")
                     thread_name = get_non_used_vim_name(datacenter_name, datacenter_id)
                     thread = vim_thread(task_lock, plugins, thread_name, None,
                                         thread_id, db=mydb)
