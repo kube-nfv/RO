@@ -1422,20 +1422,23 @@ class vimconnector(vimconn.VimConnector):
             # print "DONE :-)", server
 
             # pool_id = None
-            if external_network:
-                floating_ips = self.neutron.list_floatingips().get("floatingips", ())
             for floating_network in external_network:
                 try:
                     assigned = False
+                    floating_ip_retries = 3
+                    # In case of RO in HA there can be conflicts, two RO trying to assign same floating IP, so retry
+                    # several times
                     while not assigned:
-                        if floating_ips:
-                            ip = floating_ips.pop(0)
-                            if ip.get("port_id", False) or ip.get('tenant_id') != server.tenant_id:
+                        floating_ips = self.neutron.list_floatingips().get("floatingips", ())
+                        random.shuffle(floating_ips)   # randomize
+                        for fip in floating_ips:
+                            if fip.get("port_id") or fip.get('tenant_id') != server.tenant_id:
                                 continue
                             if isinstance(floating_network['floating_ip'], str):
-                                if ip.get("floating_network_id") != floating_network['floating_ip']:
+                                if fip.get("floating_network_id") != floating_network['floating_ip']:
                                     continue
-                            free_floating_ip = ip["id"]
+                            free_floating_ip = fip["id"]
+                            break
                         else:
                             if isinstance(floating_network['floating_ip'], str) and \
                                     floating_network['floating_ip'].lower() != "true":
@@ -1462,31 +1465,44 @@ class vimconnector(vimconn.VimConnector):
                                 # self.logger.debug("Creating floating IP")
                                 new_floating_ip = self.neutron.create_floatingip(param)
                                 free_floating_ip = new_floating_ip['floatingip']['id']
+                                created_items["floating_ip:" + str(free_floating_ip)] = True
                             except Exception as e:
                                 raise vimconn.VimConnException(type(e).__name__ + ": Cannot create new floating_ip " +
                                                                str(e), http_code=vimconn.HTTP_Conflict)
 
-                        while not assigned:
-                            try:
-                                # the vim_id key contains the neutron.port_id
-                                self.neutron.update_floatingip(free_floating_ip,
-                                                               {"floatingip": {"port_id": floating_network["vim_id"]}})
-                                # Using nove is deprecated on nova client 10.0
-                                assigned = True
-                            except Exception as e:
-                                # openstack need some time after VM creation to asign an IP. So retry if fails
-                                vm_status = self.nova.servers.get(server.id).status
-                                if vm_status != 'ACTIVE' and vm_status != 'ERROR':
-                                    if time.time() - vm_start_time < server_timeout:
-                                        time.sleep(5)
-                                        continue
-                                raise vimconn.VimConnException(
-                                    "Cannot create floating_ip: {} {}".format(type(e).__name__, e),
-                                    http_code=vimconn.HTTP_Conflict)
+                        try:
+                            # for race condition ensure not already assigned
+                            fip = self.neutron.show_floatingip(free_floating_ip)
+                            if fip['floatingip']['port_id']:
+                                continue
+                            # the vim_id key contains the neutron.port_id
+                            self.neutron.update_floatingip(free_floating_ip,
+                                                           {"floatingip": {"port_id": floating_network["vim_id"]}})
+                            # for race condition ensure not re-assigned to other VM after 5 seconds
+                            time.sleep(5)
+                            fip = self.neutron.show_floatingip(free_floating_ip)
+                            if fip['floatingip']['port_id'] != floating_network["vim_id"]:
+                                self.logger.error("floating_ip {} re-assigned to other port".format(free_floating_ip))
+                                continue
+                            self.logger.debug("Assigned floating_ip {} to VM {}".format(free_floating_ip, server.id))
+                            assigned = True
+                        except Exception as e:
+                            # openstack need some time after VM creation to assign an IP. So retry if fails
+                            vm_status = self.nova.servers.get(server.id).status
+                            if vm_status not in ('ACTIVE', 'ERROR'):
+                                if time.time() - vm_start_time < server_timeout:
+                                    time.sleep(5)
+                                    continue
+                            elif floating_ip_retries > 0:
+                                floating_ip_retries -= 1
+                                continue
+                            raise vimconn.VimConnException(
+                                "Cannot create floating_ip: {} {}".format(type(e).__name__, e),
+                                http_code=vimconn.HTTP_Conflict)
 
                 except Exception as e:
                     if not floating_network['exit_on_floating_ip_error']:
-                        self.logger.warning("Cannot create floating_ip. %s", str(e))
+                        self.logger.error("Cannot create floating_ip. %s", str(e))
                         continue
                     raise
 
@@ -1618,8 +1634,13 @@ class vimconnector(vimconn.VimConnector):
                                 keep_waiting = True
                             else:
                                 self.cinder.volumes.delete(k_id)
+                                created_items[k] = None
+                        elif k_item == "floating_ip":  # floating ip
+                            self.neutron.delete_floatingip(k_id)
+                            created_items[k] = None
+
                     except Exception as e:
-                        self.logger.error("Error deleting volume: {}: {}".format(type(e).__name__, e))
+                        self.logger.error("Error deleting {}: {}".format(k, e))
                 if keep_waiting:
                     time.sleep(1)
                     elapsed_time += 1
