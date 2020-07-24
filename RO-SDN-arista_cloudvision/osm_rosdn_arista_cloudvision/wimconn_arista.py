@@ -144,15 +144,15 @@ class AristaSdnConnector(SdnConnectorBase):
         :param config: (dict or None): Particular information of plugin. These keys if present have a common meaning:
             'mapping_not_needed': (bool) False by default or if missing, indicates that mapping is not needed.
             'service_endpoint_mapping': (list) provides the internal endpoint mapping. The meaning is:
-                KEY 	    	        meaning for WIM		        meaning for SDN assist
+                KEY                     meaning for WIM                meaning for SDN assist
                 --------                --------                    --------
-                device_id		        pop_switch_dpid		        compute_id
-                device_interface_id		pop_switch_port		        compute_pci_address
-                service_endpoint_id	    wan_service_endpoint_id     SDN_service_endpoint_id
-                service_mapping_info	wan_service_mapping_info    SDN_service_mapping_info
-                    contains extra information if needed. Text in Yaml format
-                switch_dpid		        wan_switch_dpid		        SDN_switch_dpid
-                switch_port		        wan_switch_port		        SDN_switch_port
+                device_id               pop_switch_dpid             compute_id
+                device_interface_id     pop_switch_port             compute_pci_address
+                service_endpoint_id     wan_service_endpoint_id     SDN_service_endpoint_id
+                service_mapping_info    wan_service_mapping_info    SDN_service_mapping_info
+                contains extra information if needed. Text in Yaml format
+                switch_dpid             wan_switch_dpid             SDN_switch_dpid
+                switch_port             wan_switch_port             SDN_switch_port
                 datacenter_id           vim_account                 vim_account
                 id: (internal, do not use)
                 wim_id: (internal, do not use)
@@ -692,7 +692,10 @@ class AristaSdnConnector(SdnConnectorBase):
                         for p in self.switches:
                             if self.switches[p]['mlagPeerDevice'] == s:
                                 if cls_cp.get(p):
-                                    cl_config = str(cl_vlan)
+                                    if self.topology == self._VXLAN_MLAG:
+                                        cl_config = str(cl_vlan) + str(cl_bgp[s])
+                                    else:
+                                        cl_config = str(cl_vlan)
                 else:
                     cl_config = str(cl_vlan) + str(cl_bgp[s]) + str(cls_cp[s])
 
@@ -1486,11 +1489,11 @@ class AristaSdnConnector(SdnConnectorBase):
           Score - 1.0 if the sequences are identical, and
                   0.0 if they have nothing in common.
         unified diff list
-          Code	Meaning
-          '- '	line unique to sequence 1
-          '+ '	line unique to sequence 2
-          '  '	line common to both sequences
-          '? '	line not present in either input sequence
+          Code    Meaning
+          '- '    line unique to sequence 1
+          '+ '    line unique to sequence 2
+          '  '    line common to both sequences
+          '? '    line not present in either input sequence
         """
         fromlines = fromText.splitlines(1)
         tolines = toText.splitlines(1)
@@ -1522,20 +1525,33 @@ class AristaSdnConnector(SdnConnectorBase):
     def __get_interface_ip(self, device_id, interface):
         url = '/api/v1/rest/{}/Sysdb/ip/config/ipIntfConfig/{}/'.format(device_id, interface)
         self.logger.debug('get_interface_ip: URL {}'.format(url))
+        data = None
         try:
             data = self.client.get(url, timeout=self.__API_REQUEST_TOUT)
-            return data['notifications'][0]['updates']['addrWithMask']['value'].split('/')[0]
-        except Exception:
-            raise SdnConnectorError("Invalid response from url {}: data {}".format(url, data))
+            if data['notifications']:
+                for notification in data['notifications']:
+                    for update in notification['updates']:
+                        if update == 'addrWithMask':
+                            return notification['updates'][update]['value']
+        except Exception as e:
+            raise SdnConnectorError("Invalid response from url {}: data {} - {}".format(url, data, str(e)))
+        raise SdnConnectorError("Unable to get ip for interface {} in device {}, data {}".
+                                format(interface, device_id, data))
 
     def __get_device_ASN(self, device_id):
         url = '/api/v1/rest/{}/Sysdb/routing/bgp/config/'.format(device_id)
         self.logger.debug('get_device_ASN: URL {}'.format(url))
+        data = None
         try:
             data = self.client.get(url, timeout=self.__API_REQUEST_TOUT)
-            return data['notifications'][0]['updates']['asNumber']['value']['value']['int']
-        except Exception:
-            raise SdnConnectorError("Invalid response from url {}: data {}".format(url, data))
+            if data['notifications']:
+                for notification in data['notifications']:
+                    for update in notification['updates']:
+                        if update == 'asNumber':
+                            return notification['updates'][update]['value']['value']['int']
+        except Exception as e:
+            raise SdnConnectorError("Invalid response from url {}: data {} - {}".format(url, data, str(e)))
+        raise SdnConnectorError("Unable to get AS in device {}, data {}".format(device_id, data))
 
     def __get_peer_MLAG(self, device_id):
         peer = None
