@@ -628,7 +628,7 @@ class vimconnector(vimconn.VimConnector):
                 nic_name = vm_name + '-nic-' + str(idx)
                 vm_nic, nic_items = self._create_nic(net, nic_name, net.get('ip_address'), created_items)
                 vm_nics.append({'id': str(vm_nic.id)})
-                # net['vim_id'] = vm_nic.id
+                net['vim_id'] = vm_nic.id
 
             # cloud-init configuration
             # cloud config
