@@ -23,6 +23,8 @@ all:  clean package
 
 clean:
 	rm -rf dist deb_dist osm_ro-*.tar.gz osm_ro.egg-info .eggs
+	find osm_ro -name '*.pyc' -delete
+	find osm_ro -name '*.pyo' -delete
 
 package:
 #	apt-get install -y python-stdeb
