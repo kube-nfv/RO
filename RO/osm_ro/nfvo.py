@@ -3031,13 +3031,14 @@ def get_datacenter_uuid(mydb, tenant_id, datacenter_id_name):
                " dt on td.datacenter_tenant_id=dt.uuid"
     else:
         from_ = 'datacenters as d'
-    vimaccounts = mydb.get_rows(FROM=from_, SELECT=("d.uuid as uuid, d.name as name",), WHERE=WHERE_dict )
+    vimaccounts = mydb.get_rows(FROM=from_, SELECT=("d.uuid as uuid", "d.name as name", "d.type as type"),
+                                WHERE=WHERE_dict)
     if len(vimaccounts) == 0:
         raise NfvoException("datacenter '{}' not found".format(str(datacenter_id_name)), httperrors.Not_Found)
-    elif len(vimaccounts)>1:
-        #print "nfvo.datacenter_action() error. Several datacenters found"
+    elif len(vimaccounts) > 1:
+        # print "nfvo.datacenter_action() error. Several datacenters found"
         raise NfvoException("More than one datacenters found, try to identify with uuid", httperrors.Conflict)
-    return vimaccounts[0]["uuid"], vimaccounts[0]["name"]
+    return vimaccounts[0]["uuid"], vimaccounts[0]
 
 
 def get_datacenter_by_name_uuid(mydb, tenant_id, datacenter_id_name=None, **extra_filter):
@@ -5228,45 +5229,49 @@ def delete_datacenter(mydb, datacenter):
 
 def create_vim_account(mydb, nfvo_tenant, datacenter_id, name=None, vim_id=None, vim_tenant=None, vim_tenant_name=None,
                        vim_username=None, vim_password=None, config=None):
+    global plugins
     # get datacenter info
     try:
         if not datacenter_id:
             if not vim_id:
                 raise NfvoException("You must provide 'vim_id", http_code=httperrors.Bad_Request)
             datacenter_id = vim_id
-        datacenter_id, datacenter_name = get_datacenter_uuid(mydb, None, datacenter_id)
+        datacenter_id, datacenter = get_datacenter_uuid(mydb, None, datacenter_id)
+        datacenter_name = datacenter["name"]
+        datacenter_type = datacenter["type"]
 
         create_vim_tenant = True if not vim_tenant and not vim_tenant_name else False
 
         # get nfvo_tenant info
         tenant_dict = mydb.get_table_by_uuid_name('nfvo_tenants', nfvo_tenant)
-        if vim_tenant_name==None:
-            vim_tenant_name=tenant_dict['name']
+        if vim_tenant_name is None:
+            vim_tenant_name = tenant_dict['name']
 
-        tenants_datacenter_dict={"nfvo_tenant_id":tenant_dict['uuid'], "datacenter_id":datacenter_id }
+        tenants_datacenter_dict = {"nfvo_tenant_id": tenant_dict['uuid'], "datacenter_id": datacenter_id}
         # #check that this association does not exist before
         # tenants_datacenters = mydb.get_rows(FROM='tenants_datacenters', WHERE=tenants_datacenter_dict)
         # if len(tenants_datacenters)>0:
-        #     raise NfvoException("datacenter '{}' and tenant'{}' are already attached".format(datacenter_id, tenant_dict['uuid']), httperrors.Conflict)
+        #     raise NfvoException("datacenter '{}' and tenant'{}' are already attached".format(
+        #                         datacenter_id, tenant_dict['uuid']), httperrors.Conflict)
 
-        vim_tenant_id_exist_atdb=False
+        vim_tenant_id_exist_atdb = False
         if not create_vim_tenant:
             where_={"datacenter_id": datacenter_id}
-            if vim_tenant!=None:
+            if vim_tenant is not None:
                 where_["vim_tenant_id"] = vim_tenant
-            if vim_tenant_name!=None:
+            if vim_tenant_name is not None:
                 where_["vim_tenant_name"] = vim_tenant_name
-            #check if vim_tenant_id is already at database
+            # check if vim_tenant_id is already at database
             datacenter_tenants_dict = mydb.get_rows(FROM='datacenter_tenants', WHERE=where_)
-            if len(datacenter_tenants_dict)>=1:
+            if len(datacenter_tenants_dict) >= 1:
                 datacenter_tenants_dict = datacenter_tenants_dict[0]
-                vim_tenant_id_exist_atdb=True
-                #TODO check if a field has changed and edit entry at datacenter_tenants at DB
-            else: #result=0
+                vim_tenant_id_exist_atdb = True
+                # TODO check if a field has changed and edit entry at datacenter_tenants at DB
+            else:  # result=0
                 datacenter_tenants_dict = {}
-                #insert at table datacenter_tenants
-        else: #if vim_tenant==None:
-            #create tenant at VIM if not provided
+                # insert at table datacenter_tenants
+        else:  # if vim_tenant==None:
+            # create tenant at VIM if not provided
             try:
                 _, myvim = get_datacenter_by_name_uuid(mydb, None, datacenter_id, vim_user=vim_username,
                                                        vim_passwd=vim_password)
@@ -5275,10 +5280,9 @@ def create_vim_account(mydb, nfvo_tenant, datacenter_id, name=None, vim_id=None,
             except vimconn.VimConnException as e:
                 raise NfvoException("Not possible to create vim_tenant {} at VIM: {}".format(vim_tenant_name, e),
                                     httperrors.Internal_Server_Error)
-            datacenter_tenants_dict = {}
-            datacenter_tenants_dict["created"]="true"
+            datacenter_tenants_dict = {"created": "true"}
 
-        #fill datacenter_tenants table
+        # fill datacenter_tenants table
         if not vim_tenant_id_exist_atdb:
             datacenter_tenants_dict["vim_tenant_id"] = vim_tenant
             datacenter_tenants_dict["vim_tenant_name"] = vim_tenant_name
@@ -5294,12 +5298,15 @@ def create_vim_account(mydb, nfvo_tenant, datacenter_id, name=None, vim_id=None,
             id_ = mydb.new_row('datacenter_tenants', datacenter_tenants_dict, add_uuid=True, confidential_data=True)
             datacenter_tenants_dict["uuid"] = id_
 
-        #fill tenants_datacenters table
+        # fill tenants_datacenters table
         datacenter_tenant_id = datacenter_tenants_dict["uuid"]
         tenants_datacenter_dict["datacenter_tenant_id"] = datacenter_tenant_id
         mydb.new_row('tenants_datacenters', tenants_datacenter_dict)
 
-        # create thread
+        # load plugin and create thread
+        plugin_name = "rovim_" + datacenter_type
+        if plugin_name not in plugins:
+            _load_plugin(plugin_name, type="vim")
         thread_name = get_non_used_vim_name(datacenter_name, datacenter_id)
         new_thread = vim_thread(task_lock, plugins, thread_name, None, datacenter_tenant_id, db=db)
         new_thread.start()
