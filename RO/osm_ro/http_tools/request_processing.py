@@ -131,10 +131,10 @@ def format_in(default_schema, version_fields=None, version_dict_schema=None, con
         #    bottle.abort(httperrors.Bad_Request, "Content error, empty")
         #    return
         if confidential_data:
-            logger.debug('IN: %s', remove_clear_passwd (yaml.safe_dump(client_data, explicit_start=True, indent=4, default_flow_style=False,
+            logger.info('IN: %s', remove_clear_passwd (yaml.safe_dump(client_data, explicit_start=True, indent=4, default_flow_style=False,
                                               tags=False, allow_unicode=True)))
         else:
-            logger.debug('IN: %s', yaml.safe_dump(client_data, explicit_start=True, indent=4, default_flow_style=False,
+            logger.info('IN: %s', yaml.safe_dump(client_data, explicit_start=True, indent=4, default_flow_style=False,
                                               tags=False, allow_unicode=True) )
         # look for the client provider version
         error_text = "Invalid content "

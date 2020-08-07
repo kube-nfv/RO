@@ -811,10 +811,9 @@ class vim_thread(threading.Thread):
                 return False
 
     def run(self):
-        self.logger.debug("Starting")
+        self.logger.info("Starting")
         while True:
             self.get_vim_sdn_connector()
-            self.logger.debug("Vimconnector loaded")
             reload_thread = False
 
             while True:

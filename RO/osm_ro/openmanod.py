@@ -172,6 +172,7 @@ def _get_version():
 
 
 if __name__ == "__main__":
+    log_modules = ("nfvo", "http", "vim", "wim", "db", "console", "ovim", "sdn", "sdnconn")
     # env2config contains environ variable names and the correspondence with configuration file openmanod.cfg keys.
     # If this environ is defined, this value is taken instead of the one at at configuration file
     env2config = {
@@ -186,14 +187,16 @@ if __name__ == "__main__":
         'RO_LOG_LEVEL': 'log_level',
         'RO_LOG_FILE': 'log_file',
     }
+    for log_module in log_modules:
+        env2config['RO_LOG_LEVEL_' + log_module.upper()] = 'log_level_' + log_module
     ro_version = _get_version()
     # Configure logging step 1
     hostname = socket.gethostname()
     log_formatter_str = '%(asctime)s.%(msecs)03d00Z[{host}@openmanod] %(filename)s:%(lineno)s severity:%(levelname)s logger:%(name)s log:%(message)s'
     log_formatter_complete = logging.Formatter(log_formatter_str.format(host=hostname), datefmt='%Y-%m-%dT%H:%M:%S')
-    log_format_simple = "%(asctime)s %(levelname)s  %(name)s %(thread)d %(filename)s:%(lineno)s %(message)s"
-    log_formatter_simple = logging.Formatter(log_format_simple, datefmt='%Y-%m-%dT%H:%M:%S')
-    logging.basicConfig(format=log_format_simple, level=logging.DEBUG)
+    log_format_simple = "%(asctime)s %(levelname)s %(name)s %(thread)d %(filename)s:%(lineno)s %(message)s"
+    log_formatter_simple = logging.Formatter(log_format_simple, datefmt='%Y-%m-%dT%H:%M:%S.%03d')
+    logging.basicConfig(format=log_format_simple, level=logging.DEBUG, datefmt='%Y-%m-%dT%H:%M:%S.%03d')
     logger = logging.getLogger('openmano')
     logger.setLevel(logging.DEBUG)
     socket_handler = None
@@ -263,7 +266,7 @@ if __name__ == "__main__":
                 if env_k.endswith("PORT"):  # convert to int, skip if not possible
                     global_config[env2config[env_k]] = int(env_v)
             except Exception as e:
-                logger.warn("skipping environ '{}={}' because exception '{}'".format(env_k, env_v, e))
+                logger.warning("skipping environ '{}={}' because exception '{}'".format(env_k, env_v, e))
 
         global_config["console_port_iterator"] = console_port_iterator
         global_config["console_thread"] = {}
@@ -292,7 +295,7 @@ if __name__ == "__main__":
         logger.critical("Starting openmano server version: '%s %s' command: '%s'",
                         ro_version, version_date, " ".join(sys.argv))
 
-        for log_module in ("nfvo", "http", "vim", "wim", "db", "console", "ovim", "sdn", "sdnconn"):
+        for log_module in log_modules:
             log_level_module = "log_level_" + log_module
             log_file_module = "log_file_" + log_module
             logger_module = logging.getLogger('openmano.' + log_module)
