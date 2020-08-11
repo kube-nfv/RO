@@ -490,9 +490,9 @@ def rollback(mydb,  vims, rollback_list):
                 logger.error("Error in rollback. Not possible to delete %s '%s' from DB. Message: %s", item['what'], item["uuid"], str(e))
                 undeleted_items.append("{} '{}'".format(item['what'], item["uuid"]))
     if len(undeleted_items)==0:
-        return True," Rollback successful."
+        return True, "Rollback successful."
     else:
-        return False," Rollback fails to delete: " + str(undeleted_items)
+        return False, "Rollback fails to delete: " + str(undeleted_items)
 
 
 def check_vnf_descriptor(vnf_descriptor, vnf_descriptor_version=1):
@@ -3789,7 +3789,7 @@ def create_instance(mydb, tenant_id, instance_dict):
         returned_instance["action_id"] = instance_action_id
         return returned_instance
     except (NfvoException, vimconn.VimConnException, sdnconn.SdnConnectorError, db_base_Exception) as e:
-        message = rollback(mydb, myvims, rollbackList)
+        _, message = rollback(mydb, myvims, rollbackList)
         if isinstance(e, db_base_Exception):
             error_text = "database Exception"
         elif isinstance(e, vimconn.VimConnException):
@@ -3797,8 +3797,8 @@ def create_instance(mydb, tenant_id, instance_dict):
         elif isinstance(e, sdnconn.SdnConnectorError):
             error_text = "WIM Exception"
         else:
-            error_text = "Exception"
-        error_text += " {} {}. {}".format(type(e).__name__, str(e), message)
+            error_text = "Exception " + str(type(e).__name__)
+        error_text += " {}. {}".format(e, message)
         # logger.error("create_instance: %s", error_text)
         logger.exception(e)
         raise NfvoException(error_text, e.http_code)

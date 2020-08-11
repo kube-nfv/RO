@@ -410,13 +410,16 @@ class vimconnector(vimconn.VimConnector):
         """Transform a keystone, nova, neutron  exception into a vimconn exception discovering the cause"""
 
         message_error = str(exception)
+        tip = ""
 
         if isinstance(exception, (neExceptions.NetworkNotFoundClient, nvExceptions.NotFound, ksExceptions.NotFound,
                                   gl1Exceptions.HTTPNotFound)):
             raise vimconn.VimConnNotFoundException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, (HTTPException, gl1Exceptions.HTTPException, gl1Exceptions.CommunicationError,
                                     ConnectionError, ksExceptions.ConnectionError, neExceptions.ConnectionFailed)):
-            raise vimconn.VimConnConnectionException(type(exception).__name__ + ": " + message_error)
+            if type(exception).__name__ == "SSLError":
+                tip = " (maybe option 'insecure' must be added to the VIM)"
+            raise vimconn.VimConnConnectionException("Invalid URL or credentials{}: {}".format(tip, message_error))
         elif isinstance(exception, (KeyError, nvExceptions.BadRequest, ksExceptions.BadRequest)):
             raise vimconn.VimConnException(type(exception).__name__ + ": " + message_error)
         elif isinstance(exception, (nvExceptions.ClientException, ksExceptions.ClientException,
@@ -566,9 +569,10 @@ class vimconnector(vimconn.VimConnector):
                         provider_physical_network = provider_physical_network[0]
 
                 if not provider_physical_network:
-                    raise vimconn.VimConnConflictException("You must provide a 'dataplane_physical_net' at VIM_config "
-                                                           "for creating underlay networks. or use the NS instantiation"
-                                                           " parameter provider-network:physical-network for the VLD")
+                    raise vimconn.VimConnConflictException(
+                        "missing information needed for underlay networks. Provide 'dataplane_physical_net' "
+                        "configuration at VIM or use the NS instantiation parameter 'provider-network.physical-network'"
+                        " for the VLD")
 
                 if not self.config.get('multisegment_support'):
                     network_dict["provider:physical_network"] = provider_physical_network
