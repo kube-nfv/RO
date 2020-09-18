@@ -106,7 +106,7 @@ config_schema = {
         "http_console_host": nameshort_schema,
         "http_console_ports": {
             "type": "array",
-            "items": {"OneOf": [
+            "items": {"oneOf": [
                 port_schema,
                 {"type": "object", "properties": {"from": port_schema, "to": port_schema}, "required": ["from", "to"]}
             ]}
@@ -319,7 +319,7 @@ dhcp_schema = {
     "type": "object",
     "properties":{
         "enabled": boolean_schema,
-        "start-address": {"OneOf": [null_schema, ip_schema]},
+        "start-address": {"oneOf": [null_schema, ip_schema]},
         "count": integer0_schema
     },
     # "required": ["start-address", "count"],
@@ -1247,7 +1247,7 @@ sdn_port_mapping_schema = {
                         "items": {
                             "type": "object",
                             "properties": {
-                                "pci": {"OneOf": [null_schema, pci_extended_schema]},       # pci_schema,
+                                "pci": {"oneOf": [null_schema, pci_extended_schema]},       # pci_schema,
                                 "switch_port": nameshort_schema,
                                 "switch_id": nameshort_schema,
                                 "switch_dpid": nameshort_schema,
