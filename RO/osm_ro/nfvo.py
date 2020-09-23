@@ -4199,7 +4199,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                         i = ip.rfind(".")
                         if i > 0:
                             i += 1
-                            ip = ip[i:] + str(int(ip[:i]) + 1)
+                            ip = ip[:i] + str(int(ip[i:]) + 1)
                             db_vm_iface_instance["ip_address"] = ip
                     except:
                         db_vm_iface_instance["ip_address"] = None
@@ -4921,7 +4921,7 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                                 i = ip.rfind(".")
                                 if i > 0:
                                     i += 1
-                                    ip = ip[i:] + str(int(ip[:i]) + 1)
+                                    ip = ip[:i] + str(int(ip[i:]) + 1)
                                     iface["ip_address"] = ip
                             except:
                                 iface["ip_address"] = None
