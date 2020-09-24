@@ -24,6 +24,7 @@ import yaml
 from osm_ro_plugin import vimconn
 from uuid import uuid4
 from copy import deepcopy
+import logging
 
 __author__ = "Alfonso Tierno"
 __date__ = "2020-04-20"
@@ -39,6 +40,9 @@ class VimDummyConnector(vimconn.VimConnector):
                  config={}, persistent_info={}):
         super().__init__(uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                          config, persistent_info)
+        self.logger = logging.getLogger('openmano.vim.dummy')
+        if log_level:
+            self.logger.setLevel(getattr(logging, log_level))
         self.nets = {
             "mgmt": {
                 "id": "mgmt",
@@ -91,6 +95,8 @@ class VimDummyConnector(vimconn.VimConnector):
 
     def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
         net_id = str(uuid4())
+        self.logger.debug("new network id={}, name={}, net_type={}, ip_profile={}, provider_network_profile={}".
+                          format(net_id, net_name, net_type, ip_profile, provider_network_profile))
         net = {
             "id": net_id,
             "name": net_name,
@@ -120,6 +126,7 @@ class VimDummyConnector(vimconn.VimConnector):
     def delete_network(self, net_id, created_items=None):
         if net_id not in self.nets:
             raise vimconn.VimConnNotFoundException("network with id {} not found".format(net_id))
+        self.logger.debug("delete network id={}, created_items={}".format(net_id, created_items))
         self.nets.pop(net_id)
         return net_id
 
@@ -143,6 +150,7 @@ class VimDummyConnector(vimconn.VimConnector):
 
     def new_flavor(self, flavor_data):
         flavor_id = str(uuid4())
+        self.logger.debug("new flavor id={}, flavor_data={}".format(flavor_id, flavor_data))
         flavor = deepcopy(flavor_data)
         flavor["id"] = flavor_id
         if "name" not in flavor:
@@ -153,8 +161,9 @@ class VimDummyConnector(vimconn.VimConnector):
     def delete_flavor(self, flavor_id):
         if flavor_id not in self.flavors:
             raise vimconn.VimConnNotFoundException("flavor with id {} not found".format(flavor_id))
-        return flavor_id
+        self.logger.debug("delete flavor id={}".format(flavor_id))
         self.flavors.pop(flavor_id)
+        return flavor_id
 
     def get_flavor_id_from_data(self, flavor_dict):
         for flavor_id, flavor_data in self.flavors.items():
@@ -169,6 +178,7 @@ class VimDummyConnector(vimconn.VimConnector):
 
     def new_tenant(self, tenant_name, tenant_description):
         tenant_id = str(uuid4())
+        self.logger.debug("new tenant id={}, description={}".format(tenant_id, tenant_description))
         tenant = {'name': tenant_name, 'description': tenant_description, 'id': tenant_id}
         self.tenants[tenant_id] = tenant
         return tenant_id
@@ -176,8 +186,9 @@ class VimDummyConnector(vimconn.VimConnector):
     def delete_tenant(self, tenant_id):
         if tenant_id not in self.tenants:
             raise vimconn.VimConnNotFoundException("tenant with id {} not found".format(tenant_id))
-        return tenant_id
         self.tenants.pop(tenant_id)
+        self.logger.debug("delete tenant id={}".format(tenant_id))
+        return tenant_id
 
     def get_tenant_list(self, filter_dict=None):
         tenants = []
@@ -193,6 +204,7 @@ class VimDummyConnector(vimconn.VimConnector):
 
     def new_image(self, image_dict):
         image_id = str(uuid4())
+        self.logger.debug("new image id={}, iamge_dict={}".format(image_id, image_dict))
         image = deepcopy(image_dict)
         image["id"] = image_id
         if "name" not in image:
@@ -203,8 +215,9 @@ class VimDummyConnector(vimconn.VimConnector):
     def delete_image(self, image_id):
         if image_id not in self.images:
             raise vimconn.VimConnNotFoundException("image with id {} not found".format(image_id))
-        return image_id
+        self.logger.debug("delete image id={}".format(image_id))
         self.images.pop(image_id)
+        return image_id
 
     def get_image_list(self, filter_dict=None):
         images = []
@@ -225,10 +238,13 @@ class VimDummyConnector(vimconn.VimConnector):
                        availability_zone_index=None, availability_zone_list=None):
         vm_id = str(uuid4())
         interfaces = []
+        self.logger.debug("new vm id={}, name={}, image_id={}, flavor_id={}, net_list={}, cloud_config={}".
+                          format(vm_id, name, image_id, flavor_id, net_list, cloud_config))
         for iface_index, iface in enumerate(net_list):
             iface["vim_id"] = str(iface_index)
             interface = {
-                "ip_address": self.config.get("vm_ip") or "192.168.4.2",
+                "ip_address": iface.get("ip_address") or self.config.get("vm_ip") or "192.168.4.2",
+                "mac_address": iface.get("mac_address") or self.config.get("vm_mac") or "00:11:22:33:44:55",
                 "vim_interface_id": str(iface_index),
                 "vim_net_id": iface["net_id"],
             }
@@ -257,8 +273,9 @@ class VimDummyConnector(vimconn.VimConnector):
     def delete_vminstance(self, vm_id, created_items=None):
         if vm_id not in self.vms:
             raise vimconn.VimConnNotFoundException("vm with id {} not found".format(vm_id))
-        return vm_id
         self.vms.pop(vm_id)
+        self.logger.debug("delete vm id={}, created_items={}".format(vm_id, created_items))
+        return vm_id
 
     def refresh_vms_status(self, vm_list):
         vms = {}

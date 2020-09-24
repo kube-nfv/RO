@@ -3803,6 +3803,25 @@ def create_instance(mydb, tenant_id, instance_dict):
         logger.exception(e)
         raise NfvoException(error_text, e.http_code)
 
+def increment_ip_mac(ip_mac, vm_index=1):
+    if not isinstance(ip_mac, str):
+        return ip_mac
+    try:
+        # try with ipv4 look for last dot
+        i = ip_mac.rfind(".")
+        if i > 0:
+            i += 1
+            return "{}{}".format(ip_mac[:i], int(ip_mac[i:]) + vm_index)
+        # try with ipv6 or mac look for last colon. Operate in hex
+        i = ip_mac.rfind(":")
+        if i > 0:
+            i += 1
+            # format in hex, len can be 2 for mac or 4 for ipv6
+            return ("{}{:0" + str(len(ip_mac) - i) + "x}").format(ip_mac[:i], int(ip_mac[i:], 16) + vm_index)
+    except:
+        pass
+    return None
+
 
 def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
     default_datacenter_id = params["default_datacenter_id"]
@@ -4161,16 +4180,11 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             av_index = None
         for vm_index in range(0, vm.get('count', 1)):
             vm_name = myVMDict['name'] + "-" + str(vm_index+1)
+            vm_networks = deepcopy(myVMDict['networks'])
             task_params = (vm_name, myVMDict['description'], myVMDict.get('start', None),
-                           myVMDict['imageRef'], myVMDict['flavorRef'], myVMDict['networks'], cloud_config_vm,
+                           myVMDict['imageRef'], myVMDict['flavorRef'], vm_networks, cloud_config_vm,
                            myVMDict['disks'], av_index, vnf_availability_zones)
-            # put interface uuid back to scenario[vnfs][vms[[interfaces]
-            for net in myVMDict['networks']:
-                if "vim_id" in net:
-                    for iface in vm['interfaces']:
-                        if net["name"] == iface["internal_name"]:
-                            iface["vim_id"] = net["vim_id"]
-                            break
+
             vm_uuid = str(uuid4())
             uuid_list.append(vm_uuid)
             db_vm = {
@@ -4184,28 +4198,32 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             }
             db_instance_vms.append(db_vm)
 
-            iface_index = 0
-            for db_vm_iface in db_vm_ifaces:
+            # put interface uuid back to scenario[vnfs][vms[[interfaces]
+            for net in vm_networks:
+                if "vim_id" in net:
+                    for iface in vm['interfaces']:
+                        if net["name"] == iface["internal_name"]:
+                            iface["vim_id"] = net["vim_id"]
+                            break
+
+                if vm_index > 0:
+                    if net.get("ip_address"):
+                        net["ip_address"] = increment_ip_mac(net.get("ip_address"), vm_index)
+                    if net.get("mac_address"):
+                        net["mac_address"] = increment_ip_mac(net.get("mac_address"), vm_index)
+
+            for iface_index, db_vm_iface in enumerate(db_vm_ifaces):
                 iface_uuid = str(uuid4())
                 uuid_list.append(iface_uuid)
                 db_vm_iface_instance = {
                     "uuid": iface_uuid,
-                    "instance_vm_id": vm_uuid
+                    "instance_vm_id": vm_uuid,
+                    "ip_address": vm_networks[iface_index].get("ip_address"),
+                    "mac_address": vm_networks[iface_index].get("mac_address")
                 }
                 db_vm_iface_instance.update(db_vm_iface)
-                if db_vm_iface_instance.get("ip_address"):  # increment ip_address
-                    ip = db_vm_iface_instance.get("ip_address")
-                    try:
-                        i = ip.rfind(".")
-                        if i > 0:
-                            i += 1
-                            ip = ip[:i] + str(int(ip[i:]) + 1)
-                            db_vm_iface_instance["ip_address"] = ip
-                    except:
-                        db_vm_iface_instance["ip_address"] = None
                 db_instance_interfaces.append(db_vm_iface_instance)
-                myVMDict['networks'][iface_index]["uuid"] = iface_uuid
-                iface_index += 1
+                vm_networks[iface_index]["uuid"] = iface_uuid
 
             db_vim_action = {
                 "instance_action_id": instance_action_id,
@@ -4862,7 +4880,6 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                 # TODO do the same for flavor and image when available
                 task_depends_on = []
                 task_params = extra["params"]
-                task_params_networks = deepcopy(task_params[5])
                 for iface in task_params[5]:
                     if iface["net_id"].startswith("TASK-"):
                         if "." not in iface["net_id"]:
@@ -4872,8 +4889,6 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                                                                   iface["net_id"][5:])
                         else:
                             task_depends_on.append(iface["net_id"][5:])
-                    if "mac_address" in iface:
-                        del iface["mac_address"]
 
                 vm_ifaces_to_clone = mydb.get_rows(FROM="instance_interfaces", WHERE={"instance_vm_id": target_vm["uuid"]})
                 for index in range(0, vdu_count):
@@ -4916,15 +4931,10 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                         iface["uuid"] = iface2iface[iface["uuid"]]
                         # increment ip_address
                         if iface.get("ip_address"):
-                            try:
-                                ip = iface["ip_address"]
-                                i = ip.rfind(".")
-                                if i > 0:
-                                    i += 1
-                                    ip = ip[:i] + str(int(ip[i:]) + 1)
-                                    iface["ip_address"] = ip
-                            except:
-                                iface["ip_address"] = None
+                            iface["ip_address"] = increment_ip_mac(iface.get("ip_address"), index+1)
+                        if iface.get("mac_address"):
+                            iface["mac_address"] = increment_ip_mac(iface.get("mac_address"), index+1)
+
                     if vm_name:
                         task_params_copy[0] = vm_name
                     db_vim_action = {
