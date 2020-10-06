@@ -4179,10 +4179,14 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         else:
             av_index = None
         for vm_index in range(0, vm.get('count', 1)):
+            if vm.get("instance_parameters") and vm["instance_parameters"].get("cloud_init"):
+                cloud_config_vm_ = unify_cloud_config(cloud_config_vm,
+                                                     {"user-data": vm["instance_parameters"]["cloud_init"][vm_index]})
+
             vm_name = myVMDict['name'] + "-" + str(vm_index+1)
             vm_networks = deepcopy(myVMDict['networks'])
             task_params = (vm_name, myVMDict['description'], myVMDict.get('start', None),
-                           myVMDict['imageRef'], myVMDict['flavorRef'], vm_networks, cloud_config_vm,
+                           myVMDict['imageRef'], myVMDict['flavorRef'], vm_networks, cloud_config_vm_,
                            myVMDict['disks'], av_index, vnf_availability_zones)
 
             vm_uuid = str(uuid4())
@@ -4927,6 +4931,11 @@ def instance_action(mydb,nfvo_tenant,instance_id, action_dict):
                             db_vim_actions.append({"TO-UPDATE": {}, "WHERE": {
                                 "item": "instance_wim_nets", "item_id": db_vm_iface["instance_wim_net_id"]}})
                     task_params_copy = deepcopy(task_params)
+                    cloud_config_vm = task_params_copy[6] or {}
+                    cloud_config_vm.pop("user-data", None)
+                    if vdu.get("cloud_init"):
+                        cloud_config_vm_ = unify_cloud_config(cloud_config_vm, {"user-data": vdu["cloud_init"][index]})
+                        task_params_copy[6] = cloud_config_vm_
                     for iface in task_params_copy[5]:
                         iface["uuid"] = iface2iface[iface["uuid"]]
                         # increment ip_address

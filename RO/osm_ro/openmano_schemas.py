@@ -56,6 +56,7 @@ port_schema={"type":"integer","minimum":1,"maximum":65534}
 object_schema={"type":"object"}
 schema_version_2={"type":"integer","minimum":2,"maximum":2}
 #schema_version_string={"type":"string","enum": ["0.1", "2", "0.2", "3", "0.3"]}
+string_list = {"type": "array", "items": {"type": "string"}}
 log_level_schema={"type":"string", "enum":["DEBUG", "INFO", "WARNING","ERROR","CRITICAL"]}
 checksum_schema={"type":"string", "pattern":"^[0-9a-fA-F]{32}$"}
 size_schema={"type":"integer","minimum":1,"maximum":100}
@@ -1033,8 +1034,9 @@ instance_scenario_create_schema_v01 = {
                                             "type": "object",
                                             "properties": {
                                                 "name": name_schema,  # overrides vdu name schema
-                                                "mgmt_keys": {"type": "array", "items": {"type": "string"}},
+                                                "mgmt_keys": string_list,
                                                 "vduImage": name_schema,
+                                                "cloud_init": string_list,
                                                 "devices": {
                                                     "type": "object",
                                                     "patternProperties": {
@@ -1172,7 +1174,8 @@ instance_scenario_action_schema = {
                     "osm_vdu_id": name_schema,
                     "member-vnf-index": name_schema,
                     "count": integer1_schema,
-                    "type": {"enum": ["create", "delete"]}
+                    "type": {"enum": ["create", "delete"]},
+                    "cloud_init": string_list,
                 },
                 "additionalProperties": False,
                 "minProperties": 1,
