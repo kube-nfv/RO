@@ -4172,7 +4172,7 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
             if RO_pub_key:
                 cloud_config_vm = unify_cloud_config(cloud_config_vm, {"key-pairs": [RO_pub_key]})
         if vm.get("boot_data"):
-            cloud_config_vm_ = cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config_vm)
+            cloud_config_vm = unify_cloud_config(vm["boot_data"], cloud_config_vm)
 
         if myVMDict.get('availability_zone'):
             av_index = vnf_availability_zones.index(myVMDict['availability_zone'])
@@ -4181,7 +4181,9 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
         for vm_index in range(0, vm.get('count', 1)):
             if vm.get("instance_parameters") and vm["instance_parameters"].get("cloud_init"):
                 cloud_config_vm_ = unify_cloud_config(cloud_config_vm,
-                                                     {"user-data": vm["instance_parameters"]["cloud_init"][vm_index]})
+                                                      {"user-data": vm["instance_parameters"]["cloud_init"][vm_index]})
+            else:
+                cloud_config_vm_ = cloud_config_vm
 
             vm_name = myVMDict['name'] + "-" + str(vm_index+1)
             vm_networks = deepcopy(myVMDict['networks'])
