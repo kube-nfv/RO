@@ -79,7 +79,7 @@ class SdnDummyConnector(SdnConnectorBase):
         """
         self.logger.debug("get_connectivity_service_status: service_uuid='{}' conn_info='{}'".format(service_uuid,
                                                                                                      conn_info))
-        return {'sdn_status': 'ACTIVE', 'sdn_info': self.connectivity.get(service_uuid)}
+        return {'sdn_status': 'ACTIVE', 'sdn_info': self.connections.get(service_uuid)}
 
     def create_connectivity_service(self, service_type, connection_points,
                                     **kwargs):

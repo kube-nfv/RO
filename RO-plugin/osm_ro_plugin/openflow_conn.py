@@ -162,6 +162,7 @@ class SdnConnectorOpenFlow(SdnConnectorBase):
     def __init__(self, wim, wim_account, config=None, logger=None, of_connector=None):
         self.logger = logger or logging.getLogger('openmano.sdn.openflow_conn')
         self.of_connector = of_connector
+        config = config or {}
         self.of_controller_nets_with_same_vlan = config.get("of_controller_nets_with_same_vlan", False)
 
     def check_credentials(self):

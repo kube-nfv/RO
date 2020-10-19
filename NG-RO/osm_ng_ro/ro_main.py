@@ -30,6 +30,7 @@ import sys
 
 from osm_ng_ro.ns import Ns, NsException
 from osm_ng_ro.validation import ValidationError
+from osm_ng_ro.vim_admin import VimAdminThread
 from osm_common.dbbase import DbException
 from osm_common.fsbase import FsException
 from osm_common.msgbase import MsgException
@@ -46,6 +47,8 @@ version_date = "May 2020"
 database_version = '1.2'
 auth_database_version = '1.0'
 ro_server = None           # instance of Server class
+vim_admin_thread = None   # instance of VimAdminThread class
+
 # vim_threads = None  # instance of VimThread class
 
 """
@@ -579,7 +582,7 @@ def _start_service():
     Set database, storage, message configuration
     Init database with admin/admin user password
     """
-    global ro_server
+    global ro_server, vim_admin_thread
     # global vim_threads
     cherrypy.log.error("Starting osm_ng_ro")
     # update general cherrypy configuration
@@ -603,11 +606,7 @@ def _start_service():
                 # update [/] configuration
                 engine_config["/"]["tools." + k2.replace('_', '.')] = yaml.safe_load(v)
             elif k1 in ("message", "database", "storage", "authentication"):
-                # update [message], [database], ... configuration
-                if k2 in ("port", "db_port"):
-                    engine_config[k1][k2] = int(v)
-                else:
-                    engine_config[k1][k2] = v
+                engine_config[k1][k2] = yaml.safe_load(v)
 
         except Exception as e:
             raise RoException("Cannot load env '{}': {}".format(k, e))
@@ -644,7 +643,6 @@ def _start_service():
     if engine_config["global"].get("log.level"):
         logger_cherry.setLevel(engine_config["global"]["log.level"])
         logger_nbi.setLevel(engine_config["global"]["log.level"])
-
     # logging other modules
     for k1, logname in {"message": "ro.msg", "database": "ro.db", "storage": "ro.fs"}.items():
         engine_config[k1]["logger_name"] = logname
@@ -665,16 +663,13 @@ def _start_service():
     cherrypy.tree.apps['/ro'].root.ns.init_db(target_version=database_version)
 
     # # start subscriptions thread:
-    # vim_threads = []
-    # for thread_id in range(engine_config["global"]["server.ns_threads"]):
-    #     vim_thread = VimThread(thread_id, config=engine_config, engine=ro_server.ns)
-    #     vim_thread.start()
-    #     vim_threads.append(vim_thread)
+    vim_admin_thread = VimAdminThread(config=engine_config, engine=ro_server.ns)
+    vim_admin_thread.start()
     # # Do not capture except SubscriptionException
 
-    backend = engine_config["authentication"]["backend"]
-    cherrypy.log.error("Starting OSM NBI Version '{} {}' with '{}' authentication backend"
-                       .format(ro_version, ro_version_date, backend))
+    # backend = engine_config["authentication"]["backend"]
+    # cherrypy.log.error("Starting OSM NBI Version '{} {}' with '{}' authentication backend"
+    #                    .format(ro_version, ro_version_date, backend))
 
 
 def _stop_service():
@@ -682,11 +677,11 @@ def _stop_service():
     Callback function called when cherrypy.engine stops
     TODO: Ending database connections.
     """
-    # global vim_threads
-    # if vim_threads:
-    #     for vim_thread in vim_threads:
-    #         vim_thread.terminate()
-    # vim_threads = None
+    global vim_admin_thread
+    # terminate vim_admin_thread
+    if vim_admin_thread:
+        vim_admin_thread.terminate()
+    vim_admin_thread = None
     cherrypy.tree.apps['/ro'].root.ns.stop()
     cherrypy.log.error("Stopping osm_ng_ro")
 
@@ -734,6 +729,8 @@ if __name__ == '__main__':
                 print("No configuration file 'ro.cfg' found neither at local folder nor at /etc/osm/", file=sys.stderr)
                 exit(1)
         ro_main(config_file)
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt. Finishing", file=sys.stderr)
     except getopt.GetoptError as e:
         print(str(e), file=sys.stderr)
         # usage()

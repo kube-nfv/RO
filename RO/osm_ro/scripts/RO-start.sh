@@ -19,6 +19,12 @@
 # then it checks if database is present and creates it if needed.
 # Finally it launches RO server.
 
+#  if New Generation RO just launch it
+if [ -n "$OSMRO_NG" ] ; then
+    python3 -m osm_ng_ro.ro_main || exit 1
+    exit 0
+fi
+
 [ -z "$RO_DB_OVIM_HOST" ] && export RO_DB_OVIM_HOST="$RO_DB_HOST"
 [ -z "$RO_DB_OVIM_ROOT_PASSWORD" ] && export RO_DB_OVIM_ROOT_PASSWORD="$RO_DB_ROOT_PASSWORD"
 

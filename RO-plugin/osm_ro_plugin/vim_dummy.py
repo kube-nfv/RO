@@ -25,6 +25,7 @@ from osm_ro_plugin import vimconn
 from uuid import uuid4
 from copy import deepcopy
 import logging
+from random import randrange
 
 __author__ = "Alfonso Tierno"
 __date__ = "2020-04-20"
@@ -248,6 +249,12 @@ class VimDummyConnector(vimconn.VimConnector):
                 "vim_interface_id": str(iface_index),
                 "vim_net_id": iface["net_id"],
             }
+            if iface.get("type") in ("SR-IOV", "PCI-PASSTHROUGH") and self.config.get("sdn-port-mapping"):
+                compute_index = randrange(len(self.config["sdn-port-mapping"]))
+                port_index = randrange(len(self.config["sdn-port-mapping"][compute_index]["ports"]))
+                interface["compute_node"] = self.config["sdn-port-mapping"][compute_index]["compute_node"]
+                interface["pci"] = self.config["sdn-port-mapping"][compute_index]["ports"][port_index]["pci"]
+
             interfaces.append(interface)
         vm = {
             "id": vm_id,

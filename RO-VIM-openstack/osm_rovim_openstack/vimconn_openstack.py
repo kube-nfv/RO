@@ -1225,6 +1225,7 @@ class vimconnector(vimconn.VimConnector):
                 type: 'virtual', 'PCI-PASSTHROUGH'('PF'), 'SR-IOV'('VF'), 'VFnotShared'
                 vim_id: filled/added by this function
                 floating_ip: True/False (or it can be None)
+                port_security: True/False
             'cloud_config': (optional) dictionary with:
                 'key-pairs': (optional) list of strings with the public key to be inserted to the default user
                 'users': (optional) list of users to be inserted, each item is a dict with:
@@ -1706,7 +1707,8 @@ class vimconnector(vimconn.VimConnector):
                 else:
                     vm['status'] = "OTHER"
                     vm['error_msg'] = "VIM status reported " + vm_vim['status']
-
+                vm_vim.pop("OS-EXT-SRV-ATTR:user_data", None)
+                vm_vim.pop("user_data", None)
                 vm['vim_info'] = self.serialize(vm_vim)
 
                 vm["interfaces"] = []

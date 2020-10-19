@@ -50,6 +50,7 @@ RUN /root/RO/RO/osm_ro/scripts/install-osm-im.sh --develop && \
     python3 -m pip install -e /root/RO/RO-plugin && \
     python3 -m pip install -e /root/RO/RO && \
     python3 -m pip install -e /root/RO/RO-client && \
+    python3 -m pip install -e /root/RO/NG-RO && \
     python3 -m pip install -e /root/RO/RO-VIM-vmware && \
     python3 -m pip install -e /root/RO/RO-VIM-openstack && \
     python3 -m pip install -e /root/RO/RO-VIM-openvim && \
@@ -68,42 +69,27 @@ RUN /root/RO/RO/osm_ro/scripts/install-osm-im.sh --develop && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-VOLUME /var/log/osm
-
 EXPOSE 9090
 
-# Two mysql databases are needed (DB and DB_OVIM). Can be hosted on same or separated containers
-# These ENV must be provided
-# RO_DB_HOST: host of the main
-# RO_DB_OVIM_HOST: ...        if empty RO_DB_HOST is assumed
-# RO_DB_ROOT_PASSWORD: this has to be provided first time for creating database. It will create and init only if empty!
-# RO_DB_OVIM_ROOT_PASSWORD: ...  if empty RO_DB_ROOT_PASSWORD is assumed
-# RO_DB_USER:    default value 'mano'
-# RO_DB_OVIM_USER:       default value 'mano'
-# RO_DB_PASSWORD:        default value 'manopw'
-# RO_DB_OVIM_PASSWORD:        default value 'manopw'
-# RO_DB_PORT:             default value '3306'
-# RO_DB_OVIM_PORT:        default value '3306'
-# RO_DB_NAME:             default value 'mano_db'
-# RO_DB_OVIM_NAME:        default value 'mano_vim_db'
-# RO_LOG_FILE:            default log to stderr if not defined
+ENV OSMRO_NG              True
 
-ENV RO_DB_HOST="" \
-    RO_DB_OVIM_HOST="" \
-    RO_DB_ROOT_PASSWORD="" \
-    RO_DB_OVIM_ROOT_PASSWORD="" \
-    RO_DB_USER=mano \
-    RO_DB_OVIM_USER=mano \
-    RO_DB_PASSWORD=manopw \
-    RO_DB_OVIM_PASSWORD=manopw \
-    RO_DB_PORT=3306 \
-    RO_DB_OVIM_PORT=3306 \
-    RO_DB_NAME=mano_db \
-    RO_DB_OVIM_NAME=mano_vim_db \
-    OPENMANO_TENANT=osm \
-    RO_LOG_LEVEL=DEBUG
+# database
+ENV OSMRO_DATABASE_DRIVER mongo
+ENV OSMRO_DATABASE_URI    mongodb://mongo:27017
+# ENV OSMRO_DATABASE_COMMONKEY  xxx
+# ENV OSMRO_DATABASE_USER  xxx
+# ENV OSMRO_DATABASE_PASSWORD  xxx
 
-CMD RO-start.sh
+# message
+ENV OSMRO_MESSAGE_DRIVER  kafka
+ENV OSMRO_MESSAGE_HOST    kafka
+ENV OSMRO_MESSAGE_PORT    9092
+
+# logs
+ENV OSMRO_LOG_LEVEL       DEBUG
+
+CMD python3 -m osm_ng_ro.ro_main
 
 # HEALTHCHECK --start-period=30s --interval=10s --timeout=5s --retries=12 \
-#  CMD curl --silent --fail localhost:9090/openmano/tenants || exit 1
+#  CMD curl --silent --fail http://localhost:9090/ro || exit 1
+

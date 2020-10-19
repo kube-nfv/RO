@@ -31,26 +31,50 @@ ssh_key_schema = {"type": "string", "minLength": 1}
 id_schema = {"type": "string", "pattern": "^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$"}
 bool_schema = {"type": "boolean"}
 null_schema = {"type": "null"}
+object_schema = {"type": "object"}
 
-image_schema = {
-    "title": "image input validation",
+deploy_item_schema = {
+    "title": "deploy item validation. Each vld, vdu, flavor, image, ...",
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type": "object",
-    # TODO
+    "properties": {
+        "id": string_schema,
+        "vim_info": object_schema,
+        "common_id": string_schema,
+    },
+    "additionalProperties": True
 }
 
-flavor_schema = {
-    "title": "image input validation",
-    "$schema": "http://json-schema.org/draft-04/schema#",
-    "type": "object",
-    # TODO
+deploy_item_list = {
+    "type": "array",
+    "items": deploy_item_schema,
 }
 
-ns_schema = {
-    "title": "image input validation",
+deploy_vnf_schema = {
+    "title": "deploy.vnf.item validation",
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type": "object",
-    # TODO
+    "properties": {
+        "_id": id_schema,
+        "vdur": deploy_item_list,
+        "vld": deploy_item_list,
+    },
+    "additionalProperties": True,
+    "required": ["_id"],
+}
+
+deploy_action_schema = {
+    "title": "deploy.action validation",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "properties": {
+        "action": {"enum": ["inject_ssh_key"]},
+        "key": ssh_key_schema,
+        "user": string_schema,
+        "password": string_schema,
+    },
+    "additionalProperties": False,
+    "required": ["action"],
 }
 
 deploy_schema = {
@@ -59,34 +83,22 @@ deploy_schema = {
     "type": "object",
     "properties": {
         "action_id": string_schema,
-        "name": name_schema,
-        "action": {"enum" ["inject_ssh_key"]},
-        "key": ssh_key_schema,
-        "user": name_schema,
-        "password": string_schema,
+        "cloud_init_content": object_schema,
+        "name": string_schema,
+        "action": deploy_action_schema,
         "vnf": {
+            "type": "array",
+            "items": deploy_vnf_schema,
+        },
+        "image": deploy_item_list,
+        "flavor": deploy_item_list,
+        "ns": {
             "type": "object",
             "properties": {
-                "_id": id_schema,
-                # TODO
-            },
-            "required": ["_id"],
-            "additionalProperties": True,
+                "vld": deploy_item_list,
+            }
         },
-        "image": {
-            "type": "array",
-            "minItems": 1,
-            "items": image_schema
-        },
-        "flavor": {
-            "type": "array",
-            "minItems": 1,
-            "items": flavor_schema
-        },
-        "ns": ns_schema,
     },
-
-    "required": ["name"],
     "additionalProperties": False
 }
 
