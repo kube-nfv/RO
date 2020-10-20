@@ -1198,8 +1198,9 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                 vdu_id2cp_name[vdu_id] = db_interface["external_name"]
 
                             # port security
-                            if str(cp_descriptor.get("port-security-enabled")).lower() == "false":
+                            if "port-security-disable-strategy" in cp_descriptor or str(cp_descriptor.get("port-security-enabled")).lower() == "false":
                                 db_interface["port_security"] = 0
+                                db_interface["port_security_disable_strategy"] = cp_descriptor.get("port-security-disable-strategy", "full")
                             elif str(cp_descriptor.get("port-security-enabled")).lower() == "true":
                                 db_interface["port_security"] = 1
                         except KeyError:
@@ -1233,8 +1234,9 @@ def new_vnfd_v3(mydb, tenant_id, vnf_descriptor):
                                     ("SR-IOV", "PCI-PASSTHROUGH"):
                                 db_nets[net_id2index[icp_vld.get("id")]]["type"] = "data"
                             db_interface["net_id"] = net_id2uuid[icp_vld.get("id")]
-                            if str(icp_descriptor.get("port-security-enabled")).lower() == "false":
+                            if "port-security-disable-strategy" in icp_descriptor or str(icp_descriptor.get("port-security-enabled")).lower() == "false":
                                 db_interface["port_security"] = 0
+                                db_interface["port_security_disable_strategy"] = icp_descriptor.get("port-security-disable-strategy", "full")
                             elif str(icp_descriptor.get("port-security-enabled")).lower() == "true":
                                 db_interface["port_security"] = 1
                             if icp.get("ip-address"):
@@ -4115,6 +4117,8 @@ def instantiate_vnf(mydb, sce_vnf, params, params_out, rollbackList):
                 netDict['ip_address'] = iface['ip_address']
             if iface.get("port-security") is not None:
                 netDict['port_security'] = iface['port-security']
+            if iface.get("port_security_disable_strategy") is not None:
+                netDict['port_security_disable_strategy'] = iface['port_security_disable_strategy']
             if iface.get("floating-ip") is not None:
                 netDict['floating_ip'] = iface['floating-ip']
             netDict['name'] = iface['internal_name']

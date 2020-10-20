@@ -1338,7 +1338,7 @@ class vimconnector(vimconn.VimConnector):
                 # is dropped.
                 # As a workaround we wait until the VM is active and then disable the port-security
                 if net.get("port_security") is False and not self.config.get("no_port_security_extension"):
-                    no_secured_ports.append(new_port["port"]["id"])
+                    no_secured_ports.append((new_port["port"]["id"], net.get("port_security_disable_strategy")))
 
             # if metadata_vpci:
             #     metadata = {"pci_assignement": json.dumps(metadata_vpci)}
@@ -1412,13 +1412,33 @@ class vimconnector(vimconn.VimConnector):
             if no_secured_ports:
                 self.__wait_for_vm(server.id, 'ACTIVE')
 
-            for port_id in no_secured_ports:
+            for port in no_secured_ports:
+                port_update = {
+                    "port": {
+                        "port_security_enabled": False,
+                        "security_groups": None
+                    }
+                }
+
+                if port[1] == "allow-address-pairs":
+                    port_update = {
+                        "port": {
+                            "allowed_address_pairs": [
+                                {
+                                    "ip_address": "0.0.0.0/0"
+                                }
+                            ]
+                        }
+                    }
+
                 try:
-                    self.neutron.update_port(port_id,
-                                             {"port": {"port_security_enabled": False, "security_groups": None}})
+                    self.neutron.update_port(port[0], port_update)
                 except Exception:
-                    raise vimconn.VimConnException("It was not possible to disable port security for port {}".format(
-                        port_id))
+                    raise vimconn.VimConnException(
+                        "It was not possible to disable port security for port {}"
+                        .format(port[0])
+                    )
+
             # print "DONE :-)", server
 
             # pool_id = None

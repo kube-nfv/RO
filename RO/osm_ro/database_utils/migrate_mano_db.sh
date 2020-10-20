@@ -36,7 +36,7 @@ QUIET_MODE=""
 BACKUP_DIR=""
 BACKUP_FILE=""
 # TODO update it with the last database version
-LAST_DB_VERSION=41
+LAST_DB_VERSION=42
 
 # Detect paths
 MYSQL=$(which mysql)
@@ -199,6 +199,7 @@ fi
 #[ $OPENMANO_VER_NUM -ge 6020 ] && DB_VERSION=39  #0.6.20 =>  39
 #[ $OPENMANO_VER_NUM -ge 6000004 ] && DB_VERSION=40  #6.0.4 =>  40
 #[ $OPENMANO_VER_NUM -ge 8000000 ] && DB_VERSION=41  #8.0.0 =>  41
+#[ $OPENMANO_VER_NUM -ge 8000002 ] && DB_VERSION=42  #8.0.2 =>  42
 # TODO ... put next versions here
 
 function upgrade_to_1(){
@@ -1524,6 +1525,19 @@ function downgrade_from_41(){
     sql "ALTER TABLE wims	ADD UNIQUE INDEX name (name);"
     sql "ALTER TABLE wim_accounts	ADD UNIQUE INDEX wim_name (name);"
     sql "DELETE FROM schema_version WHERE version_int='41';"
+}
+
+function upgrade_to_42(){
+    echo "      Adding 'port_security_disable_strategy' to 'interfaces'"
+    sql "ALTER TABLE interfaces    ADD COLUMN port_security_disable_strategy CHAR(25);"
+    sql "INSERT INTO schema_version (version_int, version, openmano_ver, comments, date) " \
+        "VALUES (42, '0.42', '8.0.2', 'Adding port_security_disable_strategy to interfaces', '2020-10-19');"
+}
+
+function downgrade_to_42(){
+    echo "      Removing 'port_security_disable_strategy' from 'interfaces'"
+    sql "ALTER TABLE interfaces     DROP port_security_disable_strategy;"
+    sql "DELETE FROM schema_version WHERE version_int='42';"
 }
 
 #TODO ... put functions here
