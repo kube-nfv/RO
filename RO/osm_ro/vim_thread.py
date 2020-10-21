@@ -1462,10 +1462,10 @@ class vim_thread(threading.Thread):
                 if '/' not in source_ip:
                     source_ip += '/32'
                 definition["source_ip_prefix"] = source_ip
-            if source_port:
+            if source_port and ip_proto !='icmp':
                 definition["source_port_range_min"] = source_port
                 definition["source_port_range_max"] = source_port
-            if destination_port:
+            if destination_port and ip_proto !='icmp':
                 definition["destination_port_range_min"] = destination_port
                 definition["destination_port_range_max"] = destination_port
             if destination_ip:
