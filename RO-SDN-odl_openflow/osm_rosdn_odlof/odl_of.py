@@ -65,7 +65,7 @@ class OfConnOdl(OpenflowConn):
             url = "http://" + url
         if not url.endswith("/"):
             url = url + "/"
-        self.url = url + "onos/v1/"
+        self.url = url
 
         # internal variables
         self.name = "OpenDayLight"
