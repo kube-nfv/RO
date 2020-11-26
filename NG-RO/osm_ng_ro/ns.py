@@ -413,10 +413,8 @@ class Ns(object):
 
                 flavor_data = {
                     "disk": int(target_flavor["storage-gb"]),
-                    # "ram": max(int(target_flavor["memory-mb"]) // 1024, 1),
-                    # ^ TODO manage at vim_connectors MB instead of GB
                     "ram": int(target_flavor["memory-mb"]),
-                    "vcpus": target_flavor["vcpu-count"],
+                    "vcpus": int(target_flavor["vcpu-count"]),
                 }
                 numa = {}
                 extended = {}

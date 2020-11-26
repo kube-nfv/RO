@@ -30,8 +30,7 @@ RUN DEBIAN_FRONTEND=noninteractive  apt-get -y install python3-neutronclient pyt
     python3-requests python3-netaddr python3-argcomplete curl  \
     && DEBIAN_FRONTEND=noninteractive curl -Lo /tmp/libzenohc.so https://github.com/eclipse-fog05/fog05/releases/download/v0.1.0/libzenohc.so \
     && mv /tmp/libzenohc.so /usr/local/lib/libzenohc.so \
-    && DEBIAN_FRONTEND=noninteractive python3 -m pip install -U jsonrpclib-pelix cvprac \
-    "osm-im @ git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm-im" "azure==4.0.0" boto \
+    && DEBIAN_FRONTEND=noninteractive python3 -m pip install -U jsonrpclib-pelix cvprac "azure==4.0.0" boto \
     pyone "oca @ git+https://github.com/python-oca/python-oca#egg=oca" \
     pyangbind sphinx zenoh==0.3.0 yaks==0.3.0.post1 fog05-sdk==0.2.0 fog05==0.2.0
 
@@ -48,8 +47,6 @@ COPY . /root/RO
 RUN /root/RO/RO/osm_ro/scripts/install-osm-im.sh --develop && \
     mkdir -p /var/log/osm && \
     python3 -m pip install -e /root/RO/RO-plugin && \
-    python3 -m pip install -e /root/RO/RO && \
-    python3 -m pip install -e /root/RO/RO-client && \
     python3 -m pip install -e /root/RO/NG-RO && \
     python3 -m pip install -e /root/RO/RO-VIM-vmware && \
     python3 -m pip install -e /root/RO/RO-VIM-openstack && \
