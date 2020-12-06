@@ -780,9 +780,7 @@ class NsWorker(threading.Thread):
     REFRESH_IMAGE = 3600 * 10
     REFRESH_DELETE = 3600 * 10
     QUEUE_SIZE = 2000
-    # TODO delete assigment_lock = Lock()
     terminate = False
-    # TODO delete assignment = {}
     MAX_TIME_LOCKED = 3600
     MAX_TIME_VIM_LOCKED = 120
 
@@ -815,6 +813,7 @@ class NsWorker(threading.Thread):
         }
         self.time_last_task_processed = None
         self.tasks_to_delete = []  # lists of tasks to delete because nsrs or vnfrs has been deleted from db
+        self.idle = True  # it is idle when there are not vim_targets associated
 
     def insert_task(self, task):
         try:
@@ -884,10 +883,11 @@ class NsWorker(threading.Thread):
         :return: None.
         """
         try:
-            target, _, _id = target_id.partition(":")
             self.db_vims.pop(target_id, None)
             self.my_vims.pop(target_id, None)
-            self.vim_targets.remove(target_id)
+            if target_id in self.vim_targets:
+                self.vim_targets.remove(target_id)
+            self.logger.info("Unloaded {}".format(target_id))
             rmtree("{}:{}".format(target_id, self.worker_index))
         except FileNotFoundError:
             pass  # this is raised by rmtree if folder does not exist
@@ -906,7 +906,7 @@ class NsWorker(threading.Thread):
         unset_dict = {}
         op_text = ""
         step = ""
-        loaded = target_id in self.my_vims
+        loaded = target_id in self.vim_targets
         target_database = "vim_accounts" if target == "vim" else "wim_accounts" if target == "wim" else "sdns"
         try:
             step = "Getting {} from db".format(target_id)
@@ -1451,20 +1451,31 @@ class NsWorker(threading.Thread):
 
     def run(self):
         # load database
-        self.logger.debug("Starting")
+        self.logger.info("Starting")
         while True:
             # step 1: get commands from queue
             try:
-                task = self.task_queue.get(block=False if self.my_vims else True)
+                if self.vim_targets:
+                    task = self.task_queue.get(block=False)
+                else:
+                    if not self.idle:
+                        self.logger.debug("enters in idle state")
+                    self.idle = True
+                    task = self.task_queue.get(block=True)
+                    self.idle = False
+
                 if task[0] == "terminate":
                     break
                 elif task[0] == "load_vim":
+                    self.logger.info("order to load vim {}".format(task[1]))
                     self._load_vim(task[1])
                 elif task[0] == "unload_vim":
+                    self.logger.info("order to unload vim {}".format(task[1]))
                     self._unload_vim(task[1])
                 elif task[0] == "reload_vim":
                     self._reload_vim(task[1])
                 elif task[0] == "check_vim":
+                    self.logger.info("order to check vim {}".format(task[1]))
                     self._check_vim(task[1])
                 continue
             except Exception as e:
@@ -1487,4 +1498,4 @@ class NsWorker(threading.Thread):
             except Exception as e:
                 self.logger.critical("Unexpected exception at run: " + str(e), exc_info=True)
 
-        self.logger.debug("Finishing")
+        self.logger.info("Finishing")
