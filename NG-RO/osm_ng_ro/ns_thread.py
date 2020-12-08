@@ -1222,6 +1222,7 @@ class NsWorker(threading.Thread):
                 for task_index, task in enumerate(ro_task["tasks"]):
                     if not task:
                         continue  # task deleted
+                    task_depends = {}
                     target_update = None
                     if (task_action in ("DELETE", "EXEC") and task["status"] not in ("SCHEDULED", "BUILD")) or \
                             task["action"] != task_action or \
@@ -1231,7 +1232,6 @@ class NsWorker(threading.Thread):
                     try:
                         db_vim_info_update = None
                         if task["status"] == "SCHEDULED":
-                            task_depends = {}
                             # check if tasks that this depends on have been completed
                             dependency_not_completed = False
                             for dependency_task_id in (task.get("depends_on") or ()):

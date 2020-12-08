@@ -548,8 +548,12 @@ class Ns(object):
                 for iface_index, interface in enumerate(target_vdu["interfaces"]):
                     if interface.get("ns-vld-id"):
                         net_text = ns_preffix + ":vld." + interface["ns-vld-id"]
-                    else:
+                    elif interface.get("vnf-vld-id"):
                         net_text = vnf_preffix + ":vld." + interface["vnf-vld-id"]
+                    else:
+                        self.logger.error("Interface {} from vdu {} not connected to any vld".format(
+                            iface_index, target_vdu["vdu-name"]))
+                        continue   # interface not connected to any vld
                     extra_dict["depends_on"].append(net_text)
                     net_item = {x: v for x, v in interface.items() if x in
                                 ("name", "vpci", "port_security", "port_security_disable_strategy", "floating_ip")}
