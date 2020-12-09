@@ -44,9 +44,7 @@ RUN DEBIAN_FRONTEND=noninteractive  apt-get -y install python3-neutronclient pyt
 
 COPY . /root/RO
 
-RUN /root/RO/RO/osm_ro/scripts/install-osm-im.sh --develop && \
-    mkdir -p /var/log/osm && \
-    python3 -m pip install -e /root/RO/RO-plugin && \
+RUN python3 -m pip install -e /root/RO/RO-plugin && \
     python3 -m pip install -e /root/RO/NG-RO && \
     python3 -m pip install -e /root/RO/RO-VIM-vmware && \
     python3 -m pip install -e /root/RO/RO-VIM-openstack && \
