@@ -41,7 +41,6 @@ setup(
         'PyYAML',
         'requests',
         'cryptography',  # >=2.5  installed right version with the debian post-install script
-        'osm-im @ git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm-im',
         "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
     ],
     setup_requires=['setuptools-version-command'],

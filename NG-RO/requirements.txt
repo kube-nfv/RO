@@ -17,6 +17,5 @@ CherryPy==18.1.2
 osm-common @ git+https://osm.etsi.org/gerrit/osm/common.git#egg=osm-common
 requests
 cryptography
-osm-im @ git+https://osm.etsi.org/gerrit/osm/IM.git#egg=osm-im
 osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin
 logutils
