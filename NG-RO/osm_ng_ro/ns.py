@@ -510,10 +510,11 @@ class Ns(object):
                     "ip_version": "IPv4" if "v4" in ip_profile.get("ip-version", "ipv4") else "IPv6",
                     "subnet_address": ip_profile.get("subnet-address"),
                     "gateway_address": ip_profile.get("gateway-address"),
-                    "dhcp_enabled": ip_profile["dhcp-params"].get("enabled", True),
-                    "dhcp_start_address": ip_profile["dhcp-params"].get("start-address"),
-                    "dhcp_count": ip_profile["dhcp-params"].get("count"),
-
+                    "dhcp_enabled": ip_profile["dhcp-params"].get("enabled", True)
+                    if "dhcp_params" in ip_profile else False,
+                    "dhcp_start_address": ip_profile["dhcp-params"].get("start-address")
+                    if "dhcp_params" in ip_profile else None,
+                    "dhcp_count": ip_profile["dhcp-params"].get("count") if "dhcp_params" in ip_profile else None,
                 }
                 if ip_profile.get("dns-server"):
                     ro_ip_profile["dns_address"] = ";".join([v["address"] for v in ip_profile["dns-server"]])
