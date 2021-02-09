@@ -44,7 +44,7 @@ class SdnDummyConnector(SdnConnectorBase):
     An extra property, ``service_endpoint_mapping`` is created from ``config``.
     """
     def __init__(self, wim, wim_account, config=None, logger=None):
-        self.logger = logger or logging.getLogger('openmano.sdnconn.dummy')
+        self.logger = logger or logging.getLogger('ro.sdn.dummy')
         super(SdnDummyConnector, self).__init__(wim, wim_account, config, self.logger)
         self.logger.debug("__init: wim='{}' wim_account='{}'".format(wim, wim_account))
         self.connections = {}

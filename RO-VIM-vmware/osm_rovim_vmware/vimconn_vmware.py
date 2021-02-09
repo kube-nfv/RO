@@ -151,7 +151,7 @@ class vimconnector(vimconn.VimConnector):
         vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url,
                                       url_admin, user, passwd, log_level, config)
 
-        self.logger = logging.getLogger('openmano.vim.vmware')
+        self.logger = logging.getLogger('ro.vim.vmware')
         self.logger.setLevel(10)
         self.persistent_info = persistent_info
 

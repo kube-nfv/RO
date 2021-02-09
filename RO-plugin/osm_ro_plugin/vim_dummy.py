@@ -41,7 +41,7 @@ class VimDummyConnector(vimconn.VimConnector):
                  config={}, persistent_info={}):
         super().__init__(uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                          config, persistent_info)
-        self.logger = logging.getLogger('openmano.vim.dummy')
+        self.logger = logging.getLogger('ro.vim.dummy')
         if log_level:
             self.logger.setLevel(getattr(logging, log_level))
         self.nets = {

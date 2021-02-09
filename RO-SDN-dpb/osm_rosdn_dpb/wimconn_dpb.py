@@ -205,7 +205,7 @@ class DpbRestInterface():
 class DpbConnector(SdnConnectorBase):
     """ Use the DPB to establish multipoint connections """
 
-    __LOGGER_NAME = "openmano.rosdnconn.dpb"
+    __LOGGER_NAME = "ro.sdn.dpb"
     __SUPPORTED_SERV_TYPES = ["ELAN (L2)", "ELINE (L2)"]
     __SUPPORTED_CONNECTION_TYPES = ["REST", "SSH"]
     __SUPPORTED_SSH_AUTH_TYPES = ["KEY", "PASS"]

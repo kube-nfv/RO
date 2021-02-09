@@ -92,7 +92,7 @@ class SdnConnectorBase(object):
                 wim_id: (internal, do not use)
         :param logger (logging.Logger): optional logger object. If none is passed 'openmano.sdn.sdnconn' is used.
         """
-        self.logger = logger or logging.getLogger('openmano.sdnconn')
+        self.logger = logger or logging.getLogger('ro.sdn')
 
         self.wim = wim
         self.wim_account = wim_account

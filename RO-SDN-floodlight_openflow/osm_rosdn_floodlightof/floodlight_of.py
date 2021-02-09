@@ -76,7 +76,7 @@ class OfConnFloodLight(OpenflowConn):
         self.ofi2pp = {}  # From OpenFlow Index to Physical Port
         self.headers = {'content-type': 'application/json', 'Accept': 'application/json'}
         self.version = None
-        self.logger = logging.getLogger('SDN.floodlightOF')
+        self.logger = logging.getLogger('ro.sdn.floodlightof')
         self.logger.setLevel(params.get("of_debug", "ERROR"))
         self._set_version(params.get("of_version"))
 

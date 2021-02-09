@@ -32,6 +32,7 @@ Support config dict:
 
 """
 
+import logging
 import uuid
 import socket
 import struct
@@ -70,6 +71,7 @@ class vimconnector(vimconn.VimConnector):
         vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config, persistent_info)
 
+        self.logger = logging.getLogger('ro.vim.fos')
         self.logger.debug('vimconn_fos init with config: {}'.format(config))
         self.arch = config.get('arch', 'x86_64')
         self.hv = config.get('hypervisor', 'LXD')

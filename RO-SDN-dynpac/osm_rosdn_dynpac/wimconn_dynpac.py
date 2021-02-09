@@ -58,7 +58,7 @@ class SdnAPIActions(Enum):
 class DynpacConnector(SdnConnectorBase):
     __supported_service_types = ["ELINE (L2)", "ELINE"]
     __supported_encapsulation_types = ["dot1q"]
-    __WIM_LOGGER = 'openmano.sdnconn.dynpac'
+    __WIM_LOGGER = 'ro.sdn.dynpac'
     __ENCAPSULATION_TYPE_PARAM = "service_endpoint_encapsulation_type"
     __ENCAPSULATION_INFO_PARAM = "service_endpoint_encapsulation_info"
     __BACKUP_PARAM = "backup"

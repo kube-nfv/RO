@@ -86,7 +86,7 @@ class OfConnOnos(OpenflowConn):
             self.auth = self.auth.decode()
             self.headers['authorization'] = 'Basic ' + self.auth
 
-        self.logger = logging.getLogger('openmano.sdnconn.onosof')
+        self.logger = logging.getLogger('ro.sdn.onosof')
         # self.logger.setLevel( getattr(logging, params.get("of_debug", "ERROR")) )
         self.logger.debug("onosof plugin initialized")
         self.ip_address = None

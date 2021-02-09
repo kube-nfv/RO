@@ -46,7 +46,7 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
             wim (dict): WIM record, as stored in the database
             wim_account (dict): WIM account record, as stored in the database
         """
-        self.logger = logging.getLogger('openmano.sdnconn.ietfl2vpn')
+        self.logger = logging.getLogger('ro.sdn.ietfl2vpn')
         super().__init__(wim, wim_account, config, logger)
         self.headers = {'Content-Type': 'application/json'}
         self.mappings = {m['service_endpoint_id']: m

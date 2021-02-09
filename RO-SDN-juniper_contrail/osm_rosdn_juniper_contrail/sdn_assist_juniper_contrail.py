@@ -39,7 +39,7 @@ class JuniperContrail(SdnConnectorBase):
       tutorial_with_rest.html
     - https://github.com/tonyliu0592/contrail-toolbox/blob/master/sriov/sriov
     """
-    _WIM_LOGGER = "openmano.sdnconn.junipercontrail"
+    _WIM_LOGGER = "ro.sdn.junipercontrail"
 
     def __init__(self, wim, wim_account, config=None, logger=None):
         """
@@ -62,7 +62,7 @@ class JuniperContrail(SdnConnectorBase):
                 datacenter_id           vim_account                 vim_account
                 id: (internal, do not use)
                 wim_id: (internal, do not use)
-        :param logger (logging.Logger): optional logger object. If none is passed 'openmano.sdn.sdnconn' is used.
+        :param logger (logging.Logger): optional logger object. If none is passed 'ro.sdn.sdnconn' is used.
         """
         self.logger = logger or logging.getLogger(self._WIM_LOGGER)
         self.logger.debug('wim: {}, wim_account: {}, config: {}'.format(wim, wim_account, config))
@@ -680,7 +680,7 @@ if __name__ == '__main__':
     log_formatter = logging.Formatter(log_format, datefmt='%Y-%m-%dT%H:%M:%S')
     handler = logging.StreamHandler()
     handler.setFormatter(log_formatter)
-    logger = logging.getLogger('openmano.sdnconn.junipercontrail')
+    logger = logging.getLogger('ro.sdn.junipercontrail')
     # logger.setLevel(level=logging.ERROR)
     # logger.setLevel(level=logging.INFO)
     logger.setLevel(level=logging.DEBUG)
