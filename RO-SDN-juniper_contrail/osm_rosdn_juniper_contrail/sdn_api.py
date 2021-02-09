@@ -29,7 +29,7 @@ class UnderlayApi:
 
     def __init__(self, url, config=None, user=None, password=None, logger=None):
 
-        self.logger = logger or logging.getLogger("openmano.sdnconn.junipercontrail.sdnapi")
+        self.logger = logger or logging.getLogger("ro.sdn.junipercontrail.sdnapi")
         self.controller_url = url
 
         if not url:

@@ -86,7 +86,7 @@ class OpenflowConn:
         self.name = "openflow_conector"
         self.pp2ofi = {}  # From Physical Port to OpenFlow Index
         self.ofi2pp = {}  # From OpenFlow Index to Physical Port
-        self.logger = logging.getLogger('openmano.sdn.openflow_conn')
+        self.logger = logging.getLogger('ro.sdn.openflow_conn')
 
     def get_of_switches(self):
         """"
@@ -160,7 +160,7 @@ class SdnConnectorOpenFlow(SdnConnectorBase):
     flow_fields = ('priority', 'vlan', 'ingress_port', 'actions', 'dst_mac', 'src_mac', 'net_id')
 
     def __init__(self, wim, wim_account, config=None, logger=None, of_connector=None):
-        self.logger = logger or logging.getLogger('openmano.sdn.openflow_conn')
+        self.logger = logger or logging.getLogger('ro.sdn.openflow_conn')
         self.of_connector = of_connector
         config = config or {}
         self.of_controller_nets_with_same_vlan = config.get("of_controller_nets_with_same_vlan", False)

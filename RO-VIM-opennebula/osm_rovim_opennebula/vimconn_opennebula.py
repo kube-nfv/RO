@@ -28,7 +28,9 @@ vimconnector implements all the methods to interact with OpenNebula using the XM
 __author__ = "Jose Maria Carmona Perez,Juan Antonio Hernando Labajo, Emilio Abraham Garrido Garcia,Alberto Florez " \
              "Pages, Andres Pozo Munoz, Santiago Perez Marin, Onlife Networks Telefonica I+D Product Innovation "
 __date__ = "$13-dec-2017 11:09:29$"
+
 from osm_ro_plugin import vimconn
+import logging
 import requests
 # import logging
 import oca
@@ -62,6 +64,8 @@ class vimconnector(vimconn.VimConnector):
 
         vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
                                       config)
+
+        self.logger = logging.getLogger('ro.vim.openstack')
 
     def _new_one_connection(self):
         return pyone.OneServer(self.url, session=self.user + ':' + self.passwd)

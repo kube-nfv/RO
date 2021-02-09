@@ -621,18 +621,18 @@ def _start_service():
     logger_server = logging.getLogger("cherrypy.error")
     logger_access = logging.getLogger("cherrypy.access")
     logger_cherry = logging.getLogger("cherrypy")
-    logger_nbi = logging.getLogger("ro")
+    logger = logging.getLogger("ro")
 
     if "log.file" in engine_config["global"]:
         file_handler = logging.handlers.RotatingFileHandler(engine_config["global"]["log.file"],
                                                             maxBytes=100e6, backupCount=9, delay=0)
         file_handler.setFormatter(log_formatter_simple)
         logger_cherry.addHandler(file_handler)
-        logger_nbi.addHandler(file_handler)
+        logger.addHandler(file_handler)
     # log always to standard output
     for format_, logger in {"ro.server %(filename)s:%(lineno)s": logger_server,
                             "ro.access %(filename)s:%(lineno)s": logger_access,
-                            "%(name)s %(filename)s:%(lineno)s": logger_nbi
+                            "%(name)s %(filename)s:%(lineno)s": logger
                             }.items():
         log_format_cherry = "%(asctime)s %(levelname)s {} %(message)s".format(format_)
         log_formatter_cherry = logging.Formatter(log_format_cherry, datefmt='%Y-%m-%dT%H:%M:%S')
@@ -642,7 +642,7 @@ def _start_service():
 
     if engine_config["global"].get("log.level"):
         logger_cherry.setLevel(engine_config["global"]["log.level"])
-        logger_nbi.setLevel(engine_config["global"]["log.level"])
+        logger.setLevel(engine_config["global"]["log.level"])
     # logging other modules
     for k1, logname in {"message": "ro.msg", "database": "ro.db", "storage": "ro.fs"}.items():
         engine_config[k1]["logger_name"] = logname

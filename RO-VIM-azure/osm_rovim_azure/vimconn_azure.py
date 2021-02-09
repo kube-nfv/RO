@@ -93,7 +93,7 @@ class vimconnector(vimconn.VimConnector):
 
         self.vnet_address_space = None
         # LOGGER
-        self.logger = logging.getLogger('openmano.vim.azure')
+        self.logger = logging.getLogger('ro.vim.azure')
         if log_level:
             logging.basicConfig()
             self.logger.setLevel(getattr(logging, log_level))

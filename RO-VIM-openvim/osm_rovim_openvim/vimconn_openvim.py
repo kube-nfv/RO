@@ -330,7 +330,7 @@ class vimconnector(vimconn.VimConnector):
         vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level, config)
         self.tenant = None
         self.headers_req = {'content-type': 'application/json'}
-        self.logger = logging.getLogger('openmano.vim.openvim')
+        self.logger = logging.getLogger('ro.vim.openvim')
         self.persistent_info = persistent_info
         if tenant_id:
             self.tenant = tenant_id

@@ -152,7 +152,7 @@ class vimconnector(vimconn.VimConnector):
         logging.getLogger('urllib3').setLevel(logging.WARNING)
         logging.getLogger('keystoneauth').setLevel(logging.WARNING)
         logging.getLogger('novaclient').setLevel(logging.WARNING)
-        self.logger = logging.getLogger('openmano.vim.openstack')
+        self.logger = logging.getLogger('ro.vim.openstack')
 
         # allow security_groups to be a list or a single string
         if isinstance(self.config.get('security_groups'), str):
@@ -161,7 +161,7 @@ class vimconnector(vimconn.VimConnector):
 
         # ###### VIO Specific Changes #########
         if self.vim_type == "VIO":
-            self.logger = logging.getLogger('openmano.vim.vio')
+            self.logger = logging.getLogger('ro.vim.vio')
 
         if log_level:
             self.logger.setLevel(getattr(logging, log_level))

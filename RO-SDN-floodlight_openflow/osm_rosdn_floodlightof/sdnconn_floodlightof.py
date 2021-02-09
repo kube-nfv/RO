@@ -29,7 +29,7 @@ class SdnConnectorFloodLightOf(SdnConnectorOpenFlow):
     def __init__(self, wim, wim_account, config=None, logger=None):
         """Creates a connectivity based on pro-active openflow rules
         """
-        self.logger = logging.getLogger('openmano.sdnconn.floodlightof')
+        self.logger = logging.getLogger('ro.sdn.floodlightof')
         super().__init__(wim, wim_account, config, logger)
         of_params = {
             "of_url": wim["wim_url"],

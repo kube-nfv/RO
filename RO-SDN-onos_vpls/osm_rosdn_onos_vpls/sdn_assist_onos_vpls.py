@@ -34,7 +34,7 @@ class OnosVpls(SdnConnectorBase):
     """
     https://wiki.onosproject.org/display/ONOS/VPLS+User+Guide
     """
-    _WIM_LOGGER = "openmano.sdnconn.onosvpls"
+    _WIM_LOGGER = "ro.sdn.onosvpls"
 
     def __init__(self, wim, wim_account, config=None, logger=None):
         self.logger = logger or logging.getLogger(self._WIM_LOGGER)
@@ -373,7 +373,7 @@ class OnosVpls(SdnConnectorBase):
 
 
 if __name__ == '__main__':
-    logger = logging.getLogger('openmano.sdn.onos_vpls')
+    logger = logging.getLogger('ro.sdn.onos_vpls')
     logging.basicConfig()
     logger.setLevel(getattr(logging, "DEBUG"))
     # wim_url = "http://10.95.172.251:8181"

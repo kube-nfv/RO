@@ -103,7 +103,7 @@ class AristaSdnConnector(SdnConnectorBase):
     __ELINE_num_connection_points = 2
     __supported_service_types = ["ELINE", "ELAN"]
     __supported_encapsulation_types = ["dot1q"]
-    __WIM_LOGGER = 'openmano.sdnconn.arista'
+    __WIM_LOGGER = 'ro.sdn.arista'
     __SERVICE_ENDPOINT_MAPPING = 'service_endpoint_mapping'
     __ENCAPSULATION_TYPE_PARAM = "service_endpoint_encapsulation_type"
     __ENCAPSULATION_INFO_PARAM = "service_endpoint_encapsulation_info"
@@ -156,7 +156,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 datacenter_id           vim_account                 vim_account
                 id: (internal, do not use)
                 wim_id: (internal, do not use)
-        :param logger (logging.Logger): optional logger object. If none is passed 'openmano.sdn.sdnconn' is used.
+        :param logger (logging.Logger): optional logger object. If none is passed 'ro.sdn.sdnconn' is used.
         """
         self.__regex = re.compile(
             r'^(?:http|ftp)s?://'  # http:// or https://

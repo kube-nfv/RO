@@ -20,6 +20,7 @@ LABEL authors="Alfonso Tierno"
 RUN apt-get update && apt-get install -y git python3 python3-pip \
     && python3 -m pip install --upgrade pip \
     && DEBIAN_FRONTEND=noninteractive apt-get -y install libssl-dev libmysqlclient-dev mysql-client \
+    build-essential libffi-dev cargo \
     && DEBIAN_FRONTEND=noninteractive python3 -m pip install -U networking-l2gw  \
     && DEBIAN_FRONTEND=noninteractive python3 -m pip install -U progressbar pyvmomi pyvcloud==19.1.1  \
     && DEBIAN_FRONTEND=noninteractive apt-get -y install genisoimage
@@ -32,7 +33,7 @@ RUN DEBIAN_FRONTEND=noninteractive  apt-get -y install python3-neutronclient pyt
     && mv /tmp/libzenohc.so /usr/local/lib/libzenohc.so \
     && DEBIAN_FRONTEND=noninteractive python3 -m pip install -U jsonrpclib-pelix cvprac "azure==4.0.0" boto \
     pyone "oca @ git+https://github.com/python-oca/python-oca#egg=oca" \
-    pyangbind sphinx zenoh==0.3.0 yaks==0.3.0.post1 fog05-sdk==0.2.0 fog05==0.2.0
+    pyangbind sphinx zenoh==0.3.0 yaks==0.3.0.post1 fog05-sdk==0.2.0 fog05==0.2.0 "cryptography>=2.5"
 
 
 #    DEBIAN_FRONTEND=noninteractive apt-get -y install python-openstacksdk python-openstackclient && \
@@ -83,7 +84,7 @@ ENV OSMRO_MESSAGE_PORT    9092
 # logs
 ENV OSMRO_LOG_LEVEL       DEBUG
 
-CMD python3 -m osm_ng_ro.ro_main
+CMD ["python3", "-u", "-m", "osm_ng_ro.ro_main"]
 
 # HEALTHCHECK --start-period=30s --interval=10s --timeout=5s --retries=12 \
 #  CMD curl --silent --fail http://localhost:9090/ro || exit 1

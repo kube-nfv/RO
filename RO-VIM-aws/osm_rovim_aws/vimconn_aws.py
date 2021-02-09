@@ -119,7 +119,7 @@ class vimconnector(vimconn.VimConnector):
             elif isinstance(flavor_data, dict):
                 self.flavor_info = flavor_data
 
-        self.logger = logging.getLogger('openmano.vim.aws')
+        self.logger = logging.getLogger('ro.vim.aws')
         if log_level:
             self.logger.setLevel(getattr(logging, log_level))
 

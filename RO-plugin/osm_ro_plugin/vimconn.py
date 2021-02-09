@@ -150,7 +150,7 @@ class VimConnector():
         self.passwd = passwd
         self.config = config or {}
         self.availability_zone = None
-        self.logger = logging.getLogger('openmano.vim')
+        self.logger = logging.getLogger('ro.vim')
         if log_level:
             self.logger.setLevel(getattr(logging, log_level))
         if not self.url_admin:   # try to use normal url
