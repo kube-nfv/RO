@@ -30,29 +30,36 @@ osm-ro pluging for openstack VIM
 
 setup(
     name=_name,
-    description='OSM ro vim plugin for openstack',
+    description="OSM ro vim plugin for openstack",
     long_description=README,
-    version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
+    version_command=(
+        "git describe --match v* --tags --long --dirty",
+        "pep440-git-full",
+    ),
     # version=VERSION,
-    # python_requires='>3.5.0',
-    author='ETSI OSM',
-    author_email='alfonso.tiernosepulveda@telefonica.com',
-    maintainer='Alfonso Tierno',
-    maintainer_email='alfonso.tiernosepulveda@telefonica.com',
-    url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
-    license='Apache 2.0',
-
+    # python_requires=">3.5.0",
+    author="ETSI OSM",
+    author_email="alfonso.tiernosepulveda@telefonica.com",
+    maintainer="Alfonso Tierno",
+    maintainer_email="alfonso.tiernosepulveda@telefonica.com",
+    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
+    license="Apache 2.0",
     packages=[_name],
     include_package_data=True,
     install_requires=[
-        "python-openstackclient", "python-neutronclient", 
-        "requests", "netaddr", "PyYAML",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
+        "python-openstackclient",
+        "python-neutronclient",
+        "requests",
+        "netaddr",
+        "PyYAML",
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
         # TODO py3 "networking-l2gw"
         # "python-novaclient", "python-keystoneclient", "python-glanceclient", "python-cinderclient",
     ],
-    setup_requires=['setuptools-version-command'],
+    setup_requires=["setuptools-version-command"],
     entry_points={
-        'osm_rovim.plugins': ['rovim_openstack = osm_rovim_openstack.vimconn_openstack:vimconnector'],
+        "osm_rovim.plugins": [
+            "rovim_openstack = osm_rovim_openstack.vimconn_openstack:vimconnector"
+        ],
     },
 )

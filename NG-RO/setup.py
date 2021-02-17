@@ -22,26 +22,28 @@ _name = "osm_ng_ro"
 _readme = "osm-ng-ro is the New Generation Resource Orchestrator for OSM"
 setup(
     name=_name,
-    description='OSM Resource Orchestrator',
+    description="OSM Resource Orchestrator",
     long_description=_readme,
-    version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
-    author='ETSI OSM',
-    author_email='alfonso.tiernosepulveda@telefonica.com',
-    maintainer='Alfonso Tierno',
-    maintainer_email='alfonso.tiernosepulveda@telefonica.com',
-    url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
-    license='Apache 2.0',
-
+    version_command=(
+        "git describe --match v* --tags --long --dirty",
+        "pep440-git-full",
+    ),
+    author="ETSI OSM",
+    author_email="alfonso.tiernosepulveda@telefonica.com",
+    maintainer="Alfonso Tierno",
+    maintainer_email="alfonso.tiernosepulveda@telefonica.com",
+    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
+    license="Apache 2.0",
     packages=find_packages(exclude=["temp", "local"]),
     include_package_data=True,
     install_requires=[
-        'CherryPy==18.1.2',
-        'osm-common @ git+https://osm.etsi.org/gerrit/osm/common.git#egg=osm-common',
-        'jsonschema',
-        'PyYAML',
-        'requests',
-        'cryptography',  # >=2.5  installed right version with the debian post-install script
+        "CherryPy==18.1.2",
+        "osm-common @ git+https://osm.etsi.org/gerrit/osm/common.git#egg=osm-common",
+        "jsonschema",
+        "PyYAML",
+        "requests",
+        "cryptography",  # >=2.5  installed right version with the debian post-install script
         "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
     ],
-    setup_requires=['setuptools-version-command'],
+    setup_requires=["setuptools-version-command"],
 )

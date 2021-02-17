@@ -30,27 +30,31 @@ osm-ro plugin for Juniper Contrail SDN
 
 setup(
     name=_name,
-    description='OSM RO SDN plugin for Juniper Contrail',
+    description="OSM RO SDN plugin for Juniper Contrail",
     long_description=README,
-    version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
+    version_command=(
+        "git describe --match v* --tags --long --dirty",
+        "pep440-git-full",
+    ),
     # version=VERSION,
     # python_requires='>3.5.0',
-    author='ETSI OSM',
-    author_email='OSM_TECH@list.etsi.org',
-    maintainer='ETSI OSM',
-    maintainer_email='OSM_TECH@list.etsi.org',
-    url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
-    license='Apache 2.0',
-
+    author="ETSI OSM",
+    author_email="OSM_TECH@list.etsi.org",
+    maintainer="ETSI OSM",
+    maintainer_email="OSM_TECH@list.etsi.org",
+    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
+    license="Apache 2.0",
     packages=[_name],
     include_package_data=True,
-    #dependency_links=["git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro"],
+    # dependency_links=["git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro"],
     install_requires=[
         "requests",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
     ],
-    setup_requires=['setuptools-version-command'],
+    setup_requires=["setuptools-version-command"],
     entry_points={
-        'osm_rosdn.plugins': ['rosdn_juniper_contrail = osm_rosdn_juniper_contrail.sdn_assist_juniper_contrail:JuniperContrail'],
+        "osm_rosdn.plugins": [
+            "rosdn_juniper_contrail = osm_rosdn_juniper_contrail.sdn_assist_juniper_contrail:JuniperContrail"
+        ],
     },
 )

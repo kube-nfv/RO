@@ -24,6 +24,7 @@ import logging
 from uuid import uuid4
 from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 from http import HTTPStatus
+
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 
 
@@ -43,8 +44,9 @@ class SdnDummyConnector(SdnConnectorBase):
     The arguments of the constructor are converted to object attributes.
     An extra property, ``service_endpoint_mapping`` is created from ``config``.
     """
+
     def __init__(self, wim, wim_account, config=None, logger=None):
-        self.logger = logger or logging.getLogger('ro.sdn.dummy')
+        self.logger = logger or logging.getLogger("ro.sdn.dummy")
         super(SdnDummyConnector, self).__init__(wim, wim_account, config, self.logger)
         self.logger.debug("__init: wim='{}' wim_account='{}'".format(wim, wim_account))
         self.connections = {}
@@ -58,6 +60,7 @@ class SdnDummyConnector(SdnConnectorBase):
                 external URLs, etc are detected.
         """
         self.logger.debug("check_credentials")
+
         return None
 
     def get_connectivity_service_status(self, service_uuid, conn_info=None):
@@ -77,48 +80,66 @@ class SdnDummyConnector(SdnConnectorBase):
                 keys can be used to provide additional status explanation or
                 new information available for the connectivity service.
         """
-        self.logger.debug("get_connectivity_service_status: service_uuid='{}' conn_info='{}'".format(service_uuid,
-                                                                                                     conn_info))
-        return {'sdn_status': 'ACTIVE', 'sdn_info': self.connections.get(service_uuid)}
+        self.logger.debug(
+            "get_connectivity_service_status: service_uuid='{}' conn_info='{}'".format(
+                service_uuid, conn_info
+            )
+        )
 
-    def create_connectivity_service(self, service_type, connection_points,
-                                    **kwargs):
-        """
-        Stablish WAN connectivity between the endpoints
+        return {"sdn_status": "ACTIVE", "sdn_info": self.connections.get(service_uuid)}
 
-        """
-        self.logger.debug("create_connectivity_service: service_type='{}' connection_points='{}', kwargs='{}'".
-                          format(service_type, connection_points, kwargs))
+    def create_connectivity_service(self, service_type, connection_points, **kwargs):
+        """Establish WAN connectivity between the endpoints"""
+        self.logger.debug(
+            "create_connectivity_service: service_type='{}' connection_points='{}', kwargs='{}'".format(
+                service_type, connection_points, kwargs
+            )
+        )
         _id = str(uuid4())
         self.connections[_id] = connection_points.copy()
         self.counter += 1
+
         return _id, None
 
     def delete_connectivity_service(self, service_uuid, conn_info=None):
-        """Disconnect multi-site endpoints previously connected
+        """Disconnect multi-site endpoints previously connected"""
+        self.logger.debug(
+            "delete_connectivity_service: service_uuid='{}' conn_info='{}'".format(
+                service_uuid, conn_info
+            )
+        )
 
-        """
-        self.logger.debug("delete_connectivity_service: service_uuid='{}' conn_info='{}'".format(service_uuid,
-                                                                                                 conn_info))
         if service_uuid not in self.connections:
-            raise SdnConnectorError("connectivity {} not found".format(service_uuid),
-                                    http_code=HTTPStatus.NOT_FOUND.value)
+            raise SdnConnectorError(
+                "connectivity {} not found".format(service_uuid),
+                http_code=HTTPStatus.NOT_FOUND.value,
+            )
+
         self.connections.pop(service_uuid, None)
+
         return None
 
-    def edit_connectivity_service(self, service_uuid, conn_info=None,
-                                  connection_points=None, **kwargs):
+    def edit_connectivity_service(
+        self, service_uuid, conn_info=None, connection_points=None, **kwargs
+    ):
         """Change an existing connectivity service.
 
         This method's arguments and return value follow the same convention as
         :meth:`~.create_connectivity_service`.
         """
-        self.logger.debug("edit_connectivity_service: service_uuid='{}' conn_info='{}', connection_points='{}'"
-                          "kwargs='{}'".format(service_uuid, conn_info, connection_points, kwargs))
+        self.logger.debug(
+            "edit_connectivity_service: service_uuid='{}' conn_info='{}', connection_points='{}'"
+            "kwargs='{}'".format(service_uuid, conn_info, connection_points, kwargs)
+        )
+
         if service_uuid not in self.connections:
-            raise SdnConnectorError("connectivity {} not found".format(service_uuid),
-                                    http_code=HTTPStatus.NOT_FOUND.value)
+            raise SdnConnectorError(
+                "connectivity {} not found".format(service_uuid),
+                http_code=HTTPStatus.NOT_FOUND.value,
+            )
+
         self.connections[service_uuid] = connection_points.copy()
+
         return None
 
     def clear_all_connectivity_services(self):
@@ -131,6 +152,7 @@ class SdnDummyConnector(SdnConnectorBase):
         """
         self.logger.debug("clear_all_connectivity_services")
         self.connections.clear()
+
         return None
 
     def get_all_active_connectivity_services(self):
@@ -141,4 +163,5 @@ class SdnDummyConnector(SdnConnectorBase):
             SdnConnectorException: In case of error.
         """
         self.logger.debug("get_all_active_connectivity_services")
+
         return self.connections

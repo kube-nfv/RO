@@ -44,12 +44,17 @@ __date__ = "$14-aug-2017 23:59:59$"
 def deprecated(message):
     def deprecated_decorator(func):
         def deprecated_func(*args, **kwargs):
-            warnings.warn("{} is a deprecated function. {}".format(func.__name__, message),
-                          category=DeprecationWarning,
-                          stacklevel=2)
-            warnings.simplefilter('default', DeprecationWarning)
+            warnings.warn(
+                "{} is a deprecated function. {}".format(func.__name__, message),
+                category=DeprecationWarning,
+                stacklevel=2,
+            )
+            warnings.simplefilter("default", DeprecationWarning)
+
             return func(*args, **kwargs)
+
         return deprecated_func
+
     return deprecated_decorator
 
 
@@ -67,6 +72,7 @@ HTTP_Internal_Server_Error = HTTPStatus.INTERNAL_SERVER_ERROR.value
 
 class VimConnException(Exception):
     """Common and base class Exception for all VimConnector exceptions"""
+
     def __init__(self, message, http_code=HTTP_Bad_Request):
         Exception.__init__(self, message)
         self.http_code = http_code
@@ -74,53 +80,73 @@ class VimConnException(Exception):
 
 class VimConnConnectionException(VimConnException):
     """Connectivity error with the VIM"""
+
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
         VimConnException.__init__(self, message, http_code)
 
 
 class VimConnUnexpectedResponse(VimConnException):
     """Get an wrong response from VIM"""
+
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
         VimConnException.__init__(self, message, http_code)
 
 
 class VimConnAuthException(VimConnException):
     """Invalid credentials or authorization to perform this action over the VIM"""
+
     def __init__(self, message, http_code=HTTP_Unauthorized):
         VimConnException.__init__(self, message, http_code)
 
 
 class VimConnNotFoundException(VimConnException):
     """The item is not found at VIM"""
+
     def __init__(self, message, http_code=HTTP_Not_Found):
         VimConnException.__init__(self, message, http_code)
 
 
 class VimConnConflictException(VimConnException):
     """There is a conflict, e.g. more item found than one"""
+
     def __init__(self, message, http_code=HTTP_Conflict):
         VimConnException.__init__(self, message, http_code)
 
 
 class VimConnNotSupportedException(VimConnException):
     """The request is not supported by connector"""
+
     def __init__(self, message, http_code=HTTP_Service_Unavailable):
         VimConnException.__init__(self, message, http_code)
 
 
 class VimConnNotImplemented(VimConnException):
     """The method is not implemented by the connected"""
+
     def __init__(self, message, http_code=HTTP_Not_Implemented):
         VimConnException.__init__(self, message, http_code)
 
 
-class VimConnector():
+class VimConnector:
     """Abstract base class for all the VIM connector plugins
     These plugins must implement a VimConnector class derived from this
     and all these privated methods
     """
-    def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
-                 config={}, persistent_info={}):
+
+    def __init__(
+        self,
+        uuid,
+        name,
+        tenant_id,
+        tenant_name,
+        url,
+        url_admin=None,
+        user=None,
+        passwd=None,
+        log_level=None,
+        config={},
+        persistent_info={},
+    ):
         """
         Constructor of VIM. Raise an exception is some needed parameter is missing, but it must not do any connectivity
             checking against the VIM
@@ -150,28 +176,31 @@ class VimConnector():
         self.passwd = passwd
         self.config = config or {}
         self.availability_zone = None
-        self.logger = logging.getLogger('ro.vim')
+        self.logger = logging.getLogger("ro.vim")
+
         if log_level:
             self.logger.setLevel(getattr(logging, log_level))
-        if not self.url_admin:   # try to use normal url
+
+        if not self.url_admin:  # try to use normal url
             self.url_admin = self.url
 
     def __getitem__(self, index):
-        if index == 'tenant_id':
+        if index == "tenant_id":
             return self.tenant_id
-        if index == 'tenant_name':
+
+        if index == "tenant_name":
             return self.tenant_name
-        elif index == 'id':
+        elif index == "id":
             return self.id
-        elif index == 'name':
+        elif index == "name":
             return self.name
-        elif index == 'user':
+        elif index == "user":
             return self.user
-        elif index == 'passwd':
+        elif index == "passwd":
             return self.passwd
-        elif index == 'url':
+        elif index == "url":
             return self.url
-        elif index == 'url_admin':
+        elif index == "url_admin":
             return self.url_admin
         elif index == "config":
             return self.config
@@ -179,21 +208,22 @@ class VimConnector():
             raise KeyError("Invalid key '{}'".format(index))
 
     def __setitem__(self, index, value):
-        if index == 'tenant_id':
+        if index == "tenant_id":
             self.tenant_id = value
-        if index == 'tenant_name':
+
+        if index == "tenant_name":
             self.tenant_name = value
-        elif index == 'id':
+        elif index == "id":
             self.id = value
-        elif index == 'name':
+        elif index == "name":
             self.name = value
-        elif index == 'user':
+        elif index == "user":
             self.user = value
-        elif index == 'passwd':
+        elif index == "passwd":
             self.passwd = value
-        elif index == 'url':
+        elif index == "url":
             self.url = value
-        elif index == 'url_admin':
+        elif index == "url_admin":
             self.url_admin = value
         else:
             raise KeyError("Invalid key '{}'".format(index))
@@ -209,28 +239,32 @@ class VimConnector():
             return None
         elif len(content_list) == 1:
             return content_list[0]
+
         combined_message = MIMEMultipart()
+
         for content in content_list:
-            if content.startswith('#include'):
-                mime_format = 'text/x-include-url'
-            elif content.startswith('#include-once'):
-                mime_format = 'text/x-include-once-url'
-            elif content.startswith('#!'):
-                mime_format = 'text/x-shellscript'
-            elif content.startswith('#cloud-config'):
-                mime_format = 'text/cloud-config'
-            elif content.startswith('#cloud-config-archive'):
-                mime_format = 'text/cloud-config-archive'
-            elif content.startswith('#upstart-job'):
-                mime_format = 'text/upstart-job'
-            elif content.startswith('#part-handler'):
-                mime_format = 'text/part-handler'
-            elif content.startswith('#cloud-boothook'):
-                mime_format = 'text/cloud-boothook'
+            if content.startswith("#include"):
+                mime_format = "text/x-include-url"
+            elif content.startswith("#include-once"):
+                mime_format = "text/x-include-once-url"
+            elif content.startswith("#!"):
+                mime_format = "text/x-shellscript"
+            elif content.startswith("#cloud-config"):
+                mime_format = "text/cloud-config"
+            elif content.startswith("#cloud-config-archive"):
+                mime_format = "text/cloud-config-archive"
+            elif content.startswith("#upstart-job"):
+                mime_format = "text/upstart-job"
+            elif content.startswith("#part-handler"):
+                mime_format = "text/part-handler"
+            elif content.startswith("#cloud-boothook"):
+                mime_format = "text/cloud-boothook"
             else:  # by default
-                mime_format = 'text/x-shellscript'
+                mime_format = "text/x-shellscript"
+
             sub_message = MIMEText(content, mime_format, sys.getdefaultencoding())
             combined_message.attach(sub_message)
+
         return combined_message.as_string()
 
     def _create_user_data(self, cloud_config):
@@ -256,6 +290,7 @@ class VimConnector():
         config_drive = None
         userdata = None
         userdata_list = []
+
         if isinstance(cloud_config, dict):
             if cloud_config.get("user-data"):
                 if isinstance(cloud_config["user-data"], str):
@@ -263,48 +298,70 @@ class VimConnector():
                 else:
                     for u in cloud_config["user-data"]:
                         userdata_list.append(u)
+
             if cloud_config.get("boot-data-drive") is not None:
                 config_drive = cloud_config["boot-data-drive"]
-            if cloud_config.get("config-files") or cloud_config.get("users") or cloud_config.get("key-pairs"):
+
+            if (
+                cloud_config.get("config-files")
+                or cloud_config.get("users")
+                or cloud_config.get("key-pairs")
+            ):
                 userdata_dict = {}
+
                 # default user
                 if cloud_config.get("key-pairs"):
                     userdata_dict["ssh-authorized-keys"] = cloud_config["key-pairs"]
-                    userdata_dict["users"] = [{"default": None, "ssh-authorized-keys": cloud_config["key-pairs"]}]
+                    userdata_dict["users"] = [
+                        {
+                            "default": None,
+                            "ssh-authorized-keys": cloud_config["key-pairs"],
+                        }
+                    ]
+
                 if cloud_config.get("users"):
                     if "users" not in userdata_dict:
                         userdata_dict["users"] = ["default"]
+
                     for user in cloud_config["users"]:
                         user_info = {
                             "name": user["name"],
-                            "sudo": "ALL = (ALL)NOPASSWD:ALL"
+                            "sudo": "ALL = (ALL)NOPASSWD:ALL",
                         }
+
                         if "user-info" in user:
                             user_info["gecos"] = user["user-info"]
+
                         if user.get("key-pairs"):
                             user_info["ssh-authorized-keys"] = user["key-pairs"]
+
                         userdata_dict["users"].append(user_info)
 
                 if cloud_config.get("config-files"):
                     userdata_dict["write_files"] = []
                     for file in cloud_config["config-files"]:
-                        file_info = {
-                            "path": file["dest"],
-                            "content": file["content"]
-                        }
+                        file_info = {"path": file["dest"], "content": file["content"]}
+
                         if file.get("encoding"):
                             file_info["encoding"] = file["encoding"]
+
                         if file.get("permissions"):
                             file_info["permissions"] = file["permissions"]
+
                         if file.get("owner"):
                             file_info["owner"] = file["owner"]
+
                         userdata_dict["write_files"].append(file_info)
-                userdata_list.append("#cloud-config\n" + yaml.safe_dump(userdata_dict, indent=4,
-                                                                        default_flow_style=False))
+
+                userdata_list.append(
+                    "#cloud-config\n"
+                    + yaml.safe_dump(userdata_dict, indent=4, default_flow_style=False)
+                )
             userdata = self._create_mimemultipart(userdata_list)
             self.logger.debug("userdata: %s", userdata)
         elif isinstance(cloud_config, str):
             userdata = cloud_config
+
         return config_drive, userdata
 
     def check_vim_connectivity(self):
@@ -325,7 +382,14 @@ class VimConnector():
         """
         raise VimConnNotImplemented("Should have implemented this")
 
-    def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
+    def new_network(
+        self,
+        net_name,
+        net_type,
+        ip_profile=None,
+        shared=False,
+        provider_network_profile=None,
+    ):
         """Adds a tenant network to VIM
         Params:
             'net_name': name of the network
@@ -453,28 +517,31 @@ class VimConnector():
                 disk: disk size
                 is_public:
                  #TODO to concrete
-        Returns the flavor identifier"""
+        Returns the flavor identifier
+        """
         raise VimConnNotImplemented("Should have implemented this")
 
     def delete_flavor(self, flavor_id):
         """Deletes a tenant flavor from VIM identify by its id
-        Returns the used id or raise an exception"""
+        Returns the used id or raise an exception
+        """
         raise VimConnNotImplemented("Should have implemented this")
 
     def new_image(self, image_dict):
-        """ Adds a tenant image to VIM
+        """Adds a tenant image to VIM
         Returns the image id or raises an exception if failed
         """
         raise VimConnNotImplemented("Should have implemented this")
 
     def delete_image(self, image_id):
         """Deletes a tenant image from VIM
-        Returns the image_id if image is deleted or raises an exception on error"""
+        Returns the image_id if image is deleted or raises an exception on error
+        """
         raise VimConnNotImplemented("Should have implemented this")
 
     def get_image_id_from_path(self, path):
         """Get the image id from image path in the VIM database.
-           Returns the image_id or raises a VimConnNotFoundException
+        Returns the image_id or raises a VimConnNotFoundException
         """
         raise VimConnNotImplemented("Should have implemented this")
 
@@ -491,8 +558,19 @@ class VimConnector():
         """
         raise VimConnNotImplemented("Should have implemented this")
 
-    def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
-                       availability_zone_index=None, availability_zone_list=None):
+    def new_vminstance(
+        self,
+        name,
+        description,
+        start,
+        image_id,
+        flavor_id,
+        net_list,
+        cloud_config=None,
+        disk_list=None,
+        availability_zone_index=None,
+        availability_zone_list=None,
+    ):
         """Adds a VM instance to VIM
         Params:
             'start': (boolean) indicates if VM must start or created in pause mode.
@@ -500,13 +578,13 @@ class VimConnector():
             'net_list': list of interfaces, each one is a dictionary with:
                 'name': (optional) name for the interface.
                 'net_id': VIM network id where this interface must be connect to. Mandatory for type==virtual
-                'vpci': (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM 
+                'vpci': (optional) virtual vPCI address to assign at the VM. Can be ignored depending on VIM
                     capabilities
                 'model': (optional and only have sense for type==virtual) interface model: virtio, e1000, ...
                 'mac_address': (optional) mac address to assign to this interface
                 'ip_address': (optional) IP address to assign to this interface
                 #TODO: CHECK if an optional 'vlan' parameter is needed for VIMs when type if VF and net_id is not
-                    provided, the VLAN tag to be used. In case net_id is provided, the internal network vlan is used 
+                    provided, the VLAN tag to be used. In case net_id is provided, the internal network vlan is used
                     for tagging VF
                 'type': (mandatory) can be one of:
                     'virtual', in this case always connected to a network of type 'net_type=bridge'
@@ -567,29 +645,29 @@ class VimConnector():
 
     def refresh_vms_status(self, vm_list):
         """Get the status of the virtual machines and their interfaces/ports
-           Params: the list of VM identifiers
-           Returns a dictionary with:
-                vm_id:          #VIM id of this Virtual Machine
-                    status:     #Mandatory. Text with one of:
-                                #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
-                                #  OTHER (Vim reported other status not understood)
-                                #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running),
-                                #  BUILD (on building process), ERROR
-                                #  ACTIVE:NoMgmtIP (Active but any of its interface has an IP address
-                                #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
-                    vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
-                    interfaces: list with interface info. Each item a dictionary with:
-                        vim_info:         #Text with plain information obtained from vim (yaml.safe_dump)
-                        mac_address:      #Text format XX:XX:XX:XX:XX:XX
-                        vim_net_id:       #network id where this interface is connected, if provided at creation
-                        vim_interface_id: #interface/port VIM id
-                        ip_address:       #null, or text with IPv4, IPv6 address
-                        compute_node:     #identification of compute node where PF,VF interface is allocated
-                        pci:              #PCI address of the NIC that hosts the PF,VF
-                        vlan:             #physical VLAN used for VF
+        Params: the list of VM identifiers
+        Returns a dictionary with:
+            vm_id:          #VIM id of this Virtual Machine
+                status:     #Mandatory. Text with one of:
+                            #  DELETED (not found at vim)
+                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                            #  OTHER (Vim reported other status not understood)
+                            #  ERROR (VIM indicates an ERROR status)
+                            #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running),
+                            #  BUILD (on building process), ERROR
+                            #  ACTIVE:NoMgmtIP (Active but any of its interface has an IP address
+                            #
+                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
+                interfaces: list with interface info. Each item a dictionary with:
+                    vim_info:         #Text with plain information obtained from vim (yaml.safe_dump)
+                    mac_address:      #Text format XX:XX:XX:XX:XX:XX
+                    vim_net_id:       #network id where this interface is connected, if provided at creation
+                    vim_interface_id: #interface/port VIM id
+                    ip_address:       #null, or text with IPv4, IPv6 address
+                    compute_node:     #identification of compute node where PF,VF interface is allocated
+                    pci:              #PCI address of the NIC that hosts the PF,VF
+                    vlan:             #physical VLAN used for VF
         """
         raise VimConnNotImplemented("Should have implemented this")
 
@@ -623,7 +701,9 @@ class VimConnector():
         """
         raise VimConnNotImplemented("Should have implemented this")
 
-    def inject_user_key(self, ip_addr=None, user=None, key=None, ro_key=None, password=None):
+    def inject_user_key(
+        self, ip_addr=None, user=None, key=None, ro_key=None, password=None
+    ):
         """
         Inject a ssh public key in a VM
         Params:
@@ -635,35 +715,59 @@ class VimConnector():
         The function doesn't return a value:
         """
         if not ip_addr or not user:
-            raise VimConnNotSupportedException("All parameters should be different from 'None'")
+            raise VimConnNotSupportedException(
+                "All parameters should be different from 'None'"
+            )
         elif not ro_key and not password:
-            raise VimConnNotSupportedException("All parameters should be different from 'None'")
+            raise VimConnNotSupportedException(
+                "All parameters should be different from 'None'"
+            )
         else:
-            commands = {'mkdir -p ~/.ssh/', 'echo "{}" >> ~/.ssh/authorized_keys'.format(key),
-                        'chmod 644 ~/.ssh/authorized_keys', 'chmod 700 ~/.ssh/'}
+            commands = {
+                "mkdir -p ~/.ssh/",
+                'echo "{}" >> ~/.ssh/authorized_keys'.format(key),
+                "chmod 644 ~/.ssh/authorized_keys",
+                "chmod 700 ~/.ssh/",
+            }
             client = paramiko.SSHClient()
+
             try:
                 if ro_key:
                     pkey = paramiko.RSAKey.from_private_key(StringIO(ro_key))
                 else:
                     pkey = None
+
                 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                client.connect(ip_addr, username=user, password=password, pkey=pkey, timeout=10)
+                client.connect(
+                    ip_addr, username=user, password=password, pkey=pkey, timeout=10
+                )
+
                 for command in commands:
                     (i, o, e) = client.exec_command(command, timeout=10)
                     returncode = o.channel.recv_exit_status()
                     outerror = e.read()
+
                     if returncode != 0:
                         text = "run_command='{}' Error='{}'".format(command, outerror)
-                        raise VimConnUnexpectedResponse("Cannot inject ssh key in VM: '{}'".format(text))
+                        raise VimConnUnexpectedResponse(
+                            "Cannot inject ssh key in VM: '{}'".format(text)
+                        )
+
                         return
-            except (socket.error, paramiko.AuthenticationException, paramiko.SSHException) as message:
+            except (
+                socket.error,
+                paramiko.AuthenticationException,
+                paramiko.SSHException,
+            ) as message:
                 raise VimConnUnexpectedResponse(
-                    "Cannot inject ssh key in VM: '{}' - {}".format(ip_addr, str(message)))
+                    "Cannot inject ssh key in VM: '{}' - {}".format(
+                        ip_addr, str(message)
+                    )
+                )
+
                 return
 
-# Optional methods
-
+    # Optional methods
     def new_tenant(self, tenant_name, tenant_description):
         """Adds a new tenant to VIM with this name and description, this is done using admin_url if provided
         "tenant_name": string max lenght 64
@@ -672,7 +776,7 @@ class VimConnector():
         """
         raise VimConnNotImplemented("Should have implemented this")
 
-    def delete_tenant(self, tenant_id,):
+    def delete_tenant(self, tenant_id):
         """Delete a tenant from VIM
         tenant_id: returned VIM tenant_id on "new_tenant"
         Returns None on success. Raises and exception of failure. If tenant is not found raises VimConnNotFoundException
@@ -726,20 +830,20 @@ class VimConnector():
         raise VimConnNotImplemented("SFC support not implemented")
 
     def refresh_classifications_status(self, classification_list):
-        '''Get the status of the classifications
-           Params: the list of classification identifiers
-           Returns a dictionary with:
-                vm_id:          #VIM id of this classifier
-                    status:     #Mandatory. Text with one of:
-                                #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
-                                #  OTHER (Vim reported other status not understood)
-                                #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE,
-                                #  CREATING (on building process)
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
-                    vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
-        '''
+        """Get the status of the classifications
+        Params: the list of classification identifiers
+        Returns a dictionary with:
+            vm_id:          #VIM id of this classifier
+                status:     #Mandatory. Text with one of:
+                            #  DELETED (not found at vim)
+                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                            #  OTHER (Vim reported other status not understood)
+                            #  ERROR (VIM indicates an ERROR status)
+                            #  ACTIVE,
+                            #  CREATING (on building process)
+                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
+        """
         raise VimConnNotImplemented("Should have implemented this")
 
     def delete_classification(self, classification_id):
@@ -799,20 +903,20 @@ class VimConnector():
         raise VimConnNotImplemented("SFC support not implemented")
 
     def refresh_sfis_status(self, sfi_list):
-        '''Get the status of the service function instances
-           Params: the list of sfi identifiers
-           Returns a dictionary with:
-                vm_id:          #VIM id of this service function instance
-                    status:     #Mandatory. Text with one of:
-                                #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
-                                #  OTHER (Vim reported other status not understood)
-                                #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE,
-                                #  CREATING (on building process)
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
-                    vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
-        '''
+        """Get the status of the service function instances
+        Params: the list of sfi identifiers
+        Returns a dictionary with:
+            vm_id:          #VIM id of this service function instance
+                status:     #Mandatory. Text with one of:
+                            #  DELETED (not found at vim)
+                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                            #  OTHER (Vim reported other status not understood)
+                            #  ERROR (VIM indicates an ERROR status)
+                            #  ACTIVE,
+                            #  CREATING (on building process)
+                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
+        """
         raise VimConnNotImplemented("Should have implemented this")
 
     def new_sf(self, name, sfis, sfc_encap=True):
@@ -863,20 +967,20 @@ class VimConnector():
         raise VimConnNotImplemented("SFC support not implemented")
 
     def refresh_sfs_status(self, sf_list):
-        '''Get the status of the service functions
-           Params: the list of sf identifiers
-           Returns a dictionary with:
-                vm_id:          #VIM id of this service function
-                    status:     #Mandatory. Text with one of:
-                                #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
-                                #  OTHER (Vim reported other status not understood)
-                                #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE,
-                                #  CREATING (on building process)
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
-                    vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
-        '''
+        """Get the status of the service functions
+        Params: the list of sf identifiers
+        Returns a dictionary with:
+            vm_id:          #VIM id of this service function
+                status:     #Mandatory. Text with one of:
+                            #  DELETED (not found at vim)
+                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                            #  OTHER (Vim reported other status not understood)
+                            #  ERROR (VIM indicates an ERROR status)
+                            #  ACTIVE,
+                            #  CREATING (on building process)
+                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
+        """
         raise VimConnNotImplemented("Should have implemented this")
 
     def new_sfp(self, name, classifications, sfs, sfc_encap=True, spi=None):
@@ -924,20 +1028,20 @@ class VimConnector():
         raise VimConnNotImplemented("SFC support not implemented")
 
     def refresh_sfps_status(self, sfp_list):
-        '''Get the status of the service function path
-           Params: the list of sfp identifiers
-           Returns a dictionary with:
-                vm_id:          #VIM id of this service function path
-                    status:     #Mandatory. Text with one of:
-                                #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
-                                #  OTHER (Vim reported other status not understood)
-                                #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE,
-                                #  CREATING (on building process)
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
-                    vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)F
-        '''
+        """Get the status of the service function path
+        Params: the list of sfp identifiers
+        Returns a dictionary with:
+            vm_id:          #VIM id of this service function path
+                status:     #Mandatory. Text with one of:
+                            #  DELETED (not found at vim)
+                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                            #  OTHER (Vim reported other status not understood)
+                            #  ERROR (VIM indicates an ERROR status)
+                            #  ACTIVE,
+                            #  CREATING (on building process)
+                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)F
+        """
         raise VimConnNotImplemented("Should have implemented this")
 
     def delete_sfp(self, sfp_id):
@@ -946,8 +1050,7 @@ class VimConnector():
         """
         raise VimConnNotImplemented("SFC support not implemented")
 
-# NOT USED METHODS in current version. Deprecated
-
+    # NOT USED METHODS in current version. Deprecated
     @deprecated
     def host_vim2gui(self, host, server_dict):
         """Transform host dictionary from VIM format to GUI format,

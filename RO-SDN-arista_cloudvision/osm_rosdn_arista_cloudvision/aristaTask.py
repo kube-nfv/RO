@@ -48,6 +48,7 @@ class AristaCVPTask:
     def __apply_state(self, task, state):
         t_id = self.__get_id(task)
         self.cvpClientApi.add_note_to_task(t_id, "Executed by OSM")
+
         if state == "executed":
             return self.__execute_task(t_id)
         elif state == "cancelled":
@@ -64,33 +65,39 @@ class AristaCVPTask:
 
     def update_all_tasks(self, data):
         new_data = dict()
+
         for task_id in data.keys():
             res = self.cvpClientApi.get_task_by_id(task_id)
             new_data[task_id] = res
+
         return new_data
 
     def get_pending_tasks(self):
-        return self.cvpClientApi.get_tasks_by_status('Pending')
+        return self.cvpClientApi.get_tasks_by_status("Pending")
 
     def get_pending_tasks_old(self):
         taskList = []
-        tasksField = {'workOrderId': 'workOrderId',
-                      'workOrderState': 'workOrderState',
-                      'currentTaskName': 'currentTaskName',
-                      'description': 'description',
-                      'workOrderUserDefinedStatus':
-                      'workOrderUserDefinedStatus',
-                      'note': 'note',
-                      'taskStatus': 'taskStatus',
-                      'workOrderDetails': 'workOrderDetails'}
-        tasks = self.cvpClientApi.get_tasks_by_status('Pending')
+        tasksField = {
+            "workOrderId": "workOrderId",
+            "workOrderState": "workOrderState",
+            "currentTaskName": "currentTaskName",
+            "description": "description",
+            "workOrderUserDefinedStatus": "workOrderUserDefinedStatus",
+            "note": "note",
+            "taskStatus": "taskStatus",
+            "workOrderDetails": "workOrderDetails",
+        }
+        tasks = self.cvpClientApi.get_tasks_by_status("Pending")
+
         # Reduce task data to required fields
         for task in tasks:
             taskFacts = {}
             for field in task.keys():
                 if field in tasksField:
                     taskFacts[tasksField[field]] = task[field]
+
             taskList.append(taskFacts)
+
         return taskList
 
     def task_action(self, tasks, wait, state):
@@ -118,15 +125,18 @@ class AristaCVPTask:
         now = time.time()
         while (now - start) < wait:
             data = self.update_all_tasks(data)
+
             if all([self.__terminal(self.__get_state(t)) for t in data.values()]):
                 break
+
             time.sleep(1)
             now = time.time()
 
         if wait:
             for i, task in data.items():
                 if not self.__terminal(self.__get_state(task)):
-                    warnings.append("Task {} has not completed in {} seconds".
-                                    format(i, wait))
+                    warnings.append(
+                        "Task {} has not completed in {} seconds".format(i, wait)
+                    )
 
         return changed, data, warnings

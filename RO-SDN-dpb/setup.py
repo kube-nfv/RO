@@ -30,18 +30,20 @@ osm-ro plugin for dpb SDN
 
 setup(
     name=_name,
-    description='OSM ro sdn plugin for dpb',
+    description="OSM ro sdn plugin for dpb",
     long_description=README,
-    version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
+    version_command=(
+        "git describe --match v* --tags --long --dirty",
+        "pep440-git-full",
+    ),
     # version=VERSION,
     # python_requires='>3.5.0',
-    author='ETSI OSM',
-    author_email='OSM_TECH@LIST.ETSI.ORG',
-    maintainer='ETSI OSM',
-    maintainer_email='OSM_TECH@LIST.ETSI.ORG',
-    url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
-    license='Apache 2.0',
-
+    author="ETSI OSM",
+    author_email="OSM_TECH@LIST.ETSI.ORG'",
+    maintainer="ETSI OSM",
+    maintainer_email="OSM_TECH@LIST.ETSI.ORG",
+    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
+    license="Apache 2.0",
     packages=[_name],
     include_package_data=True,
     install_requires=[
@@ -49,8 +51,8 @@ setup(
         "requests",
         "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
     ],
-    setup_requires=['setuptools-version-command'],
+    setup_requires=["setuptools-version-command"],
     entry_points={
-        'osm_rosdn.plugins': ['rosdn_dpb = osm_rosdn_dpb.wimconn_dpb:DpbConnector'],
+        "osm_rosdn.plugins": ["rosdn_dpb = osm_rosdn_dpb.wimconn_dpb:DpbConnector"],
     },
 )

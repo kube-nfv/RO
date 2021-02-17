@@ -25,15 +25,19 @@
 """
 vimconnector implements all the methods to interact with OpenNebula using the XML-RPC API.
 """
-__author__ = "Jose Maria Carmona Perez,Juan Antonio Hernando Labajo, Emilio Abraham Garrido Garcia,Alberto Florez " \
-             "Pages, Andres Pozo Munoz, Santiago Perez Marin, Onlife Networks Telefonica I+D Product Innovation "
+__author__ = (
+    "Jose Maria Carmona Perez,Juan Antonio Hernando Labajo, Emilio Abraham Garrido Garcia,Alberto Florez "
+    "Pages, Andres Pozo Munoz, Santiago Perez Marin, Onlife Networks Telefonica I+D Product Innovation "
+)
 __date__ = "$13-dec-2017 11:09:29$"
 
 from osm_ro_plugin import vimconn
 import logging
 import requests
+
 # import logging
 import oca
+
 # import untangle
 import math
 import random
@@ -41,9 +45,20 @@ import pyone
 
 
 class vimconnector(vimconn.VimConnector):
-    def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None,
-                 log_level="DEBUG", config={}, persistent_info={}):
-
+    def __init__(
+        self,
+        uuid,
+        name,
+        tenant_id,
+        tenant_name,
+        url,
+        url_admin=None,
+        user=None,
+        passwd=None,
+        log_level="DEBUG",
+        config={},
+        persistent_info={},
+    ):
         """Constructor of VIM
         Params:
             'uuid': id asigned to this VIM
@@ -61,32 +76,46 @@ class vimconnector(vimconn.VimConnector):
         Returns: Raise an exception is some needed parameter is missing, but it must not do any connectivity
             check against the VIM
         """
+        vimconn.VimConnector.__init__(
+            self,
+            uuid,
+            name,
+            tenant_id,
+            tenant_name,
+            url,
+            url_admin,
+            user,
+            passwd,
+            log_level,
+            config,
+        )
 
-        vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
-                                      config)
-
-        self.logger = logging.getLogger('ro.vim.openstack')
+        self.logger = logging.getLogger("ro.vim.openstack")
 
     def _new_one_connection(self):
-        return pyone.OneServer(self.url, session=self.user + ':' + self.passwd)
+        return pyone.OneServer(self.url, session=self.user + ":" + self.passwd)
 
     def new_tenant(self, tenant_name, tenant_description):
-        # '''Adds a new tenant to VIM with this name and description, returns the tenant identifier'''
+        # """Adds a new tenant to VIM with this name and description, returns the tenant identifier"""
         try:
-            client = oca.Client(self.user + ':' + self.passwd, self.url)
+            client = oca.Client(self.user + ":" + self.passwd, self.url)
             group_list = oca.GroupPool(client)
             user_list = oca.UserPool(client)
             group_list.info()
             user_list.info()
             create_primarygroup = 1
+
             # create group-tenant
             for group in group_list:
                 if str(group.name) == str(tenant_name):
                     create_primarygroup = 0
                     break
+
             if create_primarygroup == 1:
                 oca.Group.allocate(client, tenant_name)
+
             group_list.info()
+
             # set to primary_group the tenant_group and oneadmin to secondary_group
             for group in group_list:
                 if str(group.name) == str(tenant_name):
@@ -97,27 +126,34 @@ class vimconnector(vimconn.VimConnector):
                             else:
                                 self._add_secondarygroup(user.id, group.id)
                                 user.chgrp(group.id)
+
                                 return str(group.id)
         except Exception as e:
             self.logger.error("Create new tenant error: " + str(e))
+
             raise vimconn.VimConnException(e)
 
     def delete_tenant(self, tenant_id):
         """Delete a tenant from VIM. Returns the old tenant identifier"""
         try:
-            client = oca.Client(self.user + ':' + self.passwd, self.url)
+            client = oca.Client(self.user + ":" + self.passwd, self.url)
             group_list = oca.GroupPool(client)
             user_list = oca.UserPool(client)
             group_list.info()
             user_list.info()
+
             for group in group_list:
                 if str(group.id) == str(tenant_id):
                     for user in user_list:
                         if str(user.name) == str(self.user):
                             self._delete_secondarygroup(user.id, group.id)
                             group.delete(client)
+
                     return None
-            raise vimconn.VimConnNotFoundException("Group {} not found".format(tenant_id))
+
+            raise vimconn.VimConnNotFoundException(
+                "Group {} not found".format(tenant_id)
+            )
         except Exception as e:
             self.logger.error("Delete tenant " + str(tenant_id) + " error: " + str(e))
             raise vimconn.VimConnException(e)
@@ -138,7 +174,9 @@ class vimconnector(vimconn.VimConnector):
                    <value><int>{}</int></value>\
                    </param>\
                    </params>\
-                   </methodCall>'.format(self.user, self.passwd, (str(id_user)), (str(id_group)))
+                   </methodCall>'.format(
+            self.user, self.passwd, (str(id_user)), (str(id_group))
+        )
         requests.post(self.url, params)
 
     def _delete_secondarygroup(self, id_user, id_group):
@@ -156,10 +194,19 @@ class vimconnector(vimconn.VimConnector):
                    <value><int>{}</int></value>\
                    </param>\
                    </params>\
-                   </methodCall>'.format(self.user, self.passwd, (str(id_user)), (str(id_group)))
+                   </methodCall>'.format(
+            self.user, self.passwd, (str(id_user)), (str(id_group))
+        )
         requests.post(self.url, params)
 
-    def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
+    def new_network(
+        self,
+        net_name,
+        net_type,
+        ip_profile=None,
+        shared=False,
+        provider_network_profile=None,
+    ):
         """Adds a tenant network to VIM
         Params:
             'net_name': name of the network
@@ -183,27 +230,37 @@ class vimconnector(vimconn.VimConnector):
             Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
         """
-
         # oca library method cannot be used in this case (problem with cluster parameters)
         try:
             vlan = None
+
             if provider_network_profile:
                 vlan = provider_network_profile.get("segmentation-id")
+
             created_items = {}
             one = self._new_one_connection()
             size = "254"
+
             if ip_profile is None:
                 subnet_rand = random.randint(0, 255)
                 ip_start = "192.168.{}.1".format(subnet_rand)
             else:
                 index = ip_profile["subnet_address"].find("/")
                 ip_start = ip_profile["subnet_address"][:index]
+
                 if "dhcp_count" in ip_profile and ip_profile["dhcp_count"] is not None:
                     size = str(ip_profile["dhcp_count"])
-                elif "dhcp_count" not in ip_profile and ip_profile["ip_version"] == "IPv4":
-                    prefix = ip_profile["subnet_address"][index + 1:]
+                elif (
+                    "dhcp_count" not in ip_profile
+                    and ip_profile["ip_version"] == "IPv4"
+                ):
+                    prefix = ip_profile["subnet_address"][index + 1 :]
                     size = int(math.pow(2, 32 - prefix))
-                if "dhcp_start_address" in ip_profile and ip_profile["dhcp_start_address"] is not None:
+
+                if (
+                    "dhcp_start_address" in ip_profile
+                    and ip_profile["dhcp_start_address"] is not None
+                ):
                     ip_start = str(ip_profile["dhcp_start_address"])
                 # if ip_profile["ip_version"] == "IPv6":
                 #     ip_prefix_type = "GLOBAL_PREFIX"
@@ -212,29 +269,27 @@ class vimconnector(vimconn.VimConnector):
                 vlan_id = vlan
             else:
                 vlan_id = str(random.randint(100, 4095))
+
             # if "internal" in net_name:
             # OpenNebula not support two networks with same name
             random_net_name = str(random.randint(1, 1000000))
             net_name = net_name + random_net_name
-            net_id = one.vn.allocate({
-                'NAME': net_name,
-                'VN_MAD': '802.1Q',
-                'PHYDEV': self.config["network"]["phydev"],
-                'VLAN_ID': vlan_id
-            }, self.config["cluster"]["id"])
-            arpool = {
-                'AR_POOL': {
-                    'AR': {
-                        'TYPE': 'IP4',
-                        'IP': ip_start,
-                        'SIZE': size
-                    }
-                }
-            }
+            net_id = one.vn.allocate(
+                {
+                    "NAME": net_name,
+                    "VN_MAD": "802.1Q",
+                    "PHYDEV": self.config["network"]["phydev"],
+                    "VLAN_ID": vlan_id,
+                },
+                self.config["cluster"]["id"],
+            )
+            arpool = {"AR_POOL": {"AR": {"TYPE": "IP4", "IP": ip_start, "SIZE": size}}}
             one.vn.add_ar(net_id, arpool)
+
             return net_id, created_items
         except Exception as e:
             self.logger.error("Create new network error: " + str(e))
+
             raise vimconn.VimConnException(e)
 
     def get_network_list(self, filter_dict={}):
@@ -257,26 +312,36 @@ class vimconnector(vimconn.VimConnector):
         List can be empty if no network map the filter_dict. Raise an exception only upon VIM connectivity,
             authorization, or some other unspecific error
         """
-
         try:
             one = self._new_one_connection()
             net_pool = one.vnpool.info(-2, -1, -1).VNET
             response = []
+
             if "name" in filter_dict:
                 network_name_filter = filter_dict["name"]
             else:
                 network_name_filter = None
+
             if "id" in filter_dict:
                 network_id_filter = filter_dict["id"]
             else:
                 network_id_filter = None
+
             for network in net_pool:
-                if network.NAME == network_name_filter or str(network.ID) == str(network_id_filter):
-                    net_dict = {"name": network.NAME, "id": str(network.ID), "status": "ACTIVE"}
+                if network.NAME == network_name_filter or str(network.ID) == str(
+                    network_id_filter
+                ):
+                    net_dict = {
+                        "name": network.NAME,
+                        "id": str(network.ID),
+                        "status": "ACTIVE",
+                    }
                     response.append(net_dict)
+
             return response
         except Exception as e:
             self.logger.error("Get network list error: " + str(e))
+
             raise vimconn.VimConnException(e)
 
     def get_network(self, net_id):
@@ -293,18 +358,23 @@ class vimconnector(vimconn.VimConnector):
             one = self._new_one_connection()
             net_pool = one.vnpool.info(-2, -1, -1).VNET
             net = {}
+
             for network in net_pool:
                 if str(network.ID) == str(net_id):
-                    net['id'] = network.ID
-                    net['name'] = network.NAME
-                    net['status'] = "ACTIVE"
+                    net["id"] = network.ID
+                    net["name"] = network.NAME
+                    net["status"] = "ACTIVE"
                     break
+
             if net:
                 return net
             else:
-                raise vimconn.VimConnNotFoundException("Network {} not found".format(net_id))
+                raise vimconn.VimConnNotFoundException(
+                    "Network {} not found".format(net_id)
+                )
         except Exception as e:
             self.logger.error("Get network " + str(net_id) + " error): " + str(e))
+
             raise vimconn.VimConnException(e)
 
     def delete_network(self, net_id, created_items=None):
@@ -315,12 +385,15 @@ class vimconnector(vimconn.VimConnector):
         Returns the network identifier or raises an exception upon error or when network is not found
         """
         try:
-
             one = self._new_one_connection()
             one.vn.delete(int(net_id))
+
             return net_id
         except Exception as e:
-            self.logger.error("Delete network " + str(net_id) + "error: network not found" + str(e))
+            self.logger.error(
+                "Delete network " + str(net_id) + "error: network not found" + str(e)
+            )
+
             raise vimconn.VimConnException(e)
 
     def refresh_nets_status(self, net_list):
@@ -344,25 +417,30 @@ class vimconnector(vimconn.VimConnector):
         try:
             for net_id in net_list:
                 net = {}
+
                 try:
                     net_vim = self.get_network(net_id)
                     net["status"] = net_vim["status"]
                     net["vim_info"] = None
                 except vimconn.VimConnNotFoundException as e:
                     self.logger.error("Exception getting net status: {}".format(str(e)))
-                    net['status'] = "DELETED"
-                    net['error_msg'] = str(e)
+                    net["status"] = "DELETED"
+                    net["error_msg"] = str(e)
                 except vimconn.VimConnException as e:
                     self.logger.error(e)
                     net["status"] = "VIM_ERROR"
                     net["error_msg"] = str(e)
+
                 net_dict[net_id] = net
+
             return net_dict
         except vimconn.VimConnException as e:
             self.logger.error(e)
+
             for k in net_dict:
                 net_dict[k]["status"] = "VIM_ERROR"
                 net_dict[k]["error_msg"] = str(e)
+
             return net_dict
 
     def get_flavor(self, flavor_id):  # Esta correcto
@@ -371,14 +449,18 @@ class vimconnector(vimconn.VimConnector):
         Raises an exception upon error or if not found
         """
         try:
-
             one = self._new_one_connection()
             template = one.template.info(int(flavor_id))
+
             if template is not None:
-                return {'id': template.ID, 'name': template.NAME}
-            raise vimconn.VimConnNotFoundException("Flavor {} not found".format(flavor_id))
+                return {"id": template.ID, "name": template.NAME}
+
+            raise vimconn.VimConnNotFoundException(
+                "Flavor {} not found".format(flavor_id)
+            )
         except Exception as e:
             self.logger.error("get flavor " + str(flavor_id) + " error: " + str(e))
+
             raise vimconn.VimConnException(e)
 
     def new_flavor(self, flavor_data):
@@ -400,47 +482,48 @@ class vimconnector(vimconn.VimConnector):
                 is_public:
                  #TODO to concrete
         Returns the flavor identifier"""
-
-        disk_size = str(int(flavor_data["disk"])*1024)
+        disk_size = str(int(flavor_data["disk"]) * 1024)
 
         try:
             one = self._new_one_connection()
-            template_id = one.template.allocate({
-                'TEMPLATE': {
-                    'NAME': flavor_data["name"],
-                    'CPU': flavor_data["vcpus"],
-                    'VCPU': flavor_data["vcpus"],
-                    'MEMORY': flavor_data["ram"],
-                    'DISK': {
-                        'SIZE': disk_size
-                    },
-                    'CONTEXT': {
-                        'NETWORK': "YES",
-                        'SSH_PUBLIC_KEY': '$USER[SSH_PUBLIC_KEY]'
-                    },
-                    'GRAPHICS': {
-                        'LISTEN': '0.0.0.0',
-                        'TYPE': 'VNC'
-                    },
-                    'CLUSTER_ID': self.config["cluster"]["id"]
+            template_id = one.template.allocate(
+                {
+                    "TEMPLATE": {
+                        "NAME": flavor_data["name"],
+                        "CPU": flavor_data["vcpus"],
+                        "VCPU": flavor_data["vcpus"],
+                        "MEMORY": flavor_data["ram"],
+                        "DISK": {"SIZE": disk_size},
+                        "CONTEXT": {
+                            "NETWORK": "YES",
+                            "SSH_PUBLIC_KEY": "$USER[SSH_PUBLIC_KEY]",
+                        },
+                        "GRAPHICS": {"LISTEN": "0.0.0.0", "TYPE": "VNC"},
+                        "CLUSTER_ID": self.config["cluster"]["id"],
+                    }
                 }
-            })
-            return template_id
+            )
 
+            return template_id
         except Exception as e:
             self.logger.error("Create new flavor error: " + str(e))
+
             raise vimconn.VimConnException(e)
 
     def delete_flavor(self, flavor_id):
-        """ Deletes a tenant flavor from VIM
-            Returns the old flavor_id
+        """Deletes a tenant flavor from VIM
+        Returns the old flavor_id
         """
         try:
             one = self._new_one_connection()
             one.template.delete(int(flavor_id), False)
+
             return flavor_id
         except Exception as e:
-            self.logger.error("Error deleting flavor " + str(flavor_id) + ". Flavor not found")
+            self.logger.error(
+                "Error deleting flavor " + str(flavor_id) + ". Flavor not found"
+            )
+
             raise vimconn.VimConnException(e)
 
     def get_image_list(self, filter_dict={}):
@@ -458,25 +541,42 @@ class vimconnector(vimconn.VimConnector):
             one = self._new_one_connection()
             image_pool = one.imagepool.info(-2, -1, -1).IMAGE
             images = []
+
             if "name" in filter_dict:
                 image_name_filter = filter_dict["name"]
             else:
                 image_name_filter = None
+
             if "id" in filter_dict:
                 image_id_filter = filter_dict["id"]
             else:
                 image_id_filter = None
+
             for image in image_pool:
-                if str(image_name_filter) == str(image.NAME) or str(image.ID) == str(image_id_filter):
+                if str(image_name_filter) == str(image.NAME) or str(image.ID) == str(
+                    image_id_filter
+                ):
                     images_dict = {"name": image.NAME, "id": str(image.ID)}
                     images.append(images_dict)
+
             return images
         except Exception as e:
             self.logger.error("Get image list error: " + str(e))
             raise vimconn.VimConnException(e)
 
-    def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None, disk_list=None,
-                       availability_zone_index=None, availability_zone_list=None):
+    def new_vminstance(
+        self,
+        name,
+        description,
+        start,
+        image_id,
+        flavor_id,
+        net_list,
+        cloud_config=None,
+        disk_list=None,
+        availability_zone_index=None,
+        availability_zone_list=None,
+    ):
         """
         Adds a VM instance to VIM
         :param name:
@@ -537,7 +637,11 @@ class vimconnector(vimconn.VimConnector):
             as not present.
         """
         self.logger.debug(
-            "new_vminstance input: image='{}' flavor='{}' nics='{}'".format(image_id, flavor_id, str(net_list)))
+            "new_vminstance input: image='{}' flavor='{}' nics='{}'".format(
+                image_id, flavor_id, str(net_list)
+            )
+        )
+
         try:
             one = self._new_one_connection()
             template_vim = one.template.info(int(flavor_id), True)
@@ -545,34 +649,48 @@ class vimconnector(vimconn.VimConnector):
 
             one = self._new_one_connection()
             template_updated = ""
+
             for net in net_list:
                 net_in_vim = one.vn.info(int(net["net_id"]))
                 net["vim_id"] = str(net_in_vim.ID)
                 network = 'NIC = [NETWORK = "{}",NETWORK_UNAME = "{}" ]'.format(
-                    net_in_vim.NAME, net_in_vim.UNAME)
+                    net_in_vim.NAME, net_in_vim.UNAME
+                )
                 template_updated += network
 
-            template_updated += "DISK = [ IMAGE_ID = {},\n  SIZE = {}]".format(image_id, disk_size)
+            template_updated += "DISK = [ IMAGE_ID = {},\n  SIZE = {}]".format(
+                image_id, disk_size
+            )
 
             if isinstance(cloud_config, dict):
                 if cloud_config.get("key-pairs"):
                     context = 'CONTEXT = [\n  NETWORK = "YES",\n  SSH_PUBLIC_KEY = "'
+
                     for key in cloud_config["key-pairs"]:
-                        context += key + '\n'
+                        context += key + "\n"
+
                     # if False:
                     #     context += '"\n  USERNAME = '
                     context += '"]'
                     template_updated += context
 
-            vm_instance_id = one.template.instantiate(int(flavor_id), name, False, template_updated)
+            vm_instance_id = one.template.instantiate(
+                int(flavor_id), name, False, template_updated
+            )
             self.logger.info(
-                "Instanciating in OpenNebula a new VM name:{} id:{}".format(name, flavor_id))
+                "Instanciating in OpenNebula a new VM name:{} id:{}".format(
+                    name, flavor_id
+                )
+            )
+
             return str(vm_instance_id), None
         except pyone.OneNoExistsException as e:
             self.logger.error("Network with id " + str(e) + " not found: " + str(e))
+
             raise vimconn.VimConnNotFoundException(e)
         except Exception as e:
             self.logger.error("Create new vm instance error: " + str(e))
+
             raise vimconn.VimConnException(e)
 
     def get_vminstance(self, vm_id):
@@ -580,9 +698,13 @@ class vimconnector(vimconn.VimConnector):
         try:
             one = self._new_one_connection()
             vm = one.vm.info(int(vm_id))
+
             return vm
         except Exception as e:
-            self.logger.error("Getting vm instance error: " + str(e) + ": VM Instance not found")
+            self.logger.error(
+                "Getting vm instance error: " + str(e) + ": VM Instance not found"
+            )
+
             raise vimconn.VimConnException(e)
 
     def delete_vminstance(self, vm_id, created_items=None):
@@ -597,76 +719,87 @@ class vimconnector(vimconn.VimConnector):
             one = self._new_one_connection()
             one.vm.recover(int(vm_id), 3)
             vm = None
+
             while True:
                 if vm is not None and vm.LCM_STATE == 0:
                     break
                 else:
                     vm = one.vm.info(int(vm_id))
-
         except pyone.OneNoExistsException:
-            self.logger.info("The vm " + str(vm_id) + " does not exist or is already deleted")
-            raise vimconn.VimConnNotFoundException("The vm {} does not exist or is already deleted".format(vm_id))
+            self.logger.info(
+                "The vm " + str(vm_id) + " does not exist or is already deleted"
+            )
+
+            raise vimconn.VimConnNotFoundException(
+                "The vm {} does not exist or is already deleted".format(vm_id)
+            )
         except Exception as e:
             self.logger.error("Delete vm instance " + str(vm_id) + " error: " + str(e))
             raise vimconn.VimConnException(e)
 
     def refresh_vms_status(self, vm_list):
         """Get the status of the virtual machines and their interfaces/ports
-           Params: the list of VM identifiers
-           Returns a dictionary with:
-                vm_id:          #VIM id of this Virtual Machine
-                    status:     #Mandatory. Text with one of:
-                                #  DELETED (not found at vim)
-                                #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
-                                #  OTHER (Vim reported other status not understood)
-                                #  ERROR (VIM indicates an ERROR status)
-                                #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running),
-                                #  BUILD (on building process), ERROR
-                                #  ACTIVE:NoMgmtIP (Active but any of its interface has an IP address
-                                #
-                    error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
-                    vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
-                    interfaces: list with interface info. Each item a dictionary with:
-                        vim_info:         #Text with plain information obtained from vim (yaml.safe_dump)
-                        mac_address:      #Text format XX:XX:XX:XX:XX:XX
-                        vim_net_id:       #network id where this interface is connected, if provided at creation
-                        vim_interface_id: #interface/port VIM id
-                        ip_address:       #null, or text with IPv4, IPv6 address
-                        compute_node:     #identification of compute node where PF,VF interface is allocated
-                        pci:              #PCI address of the NIC that hosts the PF,VF
-                        vlan:             #physical VLAN used for VF
+        Params: the list of VM identifiers
+        Returns a dictionary with:
+            vm_id:          #VIM id of this Virtual Machine
+                status:     #Mandatory. Text with one of:
+                            #  DELETED (not found at vim)
+                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
+                            #  OTHER (Vim reported other status not understood)
+                            #  ERROR (VIM indicates an ERROR status)
+                            #  ACTIVE, PAUSED, SUSPENDED, INACTIVE (not running),
+                            #  BUILD (on building process), ERROR
+                            #  ACTIVE:NoMgmtIP (Active but any of its interface has an IP address
+                            #
+                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
+                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
+                interfaces: list with interface info. Each item a dictionary with:
+                    vim_info:         #Text with plain information obtained from vim (yaml.safe_dump)
+                    mac_address:      #Text format XX:XX:XX:XX:XX:XX
+                    vim_net_id:       #network id where this interface is connected, if provided at creation
+                    vim_interface_id: #interface/port VIM id
+                    ip_address:       #null, or text with IPv4, IPv6 address
+                    compute_node:     #identification of compute node where PF,VF interface is allocated
+                    pci:              #PCI address of the NIC that hosts the PF,VF
+                    vlan:             #physical VLAN used for VF
         """
         vm_dict = {}
         try:
             for vm_id in vm_list:
                 vm = {}
+
                 if self.get_vminstance(vm_id) is not None:
                     vm_element = self.get_vminstance(vm_id)
                 else:
                     self.logger.info("The vm " + str(vm_id) + " does not exist.")
-                    vm['status'] = "DELETED"
-                    vm['error_msg'] = ("The vm " + str(vm_id) + " does not exist.")
+                    vm["status"] = "DELETED"
+                    vm["error_msg"] = "The vm " + str(vm_id) + " does not exist."
                     continue
+
                 vm["vim_info"] = None
                 vm_status = vm_element.LCM_STATE
+
                 if vm_status == 3:
-                    vm['status'] = "ACTIVE"
+                    vm["status"] = "ACTIVE"
                 elif vm_status == 36:
-                    vm['status'] = "ERROR"
-                    vm['error_msg'] = "VM failure"
+                    vm["status"] = "ERROR"
+                    vm["error_msg"] = "VM failure"
                 else:
-                    vm['status'] = "BUILD"
+                    vm["status"] = "BUILD"
 
                 if vm_element is not None:
                     interfaces = self._get_networks_vm(vm_element)
                     vm["interfaces"] = interfaces
+
                 vm_dict[vm_id] = vm
+
             return vm_dict
         except Exception as e:
             self.logger.error(e)
             for k in vm_dict:
                 vm_dict[k]["status"] = "VIM_ERROR"
                 vm_dict[k]["error_msg"] = str(e)
+
             return vm_dict
 
     def _get_networks_vm(self, vm_element):
@@ -674,24 +807,40 @@ class vimconnector(vimconn.VimConnector):
         try:
             if isinstance(vm_element.TEMPLATE["NIC"], list):
                 for net in vm_element.TEMPLATE["NIC"]:
-                    interface = {'vim_info': None, "mac_address": str(net["MAC"]), "vim_net_id": str(net["NETWORK_ID"]),
-                                 "vim_interface_id": str(net["NETWORK_ID"])}
+                    interface = {
+                        "vim_info": None,
+                        "mac_address": str(net["MAC"]),
+                        "vim_net_id": str(net["NETWORK_ID"]),
+                        "vim_interface_id": str(net["NETWORK_ID"]),
+                    }
+
                     # maybe it should be 2 different keys for ip_address if an interface has ipv4 and ipv6
-                    if 'IP' in net:
+                    if "IP" in net:
                         interface["ip_address"] = str(net["IP"])
-                    if 'IP6_GLOBAL' in net:
+
+                    if "IP6_GLOBAL" in net:
                         interface["ip_address"] = str(net["IP6_GLOBAL"])
+
                     interfaces.append(interface)
             else:
                 net = vm_element.TEMPLATE["NIC"]
-                interface = {'vim_info': None, "mac_address": str(net["MAC"]), "vim_net_id": str(net["NETWORK_ID"]),
-                             "vim_interface_id": str(net["NETWORK_ID"])}
+                interface = {
+                    "vim_info": None,
+                    "mac_address": str(net["MAC"]),
+                    "vim_net_id": str(net["NETWORK_ID"]),
+                    "vim_interface_id": str(net["NETWORK_ID"]),
+                }
+
                 # maybe it should be 2 different keys for ip_address if an interface has ipv4 and ipv6
-                if 'IP' in net:
+                if "IP" in net:
                     interface["ip_address"] = str(net["IP"])
-                if 'IP6_GLOBAL' in net:
+
+                if "IP6_GLOBAL" in net:
                     interface["ip_address"] = str(net["IP6_GLOBAL"])
+
                 interfaces.append(interface)
             return interfaces
         except Exception:
-            self.logger.error("Error getting vm interface_information of vm_id: " + str(vm_element.ID))
+            self.logger.error(
+                "Error getting vm interface_information of vm_id: " + str(vm_element.ID)
+            )

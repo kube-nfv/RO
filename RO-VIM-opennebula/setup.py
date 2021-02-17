@@ -31,28 +31,32 @@ osm-ro pluging for opennebula VIM
 
 setup(
     name=_name,
-    description='OSM ro vim plugin for opennebula',
+    description="OSM ro vim plugin for opennebula",
     long_description=README,
-    version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
+    version_command=(
+        "git describe --match v* --tags --long --dirty",
+        "pep440-git-full",
+    ),
     # version=VERSION,
-    # python_requires='>3.5.0',
-    author='ETSI OSM',
-    author_email='OSM_TECH@LIST.ETSI.ORG',
-    maintainer='ETSI OSM',
-    maintainer_email='OSM_TECH@LIST.ETSI.ORG',
-    url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
-    license='Apache 2.0',
-
+    # python_requires=">3.5.0",
+    author="ETSI OSM",
+    author_email="OSM_TECH@LIST.ETSI.ORG",
+    maintainer="ETSI OSM",
+    maintainer_email="OSM_TECH@LIST.ETSI.ORG",
+    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
+    license="Apache 2.0",
     packages=[_name],
     include_package_data=True,
     install_requires=[
         "requests",
         "netaddr",
         "PyYAML",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
     ],
-    setup_requires=['setuptools-version-command'],
+    setup_requires=["setuptools-version-command"],
     entry_points={
-        'osm_rovim.plugins': ['rovim_opennebula = osm_rovim_opennebula.vimconn_opennebula:vimconnector'],
+        "osm_rovim.plugins": [
+            "rovim_opennebula = osm_rovim_opennebula.vimconn_opennebula:vimconnector"
+        ],
     },
 )

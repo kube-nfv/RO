@@ -30,26 +30,30 @@ osm-ro plugin for onos SDN using pre-computed openflow rules
 
 setup(
     name=_name,
-    description='OSM RO plugin for SDN with onos openflow rules',
+    description="OSM RO plugin for SDN with onos openflow rules",
     long_description=README,
-    version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
+    version_command=(
+        "git describe --match v* --tags --long --dirty",
+        "pep440-git-full",
+    ),
     # version=VERSION,
     # python_requires='>3.5.0',
-    author='ETSI OSM',
-    author_email='alfonso.tiernosepulveda@telefonica.com',
-    maintainer='Alfonso Tierno',
-    maintainer_email='alfonso.tiernosepulveda@telefonica.com',
-    url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
-    license='Apache 2.0',
-
+    author="ETSI OSM",
+    author_email="alfonso.tiernosepulveda@telefonica.com",
+    maintainer="Alfonso Tierno",
+    maintainer_email="alfonso.tiernosepulveda@telefonica.com",
+    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
+    license="Apache 2.0",
     packages=[_name],
     include_package_data=True,
     install_requires=[
         "requests",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
     ],
-    setup_requires=['setuptools-version-command'],
+    setup_requires=["setuptools-version-command"],
     entry_points={
-        'osm_rosdn.plugins': ['rosdn_onosof = osm_rosdn_onosof.sdnconn_onosof:SdnConnectorOnosOf'],
+        "osm_rosdn.plugins": [
+            "rosdn_onosof = osm_rosdn_onosof.sdnconn_onosof:SdnConnectorOnosOf"
+        ],
     },
 )
