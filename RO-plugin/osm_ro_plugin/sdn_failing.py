@@ -47,6 +47,7 @@ class SdnFailingConnector(object):
     This way we can make sure that all the other parts of the program will work
     but the user will have all the information available to fix the problem.
     """
+
     def __init__(self, error_msg):
         self.error_msg = error_msg
 
@@ -57,26 +58,34 @@ class SdnFailingConnector(object):
         raise Exception(self.error_msg)
 
     def check_credentials(self):
-        raise SdnConnectorError('Impossible to use WIM:\n' + self.error_msg)
+        raise SdnConnectorError("Impossible to use WIM:\n" + self.error_msg)
 
     def get_connectivity_service_status(self, service_uuid, _conn_info=None):
-        raise SdnConnectorError('Impossible to retrieve status for {}: {}'
-                                .format(service_uuid, self.error_msg))
+        raise SdnConnectorError(
+            "Impossible to retrieve status for {}: {}".format(
+                service_uuid, self.error_msg
+            )
+        )
 
     def create_connectivity_service(self, service_uuid, *args, **kwargs):
-        raise SdnConnectorError('Impossible to create connectivity: {}'
-                                .format(self.error_msg))
+        raise SdnConnectorError(
+            "Impossible to create connectivity: {}".format(self.error_msg)
+        )
 
     def delete_connectivity_service(self, service_uuid, _conn_info=None):
-        raise SdnConnectorError('Impossible to delete {}: {}'
-                                .format(service_uuid, self.error_msg))
+        raise SdnConnectorError(
+            "Impossible to delete {}: {}".format(service_uuid, self.error_msg)
+        )
 
     def edit_connectivity_service(self, service_uuid, *args, **kwargs):
-        raise SdnConnectorError('Impossible to change connection {}: {}'
-                                .format(service_uuid, self.error_msg))
+        raise SdnConnectorError(
+            "Impossible to change connection {}: {}".format(
+                service_uuid, self.error_msg
+            )
+        )
 
     def clear_all_connectivity_services(self):
-        raise SdnConnectorError('Impossible to use WIM: {}'.format(self.error_msg))
+        raise SdnConnectorError("Impossible to use WIM: {}".format(self.error_msg))
 
     def get_all_active_connectivity_services(self):
-        raise SdnConnectorError('Impossible to use WIM: {}'.format(self.error_msg))
+        raise SdnConnectorError("Impossible to use WIM: {}".format(self.error_msg))

@@ -54,10 +54,10 @@ interface {interface}
             switchport_def = self._int_SRIOV.format(service=s_type, vlan_id=vlan_id)
         else:
             switchport_def = self._int_PASSTROUGH.format(vlan_id=vlan_id)
-        return self._basic_int.format(uuid=uuid,
-                                      interface=interface,
-                                      type=i_type,
-                                      switchport_def=switchport_def)
+
+        return self._basic_int.format(
+            uuid=uuid, interface=interface, type=i_type, switchport_def=switchport_def
+        )
 
     def getElan_sriov(self, uuid, interface, vlan_id, index):
         return self._get_interface(uuid, interface, vlan_id, "ELAN", index, "trunk")
@@ -66,10 +66,14 @@ interface {interface}
         return self._get_interface(uuid, interface, vlan_id, "ELINE", index, "trunk")
 
     def getElan_passthrough(self, uuid, interface, vlan_id, index):
-        return self._get_interface(uuid, interface, vlan_id, "ELAN", index, "dot1q-tunnel")
+        return self._get_interface(
+            uuid, interface, vlan_id, "ELAN", index, "dot1q-tunnel"
+        )
 
     def getEline_passthrough(self, uuid, interface, vlan_id, index):
-        return self._get_interface(uuid, interface, vlan_id, "ELINE", index, "dot1q-tunnel")
+        return self._get_interface(
+            uuid, interface, vlan_id, "ELINE", index, "dot1q-tunnel"
+        )
 
     _basic_vlan = """
 vlan {vlan}
@@ -92,12 +96,21 @@ vlan {vlan}
     def _get_vlan(self, uuid, vlan_id, vni_id, s_type):
         if self.topology == self._VLAN:
             return self._configLet_VLAN.format(service=s_type, vlan=vlan_id, uuid=uuid)
+
         if self.topology == self._VLAN_MLAG:
-            return self._configLet_VLAN_MLAG.format(service=s_type, vlan=vlan_id, uuid=uuid)
+            return self._configLet_VLAN_MLAG.format(
+                service=s_type, vlan=vlan_id, uuid=uuid
+            )
+
         if self.topology == self._VXLAN:
-            return self._configLet_VXLAN.format(service=s_type, vlan=vlan_id, uuid=uuid, vni=vni_id)
+            return self._configLet_VXLAN.format(
+                service=s_type, vlan=vlan_id, uuid=uuid, vni=vni_id
+            )
+
         if self.topology == self._VXLAN_MLAG:
-            return self._configLet_VXLAN_MLAG.format(service=s_type, vlan=vlan_id, uuid=uuid, vni=vni_id)
+            return self._configLet_VXLAN_MLAG.format(
+                service=s_type, vlan=vlan_id, uuid=uuid, vni=vni_id
+            )
 
     def getElan_vlan(self, uuid, vlan_id, vni_id):
         return self._get_vlan(uuid, vlan_id, vni_id, "ELAN")
@@ -117,11 +130,9 @@ router bgp {bgp}
 
     def _get_bgp(self, uuid, vlan_id, vni_id, loopback0, bgp, s_type):
         if self.topology == self._VXLAN or self.topology == self._VXLAN_MLAG:
-            return self._configLet_BGP.format(uuid=uuid,
-                                              bgp=bgp,
-                                              vlan=vlan_id,
-                                              loopback=loopback0,
-                                              vni=vni_id)
+            return self._configLet_BGP.format(
+                uuid=uuid, bgp=bgp, vlan=vlan_id, loopback=loopback0, vni=vni_id
+            )
 
     def getElan_bgp(self, uuid, vlan_id, vni_id, loopback0, bgp):
         return self._get_bgp(uuid, vlan_id, vni_id, loopback0, bgp, "ELAN")

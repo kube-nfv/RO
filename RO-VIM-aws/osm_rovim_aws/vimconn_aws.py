@@ -21,9 +21,9 @@
 # contact with: saboor.ahmad@xflowresearch.com
 ##
 
-'''
+"""
 AWS-connector implements all the methods to interact with AWS using the BOTO client
-'''
+"""
 
 __author__ = "Saboor Ahmad"
 __date__ = "10-Apr-2017"
@@ -40,40 +40,67 @@ import boto.vpc
 
 
 class vimconnector(vimconn.VimConnector):
-    def __init__(self, uuid, name, tenant_id, tenant_name, url, url_admin=None, user=None, passwd=None, log_level=None,
-                 config={}, persistent_info={}):
-        """ Params: uuid - id asigned to this VIM
-                name - name assigned to this VIM, can be used for logging
-                tenant_id - ID to be used for tenant
-                tenant_name - name of tenant to be used VIM tenant to be used
-                url_admin - optional, url used for administrative tasks
-                user - credentials of the VIM user
-                passwd - credentials of the VIM user
-                log_level - if must use a different log_level than the general one
-                config - dictionary with misc VIM information
-                    region_name - name of region to deploy the instances
-                    vpc_cidr_block - default CIDR block for VPC
-                    security_groups - default security group to specify this instance
-                persistent_info - dict where the class can store information that will be available among class
-                    destroy/creation cycles. This info is unique per VIM/credential. At first call it will contain an
-                    empty dict. Useful to store login/tokens information for speed up communication
+    def __init__(
+        self,
+        uuid,
+        name,
+        tenant_id,
+        tenant_name,
+        url,
+        url_admin=None,
+        user=None,
+        passwd=None,
+        log_level=None,
+        config={},
+        persistent_info={},
+    ):
+        """Params:
+        uuid - id asigned to this VIM
+        name - name assigned to this VIM, can be used for logging
+        tenant_id - ID to be used for tenant
+        tenant_name - name of tenant to be used VIM tenant to be used
+        url_admin - optional, url used for administrative tasks
+        user - credentials of the VIM user
+        passwd - credentials of the VIM user
+        log_level - if must use a different log_level than the general one
+        config - dictionary with misc VIM information
+            region_name - name of region to deploy the instances
+            vpc_cidr_block - default CIDR block for VPC
+            security_groups - default security group to specify this instance
+        persistent_info - dict where the class can store information that will be available among class
+            destroy/creation cycles. This info is unique per VIM/credential. At first call it will contain an
+            empty dict. Useful to store login/tokens information for speed up communication
         """
-
-        vimconn.VimConnector.__init__(self, uuid, name, tenant_id, tenant_name, url, url_admin, user, passwd, log_level,
-                                      config, persistent_info)
+        vimconn.VimConnector.__init__(
+            self,
+            uuid,
+            name,
+            tenant_id,
+            tenant_name,
+            url,
+            url_admin,
+            user,
+            passwd,
+            log_level,
+            config,
+            persistent_info,
+        )
 
         self.persistent_info = persistent_info
         self.a_creds = {}
+
         if user:
-            self.a_creds['aws_access_key_id'] = user
+            self.a_creds["aws_access_key_id"] = user
         else:
             raise vimconn.VimConnAuthException("Username is not specified")
+
         if passwd:
-            self.a_creds['aws_secret_access_key'] = passwd
+            self.a_creds["aws_secret_access_key"] = passwd
         else:
             raise vimconn.VimConnAuthException("Password is not specified")
-        if 'region_name' in config:
-            self.region = config.get('region_name')
+
+        if "region_name" in config:
+            self.region = config.get("region_name")
         else:
             raise vimconn.VimConnException("AWS region_name is not specified at config")
 
@@ -83,68 +110,80 @@ class vimconnector(vimconn.VimConnector):
         self.conn_vpc = None
         self.account_id = None
 
-        self.vpc_id = self.get_tenant_list()[0]['id']
+        self.vpc_id = self.get_tenant_list()[0]["id"]
         # we take VPC CIDR block if specified, otherwise we use the default CIDR
         # block suggested by AWS while creating instance
-        self.vpc_cidr_block = '10.0.0.0/24'
+        self.vpc_cidr_block = "10.0.0.0/24"
 
         if tenant_id:
             self.vpc_id = tenant_id
-        if 'vpc_cidr_block' in config:
-            self.vpc_cidr_block = config['vpc_cidr_block']
+
+        if "vpc_cidr_block" in config:
+            self.vpc_cidr_block = config["vpc_cidr_block"]
 
         self.security_groups = None
-        if 'security_groups' in config:
-            self.security_groups = config['security_groups']
+        if "security_groups" in config:
+            self.security_groups = config["security_groups"]
 
         self.key_pair = None
-        if 'key_pair' in config:
-            self.key_pair = config['key_pair']
+        if "key_pair" in config:
+            self.key_pair = config["key_pair"]
 
         self.flavor_info = None
-        if 'flavor_info' in config:
-            flavor_data = config.get('flavor_info')
+        if "flavor_info" in config:
+            flavor_data = config.get("flavor_info")
             if isinstance(flavor_data, str):
                 try:
                     if flavor_data[0] == "@":  # read from a file
-                        with open(flavor_data[1:], 'r') as stream:
+                        with open(flavor_data[1:], "r") as stream:
                             self.flavor_info = yaml.load(stream, Loader=yaml.Loader)
                     else:
                         self.flavor_info = yaml.load(flavor_data, Loader=yaml.Loader)
                 except yaml.YAMLError as e:
                     self.flavor_info = None
-                    raise vimconn.VimConnException("Bad format at file '{}': {}".format(flavor_data[1:], e))
+
+                    raise vimconn.VimConnException(
+                        "Bad format at file '{}': {}".format(flavor_data[1:], e)
+                    )
                 except IOError as e:
-                    raise vimconn.VimConnException("Error reading file '{}': {}".format(flavor_data[1:], e))
+                    raise vimconn.VimConnException(
+                        "Error reading file '{}': {}".format(flavor_data[1:], e)
+                    )
             elif isinstance(flavor_data, dict):
                 self.flavor_info = flavor_data
 
-        self.logger = logging.getLogger('ro.vim.aws')
+        self.logger = logging.getLogger("ro.vim.aws")
+
         if log_level:
             self.logger.setLevel(getattr(logging, log_level))
 
     def __setitem__(self, index, value):
-        """Params: index - name of value of set
-                   value - value to set
+        """Params:
+        index - name of value of set
+        value - value to set
         """
-        if index == 'user':
-            self.a_creds['aws_access_key_id'] = value
-        elif index == 'passwd':
-            self.a_creds['aws_secret_access_key'] = value
-        elif index == 'region':
+        if index == "user":
+            self.a_creds["aws_access_key_id"] = value
+        elif index == "passwd":
+            self.a_creds["aws_secret_access_key"] = value
+        elif index == "region":
             self.region = value
         else:
             vimconn.VimConnector.__setitem__(self, index, value)
 
     def _reload_connection(self):
-        """Returns: sets boto.EC2 and boto.VPC connection to work with AWS services
-        """
-
+        """Returns: sets boto.EC2 and boto.VPC connection to work with AWS services"""
         try:
-            self.conn = boto.ec2.connect_to_region(self.region, aws_access_key_id=self.a_creds['aws_access_key_id'],
-                                                   aws_secret_access_key=self.a_creds['aws_secret_access_key'])
-            self.conn_vpc = boto.vpc.connect_to_region(self.region, aws_access_key_id=self.a_creds['aws_access_key_id'],
-                                                       aws_secret_access_key=self.a_creds['aws_secret_access_key'])
+            self.conn = boto.ec2.connect_to_region(
+                self.region,
+                aws_access_key_id=self.a_creds["aws_access_key_id"],
+                aws_secret_access_key=self.a_creds["aws_secret_access_key"],
+            )
+            self.conn_vpc = boto.vpc.connect_to_region(
+                self.region,
+                aws_access_key_id=self.a_creds["aws_access_key_id"],
+                aws_secret_access_key=self.a_creds["aws_secret_access_key"],
+            )
             # client = boto3.client("sts", aws_access_key_id=self.a_creds['aws_access_key_id'],
             # aws_secret_access_key=self.a_creds['aws_secret_access_key'])
             # self.account_id = client.get_caller_identity()["Account"]
@@ -155,20 +194,20 @@ class vimconnector(vimconn.VimConnector):
         """Params: an Exception object
         Returns: Raises the exception 'e' passed in mehtod parameters
         """
-
         self.conn = None
         self.conn_vpc = None
+
         raise vimconn.VimConnConnectionException(type(e).__name__ + ": " + str(e))
 
     def get_availability_zones_list(self):
-        """Obtain AvailabilityZones from AWS
-        """
-
+        """Obtain AvailabilityZones from AWS"""
         try:
             self._reload_connection()
             az_list = []
+
             for az in self.conn.get_all_zones():
                 az_list.append(az.name)
+
             return az_list
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -182,20 +221,29 @@ class vimconnector(vimconn.VimConnector):
         Returns the tenant list of dictionaries, and empty list if no tenant match all the filers:
             [{'name':'<name>, 'id':'<id>, ...}, ...]
         """
-
         try:
             self._reload_connection()
             vpc_ids = []
             tfilters = {}
+
             if filter_dict != {}:
-                if 'id' in filter_dict:
-                    vpc_ids.append(filter_dict['id'])
-                    tfilters['name'] = filter_dict['id']
+                if "id" in filter_dict:
+                    vpc_ids.append(filter_dict["id"])
+                    tfilters["name"] = filter_dict["id"]
+
             tenants = self.conn_vpc.get_all_vpcs(vpc_ids, tfilters)
             tenant_list = []
+
             for tenant in tenants:
-                tenant_list.append({'id': str(tenant.id), 'name': str(tenant.id), 'status': str(tenant.state),
-                                    'cidr_block': str(tenant.cidr_block)})
+                tenant_list.append(
+                    {
+                        "id": str(tenant.id),
+                        "name": str(tenant.id),
+                        "status": str(tenant.state),
+                        "cidr_block": str(tenant.cidr_block),
+                    }
+                )
+
             return tenant_list
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -206,8 +254,8 @@ class vimconnector(vimconn.VimConnector):
         "tenant_description": string max length 256
         returns the tenant identifier or raise exception
         """
-
         self.logger.debug("Adding a new VPC")
+
         try:
             self._reload_connection()
             vpc = self.conn_vpc.create_vpc(self.vpc_cidr_block)
@@ -217,11 +265,16 @@ class vimconnector(vimconn.VimConnector):
             gateway = self.conn_vpc.create_internet_gateway()
             self.conn_vpc.attach_internet_gateway(gateway.id, vpc.id)
             route_table = self.conn_vpc.create_route_table(vpc.id)
-            self.conn_vpc.create_route(route_table.id, '0.0.0.0/0', gateway.id)
+            self.conn_vpc.create_route(route_table.id, "0.0.0.0/0", gateway.id)
 
-            self.vpc_data[vpc.id] = {'gateway': gateway.id, 'route_table': route_table.id,
-                                     'subnets': self.subnet_sizes(len(self.get_availability_zones_list()),
-                                                                  self.vpc_cidr_block)}
+            self.vpc_data[vpc.id] = {
+                "gateway": gateway.id,
+                "route_table": route_table.id,
+                "subnets": self.subnet_sizes(
+                    len(self.get_availability_zones_list()), self.vpc_cidr_block
+                ),
+            }
+
             return vpc.id
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -231,36 +284,44 @@ class vimconnector(vimconn.VimConnector):
         tenant_id: returned VIM tenant_id on "new_tenant"
         Returns None on success. Raises and exception of failure. If tenant is not found raises vimconnNotFoundException
         """
-
         self.logger.debug("Deleting specified VPC")
+
         try:
             self._reload_connection()
             vpc = self.vpc_data.get(tenant_id)
-            if 'gateway' in vpc and 'route_table' in vpc:
-                gateway_id, route_table_id = vpc['gateway'], vpc['route_table']
+
+            if "gateway" in vpc and "route_table" in vpc:
+                gateway_id, route_table_id = vpc["gateway"], vpc["route_table"]
                 self.conn_vpc.detach_internet_gateway(gateway_id, tenant_id)
                 self.conn_vpc.delete_vpc(tenant_id)
-                self.conn_vpc.delete_route(route_table_id, '0.0.0.0/0')
+                self.conn_vpc.delete_route(route_table_id, "0.0.0.0/0")
             else:
                 self.conn_vpc.delete_vpc(tenant_id)
         except Exception as e:
             self.format_vimconn_exception(e)
 
     def subnet_sizes(self, availability_zones, cidr):
-        """Calcualtes possible subnets given CIDR value of VPC
-        """
-
+        """Calculates possible subnets given CIDR value of VPC"""
         if availability_zones != 2 and availability_zones != 3:
             self.logger.debug("Number of AZs should be 2 or 3")
+
             raise vimconn.VimConnNotSupportedException("Number of AZs should be 2 or 3")
 
-        netmasks = ('255.255.252.0', '255.255.254.0', '255.255.255.0', '255.255.255.128')
+        netmasks = (
+            "255.255.252.0",
+            "255.255.254.0",
+            "255.255.255.0",
+            "255.255.255.128",
+        )
         ip = netaddr.IPNetwork(cidr)
         mask = ip.netmask
 
         if str(mask) not in netmasks:
             self.logger.debug("Netmask " + str(mask) + " not found")
-            raise vimconn.VimConnNotFoundException("Netmask " + str(mask) + " not found")
+
+            raise vimconn.VimConnNotFoundException(
+                "Netmask " + str(mask) + " not found"
+            )
 
         if availability_zones == 2:
             for n, netmask in enumerate(netmasks):
@@ -272,13 +333,25 @@ class vimconnector(vimconn.VimConnector):
                     pub_net = list(ip.subnet(n + 24))
                     pri_subs = pub_net[1:]
                     pub_mask = pub_net[0].netmask
-            pub_split = list(ip.subnet(26)) if (str(pub_mask) == '255.255.255.0') else list(ip.subnet(27))
+
+            pub_split = (
+                list(ip.subnet(26))
+                if (str(pub_mask) == "255.255.255.0")
+                else list(ip.subnet(27))
+            )
             pub_subs = pub_split[:3]
             subnets = pub_subs + pri_subs
 
         return map(str, subnets)
 
-    def new_network(self, net_name, net_type, ip_profile=None, shared=False, provider_network_profile=None):
+    def new_network(
+        self,
+        net_name,
+        net_type,
+        ip_profile=None,
+        shared=False,
+        provider_network_profile=None,
+    ):
         """Adds a tenant network to VIM
         Params:
             'net_name': name of the network
@@ -302,33 +375,51 @@ class vimconnector(vimconn.VimConnector):
             Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
         """
-
         self.logger.debug("Adding a subnet to VPC")
+
         try:
             created_items = {}
             self._reload_connection()
             subnet = None
             vpc_id = self.vpc_id
+
             if self.vpc_data.get(vpc_id, None):
-                cidr_block = list(set(self.vpc_data[vpc_id]['subnets']) -
-                                  set(self.get_network_details({'tenant_id': vpc_id}, detail='cidr_block')))[0]
+                cidr_block = list(
+                    set(self.vpc_data[vpc_id]["subnets"])
+                    - set(
+                        self.get_network_details(
+                            {"tenant_id": vpc_id}, detail="cidr_block"
+                        )
+                    )
+                )[0]
             else:
-                vpc = self.get_tenant_list({'id': vpc_id})[0]
-                subnet_list = self.subnet_sizes(len(self.get_availability_zones_list()), vpc['cidr_block'])
-                cidr_block = list(set(subnet_list) - set(self.get_network_details({'tenant_id': vpc['id']},
-                                                                                  detail='cidr_block')))[0]
+                vpc = self.get_tenant_list({"id": vpc_id})[0]
+                subnet_list = self.subnet_sizes(
+                    len(self.get_availability_zones_list()), vpc["cidr_block"]
+                )
+                cidr_block = list(
+                    set(subnet_list)
+                    - set(
+                        self.get_network_details(
+                            {"tenant_id": vpc["id"]}, detail="cidr_block"
+                        )
+                    )
+                )[0]
+
             subnet = self.conn_vpc.create_subnet(vpc_id, cidr_block)
+
             return subnet.id, created_items
         except Exception as e:
             self.format_vimconn_exception(e)
 
     def get_network_details(self, filters, detail):
-        """Get specified details related to a subnet
-        """
+        """Get specified details related to a subnet"""
         detail_list = []
         subnet_list = self.get_network_list(filters)
+
         for net in subnet_list:
             detail_list.append(net[detail])
+
         return detail_list
 
     def get_network_list(self, filter_dict={}):
@@ -351,20 +442,33 @@ class vimconnector(vimconn.VimConnector):
         List can be empty if no network map the filter_dict. Raise an exception only upon VIM connectivity,
             authorization, or some other unspecific error
         """
-
         self.logger.debug("Getting all subnets from VIM")
+
         try:
             self._reload_connection()
             tfilters = {}
+
             if filter_dict != {}:
-                if 'tenant_id' in filter_dict:
-                    tfilters['vpcId'] = filter_dict['tenant_id']
-            subnets = self.conn_vpc.get_all_subnets(subnet_ids=filter_dict.get('name', None), filters=tfilters)
+                if "tenant_id" in filter_dict:
+                    tfilters["vpcId"] = filter_dict["tenant_id"]
+
+            subnets = self.conn_vpc.get_all_subnets(
+                subnet_ids=filter_dict.get("name", None), filters=tfilters
+            )
             net_list = []
+
             for net in subnets:
                 net_list.append(
-                    {'id': str(net.id), 'name': str(net.id), 'status': str(net.state), 'vpc_id': str(net.vpc_id),
-                     'cidr_block': str(net.cidr_block), 'type': 'bridge'})
+                    {
+                        "id": str(net.id),
+                        "name": str(net.id),
+                        "status": str(net.state),
+                        "vpc_id": str(net.vpc_id),
+                        "cidr_block": str(net.cidr_block),
+                        "type": "bridge",
+                    }
+                )
+
             return net_list
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -379,13 +483,19 @@ class vimconnector(vimconn.VimConnector):
             other VIM specific fields: (optional) whenever possible using the same naming of filter_dict param
         Raises an exception upon error or when network is not found
         """
-
         self.logger.debug("Getting Subnet from VIM")
+
         try:
             self._reload_connection()
             subnet = self.conn_vpc.get_all_subnets(net_id)[0]
-            return {'id': str(subnet.id), 'name': str(subnet.id), 'status': str(subnet.state),
-                    'vpc_id': str(subnet.vpc_id), 'cidr_block': str(subnet.cidr_block)}
+
+            return {
+                "id": str(subnet.id),
+                "name": str(subnet.id),
+                "status": str(subnet.state),
+                "vpc_id": str(subnet.vpc_id),
+                "cidr_block": str(subnet.cidr_block),
+            }
         except Exception as e:
             self.format_vimconn_exception(e)
 
@@ -396,12 +506,13 @@ class vimconnector(vimconn.VimConnector):
         :param created_items: dictionary with extra items to be deleted. provided by method new_network
         Returns the network identifier or raises an exception upon error or when network is not found
         """
-
         self.logger.debug("Deleting subnet from VIM")
+
         try:
             self._reload_connection()
             self.logger.debug("DELETING NET_ID: " + str(net_id))
             self.conn_vpc.delete_subnet(net_id)
+
             return net_id
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -423,31 +534,38 @@ class vimconnector(vimconn.VimConnector):
                 vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
             'net_id2': ...
         """
-
         self._reload_connection()
+
         try:
             dict_entry = {}
+
             for net_id in net_list:
                 subnet_dict = {}
                 subnet = None
+
                 try:
                     subnet = self.conn_vpc.get_all_subnets(net_id)[0]
+
                     if subnet.state == "pending":
-                        subnet_dict['status'] = "BUILD"
+                        subnet_dict["status"] = "BUILD"
                     elif subnet.state == "available":
-                        subnet_dict['status'] = 'ACTIVE'
+                        subnet_dict["status"] = "ACTIVE"
                     else:
-                        subnet_dict['status'] = 'ERROR'
-                    subnet_dict['error_msg'] = ''
+                        subnet_dict["status"] = "ERROR"
+                    subnet_dict["error_msg"] = ""
                 except Exception:
-                    subnet_dict['status'] = 'DELETED'
-                    subnet_dict['error_msg'] = 'Network not found'
+                    subnet_dict["status"] = "DELETED"
+                    subnet_dict["error_msg"] = "Network not found"
                 finally:
                     try:
-                        subnet_dict['vim_info'] = yaml.safe_dump(subnet, default_flow_style=True, width=256)
+                        subnet_dict["vim_info"] = yaml.safe_dump(
+                            subnet, default_flow_style=True, width=256
+                        )
                     except yaml.YAMLError:
-                        subnet_dict['vim_info'] = str(subnet)
+                        subnet_dict["vim_info"] = str(subnet)
+
                 dict_entry[net_id] = subnet_dict
+
             return dict_entry
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -457,13 +575,15 @@ class vimconnector(vimconn.VimConnector):
         Returns the flavor dict details {'id':<>, 'name':<>, other vim specific }
         Raises an exception upon error or if not found
         """
-
         self.logger.debug("Getting instance type")
+
         try:
             if flavor_id in self.flavor_info:
                 return self.flavor_info[flavor_id]
             else:
-                raise vimconn.VimConnNotFoundException("Cannot find flavor with this flavor ID/Name")
+                raise vimconn.VimConnNotFoundException(
+                    "Cannot find flavor with this flavor ID/Name"
+                )
         except Exception as e:
             self.format_vimconn_exception(e)
 
@@ -477,31 +597,44 @@ class vimconnector(vimconn.VimConnector):
                 #todo: complete parameters for EPA
         Returns the flavor_id or raises a vimconnNotFoundException
         """
-
         self.logger.debug("Getting flavor id from data")
+
         try:
             flavor = None
             for key, values in self.flavor_info.items():
                 if (values["ram"], values["cpus"], values["disk"]) == (
-                        flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"]):
+                    flavor_dict["ram"],
+                    flavor_dict["vcpus"],
+                    flavor_dict["disk"],
+                ):
                     flavor = (key, values)
                     break
                 elif (values["ram"], values["cpus"], values["disk"]) >= (
-                        flavor_dict["ram"], flavor_dict["vcpus"], flavor_dict["disk"]):
+                    flavor_dict["ram"],
+                    flavor_dict["vcpus"],
+                    flavor_dict["disk"],
+                ):
                     if not flavor:
                         flavor = (key, values)
                     else:
                         if (flavor[1]["ram"], flavor[1]["cpus"], flavor[1]["disk"]) >= (
-                                values["ram"], values["cpus"], values["disk"]):
+                            values["ram"],
+                            values["cpus"],
+                            values["disk"],
+                        ):
                             flavor = (key, values)
+
             if flavor:
                 return flavor[0]
-            raise vimconn.VimConnNotFoundException("Cannot find flavor with this flavor ID/Name")
+
+            raise vimconn.VimConnNotFoundException(
+                "Cannot find flavor with this flavor ID/Name"
+            )
         except Exception as e:
             self.format_vimconn_exception(e)
 
     def new_image(self, image_dict):
-        """ Adds a tenant image to VIM
+        """Adds a tenant image to VIM
         Params: image_dict
             name (string) - The name of the AMI. Valid only for EBS-based images.
             description (string) - The description of the AMI.
@@ -520,22 +653,27 @@ class vimconnector(vimconn.VimConnector):
                     volumes behind after instance termination is not free
         Returns: image_id - image ID of the newly created image
         """
-
         try:
             self._reload_connection()
-            image_location = image_dict.get('image_location', None)
+            image_location = image_dict.get("image_location", None)
+
             if image_location:
                 image_location = str(self.account_id) + str(image_location)
 
-            image_id = self.conn.register_image(image_dict.get('name', None), image_dict.get('description', None),
-                                                image_location, image_dict.get('architecture', None),
-                                                image_dict.get('kernel_id', None),
-                                                image_dict.get('root_device_name', None),
-                                                image_dict.get('block_device_map', None),
-                                                image_dict.get('virtualization_type', None),
-                                                image_dict.get('sriov_net_support', None),
-                                                image_dict.get('snapshot_id', None),
-                                                image_dict.get('delete_root_volume_on_termination', None))
+            image_id = self.conn.register_image(
+                image_dict.get("name", None),
+                image_dict.get("description", None),
+                image_location,
+                image_dict.get("architecture", None),
+                image_dict.get("kernel_id", None),
+                image_dict.get("root_device_name", None),
+                image_dict.get("block_device_map", None),
+                image_dict.get("virtualization_type", None),
+                image_dict.get("sriov_net_support", None),
+                image_dict.get("snapshot_id", None),
+                image_dict.get("delete_root_volume_on_termination", None),
+            )
+
             return image_id
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -547,23 +685,27 @@ class vimconnector(vimconn.VimConnector):
         try:
             self._reload_connection()
             self.conn.deregister_image(image_id)
+
             return image_id
         except Exception as e:
             self.format_vimconn_exception(e)
 
     def get_image_id_from_path(self, path):
-        '''
+        """
         Params: path - location of the image
         Returns: image_id - ID of the matching image
-        '''
+        """
         self._reload_connection()
         try:
             filters = {}
+
             if path:
-                tokens = path.split('/')
-                filters['owner_id'] = tokens[0]
-                filters['name'] = '/'.join(tokens[1:])
+                tokens = path.split("/")
+                filters["owner_id"] = tokens[0]
+                filters["name"] = "/".join(tokens[1:])
+
             image = self.conn.get_all_images(filters=filters)[0]
+
             return image.id
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -579,33 +721,58 @@ class vimconnector(vimconn.VimConnector):
             [{<the fields at Filter_dict plus some VIM specific>}, ...]
             List can be empty
         """
-
         self.logger.debug("Getting image list from VIM")
+
         try:
             self._reload_connection()
             image_id = None
             filters = {}
-            if 'id' in filter_dict:
-                image_id = filter_dict['id']
-            if 'name' in filter_dict:
-                filters['name'] = filter_dict['name']
-            if 'location' in filter_dict:
-                filters['location'] = filter_dict['location']
+
+            if "id" in filter_dict:
+                image_id = filter_dict["id"]
+
+            if "name" in filter_dict:
+                filters["name"] = filter_dict["name"]
+
+            if "location" in filter_dict:
+                filters["location"] = filter_dict["location"]
+
             # filters['image_type'] = 'machine'
             # filter_dict['owner_id'] = self.account_id
             images = self.conn.get_all_images(image_id, filters=filters)
             image_list = []
+
             for image in images:
-                image_list.append({'id': str(image.id), 'name': str(image.name), 'status': str(image.state),
-                                   'owner': str(image.owner_id), 'location': str(image.location),
-                                   'is_public': str(image.is_public), 'architecture': str(image.architecture),
-                                   'platform': str(image.platform)})
+                image_list.append(
+                    {
+                        "id": str(image.id),
+                        "name": str(image.name),
+                        "status": str(image.state),
+                        "owner": str(image.owner_id),
+                        "location": str(image.location),
+                        "is_public": str(image.is_public),
+                        "architecture": str(image.architecture),
+                        "platform": str(image.platform),
+                    }
+                )
+
             return image_list
         except Exception as e:
             self.format_vimconn_exception(e)
 
-    def new_vminstance(self, name, description, start, image_id, flavor_id, net_list, cloud_config=None,
-                       disk_list=None, availability_zone_index=None, availability_zone_list=None):
+    def new_vminstance(
+        self,
+        name,
+        description,
+        start,
+        image_id,
+        flavor_id,
+        net_list,
+        cloud_config=None,
+        disk_list=None,
+        availability_zone_index=None,
+        availability_zone_list=None,
+    ):
         """Create a new VM/instance in AWS
         Params: name
                 decription
@@ -659,8 +826,8 @@ class vimconnector(vimconn.VimConnector):
             Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
         """
-
         self.logger.debug("Creating a new VM instance")
+
         try:
             self._reload_connection()
             instance = None
@@ -672,17 +839,22 @@ class vimconnector(vimconn.VimConnector):
                     key_name=self.key_pair,
                     instance_type=flavor_id,
                     security_groups=self.security_groups,
-                    user_data=userdata
+                    user_data=userdata,
                 )
             else:
                 for index, subnet in enumerate(net_list):
-                    net_intr = boto.ec2.networkinterface.NetworkInterfaceSpecification(subnet_id=subnet.get('net_id'),
-                                                                                       groups=None,
-                                                                                       associate_public_ip_address=True)
+                    net_intr = boto.ec2.networkinterface.NetworkInterfaceSpecification(
+                        subnet_id=subnet.get("net_id"),
+                        groups=None,
+                        associate_public_ip_address=True,
+                    )
 
-                    if subnet.get('elastic_ip'):
+                    if subnet.get("elastic_ip"):
                         eip = self.conn.allocate_address()
-                        self.conn.associate_address(allocation_id=eip.allocation_id, network_interface_id=net_intr.id)
+                        self.conn.associate_address(
+                            allocation_id=eip.allocation_id,
+                            network_interface_id=net_intr.id,
+                        )
 
                     if index == 0:
                         reservation = self.conn.run_instances(
@@ -690,31 +862,41 @@ class vimconnector(vimconn.VimConnector):
                             key_name=self.key_pair,
                             instance_type=flavor_id,
                             security_groups=self.security_groups,
-                            network_interfaces=boto.ec2.networkinterface.NetworkInterfaceCollection(net_intr),
-                            user_data=userdata
+                            network_interfaces=boto.ec2.networkinterface.NetworkInterfaceCollection(
+                                net_intr
+                            ),
+                            user_data=userdata,
                         )
                     else:
                         while True:
                             try:
                                 self.conn.attach_network_interface(
-                                    network_interface_id=boto.ec2.networkinterface.NetworkInterfaceCollection(net_intr),
-                                    instance_id=instance.id, device_index=0)
+                                    network_interface_id=boto.ec2.networkinterface.NetworkInterfaceCollection(
+                                        net_intr
+                                    ),
+                                    instance_id=instance.id,
+                                    device_index=0,
+                                )
                                 break
                             except Exception:
                                 time.sleep(10)
-                    net_list[index]['vim_id'] = reservation.instances[0].interfaces[index].id
+
+                    net_list[index]["vim_id"] = (
+                        reservation.instances[0].interfaces[index].id
+                    )
 
             instance = reservation.instances[0]
+
             return instance.id, None
         except Exception as e:
             self.format_vimconn_exception(e)
 
     def get_vminstance(self, vm_id):
         """Returns the VM instance information from VIM"""
-
         try:
             self._reload_connection()
             reservation = self.conn.get_all_instances(vm_id)
+
             return reservation[0].instances[0].__dict__
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -722,17 +904,17 @@ class vimconnector(vimconn.VimConnector):
     def delete_vminstance(self, vm_id, created_items=None):
         """Removes a VM instance from VIM
         Returns the instance identifier"""
-
         try:
             self._reload_connection()
             self.logger.debug("DELETING VM_ID: " + str(vm_id))
             self.conn.terminate_instances(vm_id)
+
             return vm_id
         except Exception as e:
             self.format_vimconn_exception(e)
 
     def refresh_vms_status(self, vm_list):
-        """ Get the status of the virtual machines and their interfaces/ports
+        """Get the status of the virtual machines and their interfaces/ports
         Params: the list of VM identifiers
         Returns a dictionary with:
             vm_id:          #VIM id of this Virtual Machine
@@ -754,42 +936,59 @@ class vimconnector(vimconn.VimConnector):
                     ip_address - The IP address of the interface within the subnet.
         """
         self.logger.debug("Getting VM instance information from VIM")
+
         try:
             self._reload_connection()
             reservation = self.conn.get_all_instances(vm_list)[0]
             instances = {}
             instance_dict = {}
+
             for instance in reservation.instances:
                 try:
                     if instance.state in ("pending"):
-                        instance_dict['status'] = "BUILD"
+                        instance_dict["status"] = "BUILD"
                     elif instance.state in ("available", "running", "up"):
-                        instance_dict['status'] = 'ACTIVE'
+                        instance_dict["status"] = "ACTIVE"
                     else:
-                        instance_dict['status'] = 'ERROR'
-                    instance_dict['error_msg'] = ""
-                    instance_dict['interfaces'] = []
+                        instance_dict["status"] = "ERROR"
+
+                    instance_dict["error_msg"] = ""
+                    instance_dict["interfaces"] = []
                     interface_dict = {}
+
                     for interface in instance.interfaces:
-                        interface_dict['vim_interface_id'] = interface.id
-                        interface_dict['vim_net_id'] = interface.subnet_id
-                        interface_dict['mac_address'] = interface.mac_address
-                        if hasattr(interface, 'publicIp') and interface.publicIp is not None:
-                            interface_dict['ip_address'] = interface.publicIp + ";" + interface.private_ip_address
+                        interface_dict["vim_interface_id"] = interface.id
+                        interface_dict["vim_net_id"] = interface.subnet_id
+                        interface_dict["mac_address"] = interface.mac_address
+
+                        if (
+                            hasattr(interface, "publicIp")
+                            and interface.publicIp is not None
+                        ):
+                            interface_dict["ip_address"] = (
+                                interface.publicIp + ";" + interface.private_ip_address
+                            )
                         else:
-                            interface_dict['ip_address'] = interface.private_ip_address
-                        instance_dict['interfaces'].append(interface_dict)
+                            interface_dict["ip_address"] = interface.private_ip_address
+
+                        instance_dict["interfaces"].append(interface_dict)
                 except Exception as e:
-                    self.logger.error("Exception getting vm status: %s", str(e), exc_info=True)
-                    instance_dict['status'] = "DELETED"
-                    instance_dict['error_msg'] = str(e)
+                    self.logger.error(
+                        "Exception getting vm status: %s", str(e), exc_info=True
+                    )
+                    instance_dict["status"] = "DELETED"
+                    instance_dict["error_msg"] = str(e)
                 finally:
                     try:
-                        instance_dict['vim_info'] = yaml.safe_dump(instance, default_flow_style=True, width=256)
+                        instance_dict["vim_info"] = yaml.safe_dump(
+                            instance, default_flow_style=True, width=256
+                        )
                     except yaml.YAMLError:
                         # self.logger.error("Exception getting vm status: %s", str(e), exc_info=True)
-                        instance_dict['vim_info'] = str(instance)
+                        instance_dict["vim_info"] = str(instance)
+
                 instances[instance.id] = instance_dict
+
             return instances
         except Exception as e:
             self.logger.error("Exception getting vm status: %s", str(e), exc_info=True)
@@ -810,6 +1009,7 @@ class vimconnector(vimconn.VimConnector):
                 self.conn.terminate_instances(vm_id)
             elif "reboot" in action_dict:
                 self.conn.reboot_instances(vm_id)
+
             return None
         except Exception as e:
             self.format_vimconn_exception(e)

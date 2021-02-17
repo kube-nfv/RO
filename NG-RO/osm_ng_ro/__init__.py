@@ -12,12 +12,13 @@
 # under the License.
 ##
 
-version = '8.0.1.post0'
-version_date = '2020-06-29'
+version = "8.0.1.post0"
+version_date = "2020-06-29"
 
 # Obtain installed package version. Ignore if error, e.g. pkg_resources not installed
 try:
     from pkg_resources import get_distribution
+
     version = get_distribution("osm_ng_ro").version
 except Exception:
     pass

@@ -30,29 +30,32 @@ osm-ro pluging for arista_cloudvision SDN
 
 setup(
     name=_name,
-    description='OSM ro sdn plugin for arista with CloudVision',
+    description="OSM ro sdn plugin for arista with CloudVision",
     long_description=README,
-    version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
+    version_command=(
+        "git describe --match v* --tags --long --dirty",
+        "pep440-git-full",
+    ),
     # version=VERSION,
     # python_requires='>3.5.0',
-    author='ETSI OSM',
-    author_email='OSM_TECH@LIST.ETSI.ORG',
-    maintainer='Oscar Luis Peral',
-    maintainer_email='oscarluis.peral@atos.net',
-    url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
-    license='Apache 2.0',
-
+    author="ETSI OSM",
+    author_email="OSM_TECH@LIST.ETSI.ORG",
+    maintainer="Oscar Luis Peral",
+    maintainer_email="oscarluis.peral@atos.net",
+    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
+    license="Apache 2.0",
     packages=[_name],
     include_package_data=True,
     install_requires=[
         "requests",
         "uuid",
         "cvprac",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
     ],
-    setup_requires=['setuptools-version-command'],
+    setup_requires=["setuptools-version-command"],
     entry_points={
-        'osm_rosdn.plugins': ['rosdn_arista_cloudvision = osm_rosdn_arista_cloudvision.'
-                              'wimconn_arista:AristaSdnConnector']
+        "osm_rosdn.plugins": [
+            "rosdn_arista_cloudvision = osm_rosdn_arista_cloudvision.wimconn_arista:AristaSdnConnector"
+        ]
     },
 )

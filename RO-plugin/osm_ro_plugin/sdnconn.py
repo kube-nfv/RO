@@ -36,24 +36,26 @@ and intranet SDN connectivity.
 
 It receives information from ports to be connected .
 """
+
 import logging
 from http import HTTPStatus
 
 
 class SdnConnectorError(Exception):
     """Base Exception for all connector related errors
-        provide the parameter 'http_code' (int) with the error code:
-            Bad_Request = 400
-            Unauthorized = 401  (e.g. credentials are not valid)
-            Not_Found = 404    (e.g. try to edit or delete a non existing connectivity service)
-            Forbidden = 403
-            Method_Not_Allowed = 405
-            Not_Acceptable = 406
-            Request_Timeout = 408  (e.g timeout reaching server, or cannot reach the server)
-            Conflict = 409
-            Service_Unavailable = 503
-            Internal_Server_Error = 500
+    provide the parameter 'http_code' (int) with the error code:
+        Bad_Request = 400
+        Unauthorized = 401  (e.g. credentials are not valid)
+        Not_Found = 404    (e.g. try to edit or delete a non existing connectivity service)
+        Forbidden = 403
+        Method_Not_Allowed = 405
+        Not_Acceptable = 406
+        Request_Timeout = 408  (e.g timeout reaching server, or cannot reach the server)
+        Conflict = 409
+        Service_Unavailable = 503
+        Internal_Server_Error = 500
     """
+
     def __init__(self, message, http_code=HTTPStatus.INTERNAL_SERVER_ERROR.value):
         Exception.__init__(self, message)
         self.http_code = http_code
@@ -69,36 +71,34 @@ class SdnConnectorBase(object):
     The arguments of the constructor are converted to object attributes.
     An extra property, ``service_endpoint_mapping`` is created from ``config``.
     """
+
     def __init__(self, wim, wim_account, config=None, logger=None):
         """
-
         :param wim: (dict). Contains among others 'wim_url'
         :param wim_account: (dict). Contains among others 'uuid' (internal id), 'name',
             'sdn' (True if is intended for SDN-assist or False if intended for WIM), 'user', 'password'.
         :param config: (dict or None): Particular information of plugin. These keys if present have a common meaning:
             'mapping_not_needed': (bool) False by default or if missing, indicates that mapping is not needed.
             'service_endpoint_mapping': (list) provides the internal endpoint mapping. The meaning is:
-                KEY 	    	        meaning for WIM		        meaning for SDN assist
+                KEY                     meaning for WIM             meaning for SDN assist
                 --------                --------                    --------
-                device_id		        pop_switch_dpid		        compute_id
-                device_interface_id		pop_switch_port		        compute_pci_address
-                service_endpoint_id	    wan_service_endpoint_id     SDN_service_endpoint_id
-                service_mapping_info	wan_service_mapping_info    SDN_service_mapping_info
+                device_id               pop_switch_dpid             compute_id
+                device_interface_id     pop_switch_port             compute_pci_address
+                service_endpoint_id     wan_service_endpoint_id     SDN_service_endpoint_id
+                service_mapping_info    wan_service_mapping_info    SDN_service_mapping_info
                     contains extra information if needed. Text in Yaml format
-                switch_dpid		        wan_switch_dpid		        SDN_switch_dpid
-                switch_port		        wan_switch_port		        SDN_switch_port
+                switch_dpid             wan_switch_dpid             SDN_switch_dpid
+                switch_port             wan_switch_port             SDN_switch_port
                 datacenter_id           vim_account                 vim_account
-                id: (internal, do not use)
-                wim_id: (internal, do not use)
+            id: (internal, do not use)
+            wim_id: (internal, do not use)
         :param logger (logging.Logger): optional logger object. If none is passed 'openmano.sdn.sdnconn' is used.
         """
-        self.logger = logger or logging.getLogger('ro.sdn')
-
+        self.logger = logger or logging.getLogger("ro.sdn")
         self.wim = wim
         self.wim_account = wim_account
         self.config = config or {}
-        self.service_endpoint_mapping = (
-            self.config.get('service_endpoint_mapping', []))
+        self.service_endpoint_mapping = self.config.get("service_endpoint_mapping", [])
 
     def check_credentials(self):
         """Check if the connector itself can access the SDN/WIM with the provided url (wim.wim_url),
@@ -151,7 +151,7 @@ class SdnConnectorBase(object):
 
     def create_connectivity_service(self, service_type, connection_points, **kwargs):
         """
-        Stablish SDN/WAN connectivity between the endpoints
+        Establish SDN/WAN connectivity between the endpoints
         :param service_type: (str): ``ELINE`` (L2), ``ELAN`` (L2), ``ETREE`` (L2), ``L3``.
         :param connection_points:  (list): each point corresponds to
             an entry point to be connected. For WIM: from the DC to the transport network.
@@ -199,8 +199,10 @@ class SdnConnectorBase(object):
         """
         raise NotImplementedError
 
-    def edit_connectivity_service(self, service_uuid, conn_info=None, connection_points=None, **kwargs):
-        """ Change an existing connectivity service.
+    def edit_connectivity_service(
+        self, service_uuid, conn_info=None, connection_points=None, **kwargs
+    ):
+        """Change an existing connectivity service.
 
         This method's arguments and return value follow the same convention as
         :meth:`~.create_connectivity_service`.

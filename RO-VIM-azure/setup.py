@@ -30,18 +30,20 @@ osm-ro pluging for azure VIM
 
 setup(
     name=_name,
-    description='OSM ro vim plugin for azure',
+    description="OSM ro vim plugin for azure",
     long_description=README,
-    version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
+    version_command=(
+        "git describe --match v* --tags --long --dirty",
+        "pep440-git-full",
+    ),
     # version=VERSION,
     # python_requires='>3.5.0',
-    author='ETSI OSM',
-    author_email='alfonso.tiernosepulveda@telefonica.com',
-    maintainer='Alfonso Tierno',
-    maintainer_email='alfonso.tiernosepulveda@telefonica.com',
-    url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
-    license='Apache 2.0',
-
+    author="ETSI OSM",
+    author_email="alfonso.tiernosepulveda@telefonica.com",
+    maintainer="Alfonso Tierno",
+    maintainer_email="alfonso.tiernosepulveda@telefonica.com",
+    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
+    license="Apache 2.0",
     packages=[_name],
     include_package_data=True,
     install_requires=[
@@ -49,10 +51,12 @@ setup(
         "netaddr",
         "PyYAML",
         "azure==4.0.0",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin"
+        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
     ],
-    setup_requires=['setuptools-version-command'],
+    setup_requires=["setuptools-version-command"],
     entry_points={
-        'osm_rovim.plugins': ['rovim_azure = osm_rovim_azure.vimconn_azure:vimconnector'],
+        "osm_rovim.plugins": [
+            "rovim_azure = osm_rovim_azure.vimconn_azure:vimconnector"
+        ],
     },
 )

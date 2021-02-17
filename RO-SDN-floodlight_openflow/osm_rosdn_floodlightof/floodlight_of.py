@@ -34,7 +34,11 @@ __date__ = "$28-oct-2014 12:07:15$"
 import json
 import requests
 import logging
-from osm_ro_plugin.openflow_conn import OpenflowConn, OpenflowConnUnexpectedResponse, OpenflowConnConnectionException
+from osm_ro_plugin.openflow_conn import (
+    OpenflowConn,
+    OpenflowConnUnexpectedResponse,
+    OpenflowConnConnectionException,
+)
 
 
 class OfConnFloodLight(OpenflowConn):
@@ -59,12 +63,16 @@ class OfConnFloodLight(OpenflowConn):
         """
         # check params
         url = params.get("of_url")
+
         if not url:
             raise ValueError("'url' must be provided")
+
         if not url.startswith("http"):
             url = "http://" + url
+
         if not url.endswith("/"):
             url = url + "/"
+
         self.url = url
 
         OpenflowConn.__init__(self, params)
@@ -74,9 +82,12 @@ class OfConnFloodLight(OpenflowConn):
 
         self.pp2ofi = {}  # From Physical Port to OpenFlow Index
         self.ofi2pp = {}  # From OpenFlow Index to Physical Port
-        self.headers = {'content-type': 'application/json', 'Accept': 'application/json'}
+        self.headers = {
+            "content-type": "application/json",
+            "Accept": "application/json",
+        }
         self.version = None
-        self.logger = logging.getLogger('ro.sdn.floodlightof')
+        self.logger = logging.getLogger("ro.sdn.floodlightof")
         self.logger.setLevel(params.get("of_debug", "ERROR"))
         self._set_version(params.get("of_version"))
 
@@ -125,42 +136,69 @@ class OfConnFloodLight(OpenflowConn):
                       parameter is missing or wrong
         """
         try:
-            of_response = requests.get(self.url + "wm/core/controller/switches/json", headers=self.headers)
-            error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
+            of_response = requests.get(
+                self.url + "wm/core/controller/switches/json", headers=self.headers
+            )
+            error_text = "Openflow response {}: {}".format(
+                of_response.status_code, of_response.text
+            )
+
             if of_response.status_code != 200:
                 self.logger.warning("get_of_switches " + error_text)
+
                 raise OpenflowConnUnexpectedResponse(error_text)
+
             self.logger.debug("get_of_switches " + error_text)
             info = of_response.json()
+
             if not isinstance(info, (list, tuple)):
-                self.logger.error("get_of_switches. Unexpected response not a list %s", str(type(info)))
-                raise OpenflowConnUnexpectedResponse("Unexpected response, not a list. Wrong version?")
+                self.logger.error(
+                    "get_of_switches. Unexpected response not a list %s",
+                    str(type(info)),
+                )
+
+                raise OpenflowConnUnexpectedResponse(
+                    "Unexpected response, not a list. Wrong version?"
+                )
+
             if len(info) == 0:
                 return info
+
             # autodiscover version
             if self.version is None:
-                if 'dpid' in info[0] and 'inetAddress' in info[0]:
+                if "dpid" in info[0] and "inetAddress" in info[0]:
                     self._set_version("0.9")
                 # elif 'switchDPID' in info[0] and 'inetAddress' in info[0]:
                 #     self._set_version("1.X")
                 else:
-                    self.logger.error("get_of_switches. Unexpected response, not found 'dpid' or 'switchDPID' "
-                                      "field: %s", str(info[0]))
-                    raise OpenflowConnUnexpectedResponse("Unexpected response, not found 'dpid' or "
-                                                         "'switchDPID' field. Wrong version?")
+                    self.logger.error(
+                        "get_of_switches. Unexpected response, not found 'dpid' or 'switchDPID' "
+                        "field: %s",
+                        str(info[0]),
+                    )
+
+                    raise OpenflowConnUnexpectedResponse(
+                        "Unexpected response, not found 'dpid' or "
+                        "'switchDPID' field. Wrong version?"
+                    )
 
             switch_list = []
             for switch in info:
-                switch_list.append((switch[self.ver_names["dpid"]], switch['inetAddress']))
+                switch_list.append(
+                    (switch[self.ver_names["dpid"]], switch["inetAddress"])
+                )
+
             return switch_list
         except requests.exceptions.RequestException as e:
             error_text = type(e).__name__ + ": " + str(e)
             self.logger.error("get_of_switches " + error_text)
+
             raise OpenflowConnConnectionException(error_text)
         except Exception as e:
             # ValueError in the case that JSON can not be decoded
             error_text = type(e).__name__ + ": " + str(e)
             self.logger.error("get_of_switches " + error_text)
+
             raise OpenflowConnUnexpectedResponse(error_text)
 
     def get_of_rules(self, translate_of_ports=True):
@@ -179,48 +217,71 @@ class OfConnFloodLight(OpenflowConn):
             switch:       DPID, all
         Raise an openflowconnUnexpectedResponse exception if fails with text_error
         """
-
         try:
             # get translation, autodiscover version
+
             if len(self.ofi2pp) == 0:
                 self.obtain_port_correspondence()
 
-            of_response = requests.get(self.url + "wm/{}/list/{}/json".format(self.ver_names["URLmodifier"], self.dpid),
-                                       headers=self.headers)
-            error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
+            of_response = requests.get(
+                self.url
+                + "wm/{}/list/{}/json".format(self.ver_names["URLmodifier"], self.dpid),
+                headers=self.headers,
+            )
+            error_text = "Openflow response {}: {}".format(
+                of_response.status_code, of_response.text
+            )
+
             if of_response.status_code != 200:
                 self.logger.warning("get_of_rules " + error_text)
+
                 raise OpenflowConnUnexpectedResponse(error_text)
+
             self.logger.debug("get_of_rules " + error_text)
             info = of_response.json()
+
             if type(info) != dict:
-                self.logger.error("get_of_rules. Unexpected response not a dict %s", str(type(info)))
-                raise OpenflowConnUnexpectedResponse("Unexpected response, not a dict. Wrong version?")
+                self.logger.error(
+                    "get_of_rules. Unexpected response not a dict %s", str(type(info))
+                )
+
+                raise OpenflowConnUnexpectedResponse(
+                    "Unexpected response, not a dict. Wrong version?"
+                )
+
             rule_list = []
             for switch, switch_info in info.items():
                 if switch_info is None:
                     continue
+
                 if str(switch) != self.dpid:
                     continue
+
                 for name, details in switch_info.items():
-                    rule = {
-                        "name": name,
-                        "switch": str(switch)
-                    }
+                    rule = {"name": name, "switch": str(switch)}
                     # rule["active"] = "true"
                     rule["priority"] = int(details["priority"])
+
                     if self.version[0] == "0":
                         if translate_of_ports:
-                            rule["ingress_port"] = self.ofi2pp[details["match"]["inputPort"]]
+                            rule["ingress_port"] = self.ofi2pp[
+                                details["match"]["inputPort"]
+                            ]
                         else:
                             rule["ingress_port"] = str(details["match"]["inputPort"])
+
                         dst_mac = details["match"]["dataLayerDestination"]
+
                         if dst_mac != "00:00:00:00:00:00":
                             rule["dst_mac"] = dst_mac
+
                         vlan = details["match"]["dataLayerVirtualLan"]
+
                         if vlan != -1:
                             rule["vlan_id"] = vlan
+
                         actionlist = []
+
                         for action in details["actions"]:
                             if action["type"] == "OUTPUT":
                                 if translate_of_ports:
@@ -231,51 +292,82 @@ class OfConnFloodLight(OpenflowConn):
                             elif action["type"] == "STRIP_VLAN":
                                 actionlist.append(("vlan", None))
                             elif action["type"] == "SET_VLAN_ID":
-                                actionlist.append(("vlan", action["virtualLanIdentifier"]))
+                                actionlist.append(
+                                    ("vlan", action["virtualLanIdentifier"])
+                                )
                             else:
                                 actionlist.append((action["type"], str(action)))
-                                self.logger.warning("get_of_rules() Unknown action in rule %s: %s", rule["name"],
-                                                    str(action))
+                                self.logger.warning(
+                                    "get_of_rules() Unknown action in rule %s: %s",
+                                    rule["name"],
+                                    str(action),
+                                )
+
                             rule["actions"] = actionlist
                     elif self.version[0] == "1":
                         if translate_of_ports:
-                            rule["ingress_port"] = self.ofi2pp[details["match"]["in_port"]]
+                            rule["ingress_port"] = self.ofi2pp[
+                                details["match"]["in_port"]
+                            ]
                         else:
                             rule["ingress_port"] = details["match"]["in_port"]
+
                         if "eth_dst" in details["match"]:
                             dst_mac = details["match"]["eth_dst"]
                             if dst_mac != "00:00:00:00:00:00":
                                 rule["dst_mac"] = dst_mac
+
                         if "eth_vlan_vid" in details["match"]:
                             vlan = int(details["match"]["eth_vlan_vid"], 16) & 0xFFF
                             rule["vlan_id"] = str(vlan)
+
                         actionlist = []
-                        for action in details["instructions"]["instruction_apply_actions"]:
+                        for action in details["instructions"][
+                            "instruction_apply_actions"
+                        ]:
                             if action == "output":
                                 if translate_of_ports:
-                                    port = self.ofi2pp[details["instructions"]["instruction_apply_actions"]["output"]]
+                                    port = self.ofi2pp[
+                                        details["instructions"][
+                                            "instruction_apply_actions"
+                                        ]["output"]
+                                    ]
                                 else:
-                                    port = details["instructions"]["instruction_apply_actions"]["output"]
+                                    port = details["instructions"][
+                                        "instruction_apply_actions"
+                                    ]["output"]
                                 actionlist.append(("out", port))
                             elif action == "strip_vlan":
                                 actionlist.append(("vlan", None))
                             elif action == "set_vlan_vid":
                                 actionlist.append(
-                                    ("vlan", details["instructions"]["instruction_apply_actions"]["set_vlan_vid"]))
+                                    (
+                                        "vlan",
+                                        details["instructions"][
+                                            "instruction_apply_actions"
+                                        ]["set_vlan_vid"],
+                                    )
+                                )
                             else:
-                                self.logger.error("get_of_rules Unknown action in rule %s: %s", rule["name"],
-                                                  str(action))
+                                self.logger.error(
+                                    "get_of_rules Unknown action in rule %s: %s",
+                                    rule["name"],
+                                    str(action),
+                                )
                                 # actionlist.append((action, str(details["instructions"]["instruction_apply_actions"])))
+
                     rule_list.append(rule)
             return rule_list
         except requests.exceptions.RequestException as e:
             error_text = type(e).__name__ + ": " + str(e)
             self.logger.error("get_of_rules " + error_text)
+
             raise OpenflowConnConnectionException(error_text)
         except Exception as e:
             # ValueError in the case that JSON can not be decoded
             error_text = type(e).__name__ + ": " + str(e)
             self.logger.error("get_of_rules " + error_text)
+
             raise OpenflowConnUnexpectedResponse(error_text)
 
     def obtain_port_correspondence(self):
@@ -285,73 +377,112 @@ class OfConnFloodLight(OpenflowConn):
                  Raise an openflowconnUnexpectedResponse exception if fails with text_error
         """
         try:
-            of_response = requests.get(self.url + "wm/core/controller/switches/json", headers=self.headers)
+            of_response = requests.get(
+                self.url + "wm/core/controller/switches/json", headers=self.headers
+            )
             # print vim_response.status_code
-            error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
+            error_text = "Openflow response {}: {}".format(
+                of_response.status_code, of_response.text
+            )
+
             if of_response.status_code != 200:
                 self.logger.warning("obtain_port_correspondence " + error_text)
+
                 raise OpenflowConnUnexpectedResponse(error_text)
+
             self.logger.debug("obtain_port_correspondence " + error_text)
             info = of_response.json()
 
             if not isinstance(info, (list, tuple)):
-                raise OpenflowConnUnexpectedResponse("unexpected openflow response, not a list. Wrong version?")
+                raise OpenflowConnUnexpectedResponse(
+                    "unexpected openflow response, not a list. Wrong version?"
+                )
 
             index = -1
             if len(info) > 0:
                 # autodiscover version
                 if self.version is None:
-                    if 'dpid' in info[0] and 'ports' in info[0]:
+                    if "dpid" in info[0] and "ports" in info[0]:
                         self._set_version("0.9")
-                    elif 'switchDPID' in info[0]:
+                    elif "switchDPID" in info[0]:
                         self._set_version("1.X")
                     else:
-                        raise OpenflowConnUnexpectedResponse("unexpected openflow response, Wrong version?")
+                        raise OpenflowConnUnexpectedResponse(
+                            "unexpected openflow response, Wrong version?"
+                        )
 
             for i, info_item in enumerate(info):
                 if info_item[self.ver_names["dpid"]] == self.dpid:
                     index = i
                     break
+
             if index == -1:
-                text = "DPID '{}' not present in controller {}".format(self.dpid, self.url)
+                text = "DPID '{}' not present in controller {}".format(
+                    self.dpid, self.url
+                )
                 # print self.name, ": get_of_controller_info ERROR", text
+
                 raise OpenflowConnUnexpectedResponse(text)
             else:
                 if self.version[0] == "0":
                     ports = info[index]["ports"]
                 else:  # version 1.X
-                    of_response = requests.get(self.url + "wm/core/switch/{}/port-desc/json".format(self.dpid),
-                                               headers=self.headers)
+                    of_response = requests.get(
+                        self.url + "wm/core/switch/{}/port-desc/json".format(self.dpid),
+                        headers=self.headers,
+                    )
                     # print vim_response.status_code
-                    error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
+                    error_text = "Openflow response {}: {}".format(
+                        of_response.status_code, of_response.text
+                    )
+
                     if of_response.status_code != 200:
                         self.logger.warning("obtain_port_correspondence " + error_text)
+
                         raise OpenflowConnUnexpectedResponse(error_text)
+
                     self.logger.debug("obtain_port_correspondence " + error_text)
                     info = of_response.json()
+
                     if type(info) != dict:
-                        raise OpenflowConnUnexpectedResponse("unexpected openflow port-desc response, "
-                                                             "not a dict. Wrong version?")
+                        raise OpenflowConnUnexpectedResponse(
+                            "unexpected openflow port-desc response, "
+                            "not a dict. Wrong version?"
+                        )
+
                     if "portDesc" not in info:
-                        raise OpenflowConnUnexpectedResponse("unexpected openflow port-desc response, "
-                                                             "'portDesc' not found. Wrong version?")
-                    if type(info["portDesc"]) != list and type(info["portDesc"]) != tuple:
-                        raise OpenflowConnUnexpectedResponse("unexpected openflow port-desc response at "
-                                                             "'portDesc', not a list. Wrong version?")
+                        raise OpenflowConnUnexpectedResponse(
+                            "unexpected openflow port-desc response, "
+                            "'portDesc' not found. Wrong version?"
+                        )
+
+                    if (
+                        type(info["portDesc"]) != list
+                        and type(info["portDesc"]) != tuple
+                    ):
+                        raise OpenflowConnUnexpectedResponse(
+                            "unexpected openflow port-desc response at "
+                            "'portDesc', not a list. Wrong version?"
+                        )
+
                     ports = info["portDesc"]
+
                 for port in ports:
                     self.pp2ofi[str(port["name"])] = str(port["portNumber"])
                     self.ofi2pp[port["portNumber"]] = str(port["name"])
                     # print self.name, ": get_of_controller_info ports:", self.pp2ofi
+
             return self.pp2ofi
         except requests.exceptions.RequestException as e:
             error_text = type(e).__name__ + ": " + str(e)
             self.logger.error("obtain_port_correspondence " + error_text)
+
             raise OpenflowConnConnectionException(error_text)
         except Exception as e:
             # ValueError in the case that JSON can not be decoded
             error_text = type(e).__name__ + ": " + str(e)
             self.logger.error("obtain_port_correspondence " + error_text)
+
             raise OpenflowConnUnexpectedResponse(error_text)
 
     def del_flow(self, flow_name):
@@ -365,24 +496,34 @@ class OfConnFloodLight(OpenflowConn):
             if self.version is None:
                 self.get_of_switches()
 
-            of_response = requests.delete(self.url + "wm/{}/json".format(self.ver_names["URLmodifier"]),
-                                          headers=self.headers,
-                                          data='{{"switch":"{}","name":"{}"}}'.format(self.dpid, flow_name))
-            error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
+            of_response = requests.delete(
+                self.url + "wm/{}/json".format(self.ver_names["URLmodifier"]),
+                headers=self.headers,
+                data='{{"switch":"{}","name":"{}"}}'.format(self.dpid, flow_name),
+            )
+            error_text = "Openflow response {}: {}".format(
+                of_response.status_code, of_response.text
+            )
+
             if of_response.status_code != 200:
                 self.logger.warning("del_flow " + error_text)
+
                 raise OpenflowConnUnexpectedResponse(error_text)
+
             self.logger.debug("del_flow OK " + error_text)
+
             return None
 
         except requests.exceptions.RequestException as e:
             error_text = type(e).__name__ + ": " + str(e)
             self.logger.error("del_flow " + error_text)
+
             raise OpenflowConnConnectionException(error_text)
         except Exception as e:
             # ValueError in the case that JSON can not be decoded
             error_text = type(e).__name__ + ": " + str(e)
             self.logger.error("del_flow " + error_text)
+
             raise OpenflowConnUnexpectedResponse(error_text)
 
     def new_flow(self, data):
@@ -406,40 +547,57 @@ class OfConnFloodLight(OpenflowConn):
 
         try:
             # We have to build the data for the floodlight call from the generic data
-            sdata = {'active': "true", "name": data["name"]}
+            sdata = {"active": "true", "name": data["name"]}
+
             if data.get("priority"):
                 sdata["priority"] = str(data["priority"])
+
             if data.get("vlan_id"):
                 sdata[self.ver_names["vlanid"]] = data["vlan_id"]
+
             if data.get("dst_mac"):
                 sdata[self.ver_names["destmac"]] = data["dst_mac"]
-            sdata['switch'] = self.dpid
-            if not data['ingress_port'] in self.pp2ofi:
-                error_text = 'Error. Port {} is not present in the switch'.format(data['ingress_port'])
+
+            sdata["switch"] = self.dpid
+            if not data["ingress_port"] in self.pp2ofi:
+                error_text = "Error. Port {} is not present in the switch".format(
+                    data["ingress_port"]
+                )
                 self.logger.warning("new_flow " + error_text)
                 raise OpenflowConnUnexpectedResponse(error_text)
 
-            sdata[self.ver_names["inport"]] = self.pp2ofi[data['ingress_port']]
-            sdata['actions'] = ""
+            sdata[self.ver_names["inport"]] = self.pp2ofi[data["ingress_port"]]
+            sdata["actions"] = ""
 
-            for action in data['actions']:
-                if len(sdata['actions']) > 0:
-                    sdata['actions'] += ','
+            for action in data["actions"]:
+                if len(sdata["actions"]) > 0:
+                    sdata["actions"] += ","
+
                 if action[0] == "vlan":
                     if action[1] is None:
-                        sdata['actions'] += self.ver_names["stripvlan"]
+                        sdata["actions"] += self.ver_names["stripvlan"]
                     else:
-                        sdata['actions'] += self.ver_names["setvlan"] + "=" + str(action[1])
-                elif action[0] == 'out':
-                    sdata['actions'] += "output=" + self.pp2ofi[action[1]]
+                        sdata["actions"] += (
+                            self.ver_names["setvlan"] + "=" + str(action[1])
+                        )
+                elif action[0] == "out":
+                    sdata["actions"] += "output=" + self.pp2ofi[action[1]]
 
-            of_response = requests.post(self.url + "wm/{}/json".format(self.ver_names["URLmodifier"]),
-                                        headers=self.headers, data=json.dumps(sdata))
-            error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
+            of_response = requests.post(
+                self.url + "wm/{}/json".format(self.ver_names["URLmodifier"]),
+                headers=self.headers,
+                data=json.dumps(sdata),
+            )
+            error_text = "Openflow response {}: {}".format(
+                of_response.status_code, of_response.text
+            )
+
             if of_response.status_code != 200:
                 self.logger.warning("new_flow " + error_text)
                 raise OpenflowConnUnexpectedResponse(error_text)
+
             self.logger.debug("new_flow OK" + error_text)
+
             return None
 
         except requests.exceptions.RequestException as e:
@@ -466,20 +624,29 @@ class OfConnFloodLight(OpenflowConn):
                 if len(sw_list) == 0:  # empty
                     return None
 
-            url = self.url + "wm/{}/clear/{}/json".format(self.ver_names["URLmodifier"], self.dpid)
+            url = self.url + "wm/{}/clear/{}/json".format(
+                self.ver_names["URLmodifier"], self.dpid
+            )
             of_response = requests.get(url)
-            error_text = "Openflow response {}: {}".format(of_response.status_code, of_response.text)
+            error_text = "Openflow response {}: {}".format(
+                of_response.status_code, of_response.text
+            )
+
             if of_response.status_code < 200 or of_response.status_code >= 300:
                 self.logger.warning("clear_all_flows " + error_text)
                 raise OpenflowConnUnexpectedResponse(error_text)
+
             self.logger.debug("clear_all_flows OK " + error_text)
+
             return None
         except requests.exceptions.RequestException as e:
             error_text = type(e).__name__ + ": " + str(e)
             self.logger.error("clear_all_flows " + error_text)
+
             raise OpenflowConnConnectionException(error_text)
         except Exception as e:
             # ValueError in the case that JSON can not be decoded
             error_text = type(e).__name__ + ": " + str(e)
             self.logger.error("clear_all_flows " + error_text)
+
             raise OpenflowConnUnexpectedResponse(error_text)

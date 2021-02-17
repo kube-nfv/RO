@@ -25,10 +25,18 @@ Validator of input data using JSON schemas
 """
 
 # Basis schemas
-name_schema = {"type": "string", "minLength": 1, "maxLength": 255, "pattern": "^[^,;()'\"]+$"}
+name_schema = {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 255,
+    "pattern": "^[^,;()'\"]+$",
+}
 string_schema = {"type": "string", "minLength": 1, "maxLength": 255}
 ssh_key_schema = {"type": "string", "minLength": 1}
-id_schema = {"type": "string", "pattern": "^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$"}
+id_schema = {
+    "type": "string",
+    "pattern": "^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$",
+}
 bool_schema = {"type": "boolean"}
 null_schema = {"type": "null"}
 object_schema = {"type": "object"}
@@ -42,7 +50,7 @@ deploy_item_schema = {
         "vim_info": object_schema,
         "common_id": string_schema,
     },
-    "additionalProperties": True
+    "additionalProperties": True,
 }
 
 deploy_item_list = {
@@ -96,10 +104,10 @@ deploy_schema = {
             "type": "object",
             "properties": {
                 "vld": deploy_item_list,
-            }
+            },
         },
     },
-    "additionalProperties": False
+    "additionalProperties": False,
 }
 
 
@@ -119,12 +127,17 @@ def validate_input(indata, schema_to_use):
     try:
         if schema_to_use:
             js_v(indata, schema_to_use)
+
         return None
     except js_e.ValidationError as e:
         if e.path:
             error_pos = "at '" + ":".join(map(str, e.path)) + "'"
         else:
             error_pos = ""
+
         raise ValidationError("Format error {} '{}' ".format(error_pos, e.message))
     except js_e.SchemaError:
-        raise ValidationError("Bad json schema {}".format(schema_to_use), http_code=HTTPStatus.INTERNAL_SERVER_ERROR)
+        raise ValidationError(
+            "Bad json schema {}".format(schema_to_use),
+            http_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+        )

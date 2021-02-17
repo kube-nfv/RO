@@ -30,27 +30,32 @@ osm-ro plugin is the base class for RO VIM and SDN plugins
 
 setup(
     name=_name,
-    description='OSM ro base class for vim and SDN plugins',
+    description="OSM ro base class for vim and SDN plugins",
     long_description=README,
-    version_command=('git describe --match v* --tags --long --dirty', 'pep440-git-full'),
+    version_command=(
+        "git describe --match v* --tags --long --dirty",
+        "pep440-git-full",
+    ),
     # version=VERSION,
     # python_requires='>3.5.0',
-    author='ETSI OSM',
-    author_email='alfonso.tiernosepulveda@telefonica.com',
-    maintainer='Alfonso Tierno',
-    maintainer_email='alfonso.tiernosepulveda@telefonica.com',
-    url='https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary',
-    license='Apache 2.0',
-
+    author="ETSI OSM",
+    author_email="alfonso.tiernosepulveda@telefonica.com",
+    maintainer="Alfonso Tierno",
+    maintainer_email="alfonso.tiernosepulveda@telefonica.com",
+    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
+    license="Apache 2.0",
     packages=[_name],
     include_package_data=True,
     install_requires=[
-        "requests", "paramiko", "PyYAML",
+        "requests",
+        "paramiko",
+        "PyYAML",
     ],
-    setup_requires=['setuptools-version-command'],
+    setup_requires=["setuptools-version-command"],
     entry_points={
-        'osm_ro.plugins': ['rovim_plugin = osm_ro_plugin.vimconn:VimConnector',
-                           'rosdn_plugin = osm_ro_plugin.sdnconn:SdnConnectorBase'
-                           ],
+        "osm_ro.plugins": [
+            "rovim_plugin = osm_ro_plugin.vimconn:VimConnector",
+            "rosdn_plugin = osm_ro_plugin.sdnconn:SdnConnectorBase",
+        ],
     },
 )
