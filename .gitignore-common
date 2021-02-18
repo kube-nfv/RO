@@ -23,10 +23,18 @@
 # cp .gitignore-common .gitignore
 
 .tox/
+venv/
+
 .coverage
+cover
+coverage.xml
+nosetests.xml
 
 *.pyc
 *.pyo
+
+*.eggs/
+*.egg-info/
 
 #auto-ignore
 .gitignore

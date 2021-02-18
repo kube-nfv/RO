@@ -687,9 +687,7 @@ class Ns(object):
                     "dhcp_start_address": ip_profile.get("dhcp-params", {}).get(
                         "start-address", None
                     ),
-                    "dhcp_count": ip_profile.get("dhcp-params", {}).get(
-                        "count", None
-                    ),
+                    "dhcp_count": ip_profile.get("dhcp-params", {}).get("count", None),
                 }
 
                 if ip_profile.get("dns-server"):
@@ -787,13 +785,13 @@ class Ns(object):
                     extra_dict["depends_on"].append(net_text)
 
                     if "port-security-enabled" in interface:
-                        interface["port_security"] = (
-                            interface.pop("port-security-enabled")
+                        interface["port_security"] = interface.pop(
+                            "port-security-enabled"
                         )
 
                     if "port-security-disable-strategy" in interface:
-                        interface["port_security_disable_strategy"] = (
-                            interface.pop("port-security-disable-strategy")
+                        interface["port_security_disable_strategy"] = interface.pop(
+                            "port-security-disable-strategy"
                         )
 
                     net_item = {

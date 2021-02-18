@@ -19,8 +19,16 @@
 from setuptools import setup
 
 _name = "osm_rosdn_floodlightof"
+_version_command = ("git describe --match v* --tags --long --dirty", "pep440-git-full")
+_description = "OSM RO plugin for SDN with floodlight openflow rules"
+_author = "OSM Support"
+_author_email = "osmsupport@etsi.org"
+_maintainer = "OSM Support"
+_maintainer_email = "osmsupport@etsi.org"
+_license = "Apache 2.0"
+_url = "https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary"
 
-README = """
+_readme = """
 ===========
 osm-rosdn_floodlightof
 ===========
@@ -30,26 +38,17 @@ osm-ro plugin for floodlight SDN using pre-computed openflow rules
 
 setup(
     name=_name,
-    description="OSM RO plugin for SDN with floodlight openflow rules",
-    long_description=README,
-    version_command=(
-        "git describe --match v* --tags --long --dirty",
-        "pep440-git-full",
-    ),
-    # version=VERSION,
-    # python_requires='>3.5.0',
-    author="ETSI OSM",
-    author_email="alfonso.tiernosepulveda@telefonica.com",
-    maintainer="Alfonso Tierno",
-    maintainer_email="alfonso.tiernosepulveda@telefonica.com",
-    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
-    license="Apache 2.0",
+    description=_description,
+    long_description=_readme,
+    version_command=_version_command,
+    author=_author,
+    author_email=_author_email,
+    maintainer=_maintainer,
+    maintainer_email=_maintainer_email,
+    url=_url,
+    license=_license,
     packages=[_name],
     include_package_data=True,
-    install_requires=[
-        "requests",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
-    ],
     setup_requires=["setuptools-version-command"],
     entry_points={
         "osm_rosdn.plugins": [

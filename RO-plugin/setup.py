@@ -19,8 +19,16 @@
 from setuptools import setup
 
 _name = "osm_ro_plugin"
+_version_command = ("git describe --match v* --tags --long --dirty", "pep440-git-full")
+_description = "OSM ro base class for vim and SDN plugins"
+_author = "OSM Support"
+_author_email = "osmsupport@etsi.org"
+_maintainer = "OSM Support"
+_maintainer_email = "osmsupport@etsi.org"
+_license = "Apache 2.0"
+_url = "https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary"
 
-README = """
+_readme = """
 ===========
 osm-ro_plugin
 ===========
@@ -30,26 +38,21 @@ osm-ro plugin is the base class for RO VIM and SDN plugins
 
 setup(
     name=_name,
-    description="OSM ro base class for vim and SDN plugins",
-    long_description=README,
-    version_command=(
-        "git describe --match v* --tags --long --dirty",
-        "pep440-git-full",
-    ),
-    # version=VERSION,
-    # python_requires='>3.5.0',
-    author="ETSI OSM",
-    author_email="alfonso.tiernosepulveda@telefonica.com",
-    maintainer="Alfonso Tierno",
-    maintainer_email="alfonso.tiernosepulveda@telefonica.com",
-    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
-    license="Apache 2.0",
+    description=_description,
+    long_description=_readme,
+    version_command=_version_command,
+    author=_author,
+    author_email=_author_email,
+    maintainer=_maintainer,
+    maintainer_email=_maintainer_email,
+    url=_url,
+    license=_license,
     packages=[_name],
     include_package_data=True,
     install_requires=[
-        "requests",
-        "paramiko",
-        "PyYAML",
+        # "requests",
+        # "paramiko",
+        # "PyYAML",
     ],
     setup_requires=["setuptools-version-command"],
     entry_points={
