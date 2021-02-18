@@ -13,5 +13,5 @@
 #
 ##
 
-recursive-include osm_ng_ro *.py *.sh *.cfg *.yml
+recursive-include osm_ng_ro *.py *.sh *.cfg *.yml *.txt
 recursive-include osm_ng_ro/html_public *

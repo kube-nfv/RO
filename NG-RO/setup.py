@@ -19,31 +19,29 @@
 from setuptools import setup, find_packages
 
 _name = "osm_ng_ro"
+_version_command = ("git describe --match v* --tags --long --dirty", "pep440-git-full")
+_description = "OSM Resource Orchestrator"
+_author = "OSM Support"
+_author_email = "osmsupport@etsi.org"
+_maintainer = "OSM Support"
+_maintainer_email = "osmsupport@etsi.org"
+_license = "Apache 2.0"
+_url = "https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary"
+
 _readme = "osm-ng-ro is the New Generation Resource Orchestrator for OSM"
+
 setup(
     name=_name,
-    description="OSM Resource Orchestrator",
+    description=_description,
     long_description=_readme,
-    version_command=(
-        "git describe --match v* --tags --long --dirty",
-        "pep440-git-full",
-    ),
-    author="ETSI OSM",
-    author_email="alfonso.tiernosepulveda@telefonica.com",
-    maintainer="Alfonso Tierno",
-    maintainer_email="alfonso.tiernosepulveda@telefonica.com",
-    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
-    license="Apache 2.0",
+    version_command=_version_command,
+    author=_author,
+    author_email=_author_email,
+    maintainer=_maintainer,
+    maintainer_email=_maintainer_email,
+    url=_url,
+    license=_license,
     packages=find_packages(exclude=["temp", "local"]),
     include_package_data=True,
-    install_requires=[
-        "CherryPy==18.1.2",
-        "osm-common",
-        "jsonschema",
-        "PyYAML",
-        "requests",
-        "cryptography",  # >=2.5  installed right version with the debian post-install script
-        "osm-ro-plugin",
-    ],
     setup_requires=["setuptools-version-command"],
 )

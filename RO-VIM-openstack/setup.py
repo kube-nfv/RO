@@ -19,8 +19,16 @@
 from setuptools import setup
 
 _name = "osm_rovim_openstack"
+_version_command = ("git describe --match v* --tags --long --dirty", "pep440-git-full")
+_description = "OSM ro vim plugin for openstack"
+_author = "OSM Support"
+_author_email = "osmsupport@etsi.org"
+_maintainer = "OSM Support"
+_maintainer_email = "osmsupport@etsi.org"
+_license = "Apache 2.0"
+_url = "https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary"
 
-README = """
+_readme = """
 ===========
 osm-rovim_openstack
 ===========
@@ -30,32 +38,17 @@ osm-ro pluging for openstack VIM
 
 setup(
     name=_name,
-    description="OSM ro vim plugin for openstack",
-    long_description=README,
-    version_command=(
-        "git describe --match v* --tags --long --dirty",
-        "pep440-git-full",
-    ),
-    # version=VERSION,
-    # python_requires=">3.5.0",
-    author="ETSI OSM",
-    author_email="alfonso.tiernosepulveda@telefonica.com",
-    maintainer="Alfonso Tierno",
-    maintainer_email="alfonso.tiernosepulveda@telefonica.com",
-    url="https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary",
-    license="Apache 2.0",
+    description=_description,
+    long_description=_readme,
+    version_command=_version_command,
+    author=_author,
+    author_email=_author_email,
+    maintainer=_maintainer,
+    maintainer_email=_maintainer_email,
+    url=_url,
+    license=_license,
     packages=[_name],
     include_package_data=True,
-    install_requires=[
-        "python-openstackclient",
-        "python-neutronclient",
-        "requests",
-        "netaddr",
-        "PyYAML",
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
-        # TODO py3 "networking-l2gw"
-        # "python-novaclient", "python-keystoneclient", "python-glanceclient", "python-cinderclient",
-    ],
     setup_requires=["setuptools-version-command"],
     entry_points={
         "osm_rovim.plugins": [

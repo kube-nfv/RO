@@ -36,7 +36,7 @@ from pyvcloud.vcd.vapp import VApp
 import os
 import unittest
 from unittest import mock
-import test_vimconn_vmware_xml_response as xml_resp
+import tests.test_vimconn_vmware_xml_response as xml_resp
 from os import path
 
 __author__ = "Prakash Kasar"
