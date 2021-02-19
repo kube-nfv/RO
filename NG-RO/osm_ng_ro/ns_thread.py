@@ -921,7 +921,7 @@ class VimInteractionSdnNet(VimInteractionBase):
                     else None,
                     "service_endpoint_encapsulation_info": {
                         "vlan": port.get("vlan"),
-                        "mac": port.get("mac_address"),
+                        "mac": port.get("mac-address"),
                         "device_id": pmap.get("device_id") or port["compute_node"],
                         "device_interface_id": pmap.get("device_interface_id")
                         or port["pci"],
