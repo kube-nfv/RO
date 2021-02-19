@@ -1758,6 +1758,11 @@ class NsWorker(threading.Thread):
                                     next_check_at = min(
                                         next_check_at, dependency_ro_task["to_check_at"]
                                     )
+                                    # must allow dependent task to be processed first
+                                    # to do this set time after last_task_processed
+                                    next_check_at = max(
+                                        self.time_last_task_processed, next_check_at
+                                    )
                                     break
                                 elif dependency_task["status"] == "FAILED":
                                     error_text = "Cannot {} {} because depends on failed {} {} id={}): {}".format(
