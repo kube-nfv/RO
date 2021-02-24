@@ -1801,7 +1801,9 @@ def delete_vnf(mydb,tenant_id,vnf_id,datacenter=None,vim_tenant=None):
             #delelte at VIM
             c = mydb.get_rows(FROM='datacenters_flavors', WHERE={'flavor_id': flavor})
             for flavor_vim in c:
-                if not flavor_vim['created']:  # skip this flavor because not created by openmano
+                # skip this flavor because not created by openmano
+                # field created in the database is a string, must do a string comparison
+                if flavor_vim['created'] != "true":
                     continue
                 # look for vim
                 myvim = None
