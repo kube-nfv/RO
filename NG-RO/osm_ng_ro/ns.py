@@ -785,6 +785,17 @@ class Ns(object):
                         continue  # interface not connected to any vld
 
                     extra_dict["depends_on"].append(net_text)
+
+                    if "port-security-enabled" in interface:
+                        interface["port_security"] = (
+                            interface.pop("port-security-enabled")
+                        )
+
+                    if "port-security-disable-strategy" in interface:
+                        interface["port_security_disable_strategy"] = (
+                            interface.pop("port-security-disable-strategy")
+                        )
+
                     net_item = {
                         x: v
                         for x, v in interface.items()
