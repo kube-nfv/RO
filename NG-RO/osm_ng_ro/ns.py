@@ -681,15 +681,15 @@ class Ns(object):
                     else "IPv6",
                     "subnet_address": ip_profile.get("subnet-address"),
                     "gateway_address": ip_profile.get("gateway-address"),
-                    "dhcp_enabled": ip_profile["dhcp-params"].get("enabled", True)
-                    if "dhcp_params" in ip_profile
-                    else False,
-                    "dhcp_start_address": ip_profile["dhcp-params"].get("start-address")
-                    if "dhcp_params" in ip_profile
-                    else None,
-                    "dhcp_count": ip_profile["dhcp-params"].get("count")
-                    if "dhcp_params" in ip_profile
-                    else None,
+                    "dhcp_enabled": ip_profile.get("dhcp-params", {}).get(
+                        "enabled", False
+                    ),
+                    "dhcp_start_address": ip_profile.get("dhcp-params", {}).get(
+                        "start-address", None
+                    ),
+                    "dhcp_count": ip_profile.get("dhcp-params", {}).get(
+                        "count", None
+                    ),
                 }
 
                 if ip_profile.get("dns-server"):
