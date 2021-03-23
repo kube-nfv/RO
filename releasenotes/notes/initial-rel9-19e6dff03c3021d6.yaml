@@ -1,0 +1,82 @@
+#######################################################################################
+# Copyright ETSI Contributors and Others.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#######################################################################################
+---
+deprecations:
+  - |
+    OSM Information Model (IM) Debian package is no longer required, therefore
+    its usage has been removed.
+security:
+  - |
+    Security scanning has been added through the usage of the Gitlab scanners.
+fixes:
+  - |
+    Fixes [bug 1407](https://osm.etsi.org/bugzilla/show_bug.cgi?id=1407). This
+    bug was introduced due to the change from the old descriptor models into
+    the new SOL006 descriptors. The Resource Orchestrator (RO) didn't received
+    the information relating to port security, therefore it couldn't determine
+    if the network interface should have it enabled or disabled, which in turn
+    always applied the default for the used substrate.
+  - |
+    Fixes [bug 1408](https://osm.etsi.org/bugzilla/show_bug.cgi?id=1408). This
+    bug was introduced due to the change from the old descriptor models into
+    the new SOL006 descriptors. The Resource Orchestrator (RO) didn't received
+    the information relating to Virtual Link Descriptor (VLD) IP Profile,
+    therefore it couldn't apply the desired values for subnets and DHCP.
+  - |
+    Fixes [bug 1446](https://osm.etsi.org/bugzilla/show_bug.cgi?id=1446). This
+    bug was introduced due to the change from the old Resource Orchestrator to
+    the new Next-Generation Resource Orchestrator. For some Network Services,
+    we have observed that sometimes the NS remains in state BUILDING. Checking
+    in the database for ro_task we have seen that this happens because the RO
+    keeps on locking always the same ro_task that has dependencies on another
+    ro_task that is never executed.
+  - |
+    Fixes [bug 1445](https://osm.etsi.org/bugzilla/show_bug.cgi?id=1445). This
+    bug was introduced due to the change from the old Resource Orchestrator to
+    the new Next-Generation Resource Orchestrator. When we try to instantiate a
+    service with SRIOV interfaces it fails. Debugging the error we have seen
+    that the mac does not arrive to the onosof sdn plugin.
+  - |
+    Fixes [bug 1386](https://osm.etsi.org/bugzilla/show_bug.cgi?id=1386). This
+    bug was introduced due to the change from the old Resource Orchestrator to
+    the new Next-Generation Resource Orchestrator. RO has a database locking
+    system intended for HA. Every worker locks a "ro_task" by writting at
+    database, before performing it at the VIM, and unlocks afterwards. In case
+    of a crash (e.g. POD is destroyed) the ro_task becames locked during many
+    time until lock expires. The expiration time is set to 1 hour as this is
+    the time that can take some ro_task (some VMs can take this time). It will
+    be better having a shorter expiration time, and re-new it when needed if
+    the thread that perform the VIM task is still alive. In that a way after a
+    crash, new RO POD will take over the locked ro_task quite soon. The change
+    has a new asyncio task that performs the renew of the locks of all the
+    needed vim_threads. Vim_thread cannot do it by themselves because some VIM
+    plugin operations are synchronous.
+  - |
+    Fixes [bug 1385](https://osm.etsi.org/bugzilla/show_bug.cgi?id=1385). This
+    bug was introduced due to the change from the old Resource Orchestrator to
+    the new Next-Generation Resource Orchestrator. Code creates vim_threads
+    when there is new VIMs to handle (NS deployed at this VIM). However when
+    the VIM is not used anymore (NS is deleted), vim_thread is not re-used in
+    the next assignation. This is something that can be easily see with the
+    logs. This bug does not causes malfunction, but can lead to have some
+    threads overloaded. In addition resources are not free when VIM is not
+    used.
+other:
+  - |
+    The code has been reformatted to be compliant with the Python Language
+    standards, using [black](https://github.com/psf/black) and
+    [flake8](https://flake8.pycqa.org/en/latest/).
