@@ -24,3 +24,4 @@ python-novaclient
 python-keystoneclient
 python-glanceclient
 python-cinderclient
+pyroute2==0.5.18

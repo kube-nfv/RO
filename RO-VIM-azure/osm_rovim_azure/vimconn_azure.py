@@ -20,17 +20,23 @@ import netaddr
 import re
 
 from os import getenv
-from azure.common.credentials import ServicePrincipalCredentials
+from azure.identity import ClientSecretCredential
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import DiskCreateOption
+from azure.core.exceptions import ResourceNotFoundError
+from azure.profiles import ProfileDefinition
 from msrestazure.azure_exceptions import CloudError
 from msrest.exceptions import AuthenticationError
 import msrestazure.tools as azure_tools
 from requests.exceptions import ConnectionError
 
-__author__ = "Isabel Lloret, Sergio Gonzalez, Alfonso Tierno"
+from cryptography.hazmat.primitives import serialization as crypto_serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend as crypto_default_backend
+
+__author__ = "Isabel Lloret, Sergio Gonzalez, Alfonso Tierno, Gerardo Garcia"
 __date__ = "$18-apr-2019 23:59:59$"
 
 
@@ -68,7 +74,83 @@ class vimconnector(vimconn.VimConnector):
         "deallocating": "BUILD",
     }
 
+    # TODO - review availability zones
     AZURE_ZONES = ["1", "2", "3"]
+
+    AZURE_COMPUTE_MGMT_CLIENT_API_VERSION = "2021-03-01"
+    AZURE_COMPUTE_MGMT_PROFILE_TAG = "azure.mgmt.compute.ComputeManagementClient"
+    AZURE_COMPUTE_MGMT_PROFILE = ProfileDefinition(
+        {
+            AZURE_COMPUTE_MGMT_PROFILE_TAG: {
+                None: AZURE_COMPUTE_MGMT_CLIENT_API_VERSION,
+                "availability_sets": "2020-12-01",
+                "dedicated_host_groups": "2020-12-01",
+                "dedicated_hosts": "2020-12-01",
+                "disk_accesses": "2020-12-01",
+                "disk_encryption_sets": "2020-12-01",
+                "disk_restore_point": "2020-12-01",
+                "disks": "2020-12-01",
+                "galleries": "2020-09-30",
+                "gallery_application_versions": "2020-09-30",
+                "gallery_applications": "2020-09-30",
+                "gallery_image_versions": "2020-09-30",
+                "gallery_images": "2020-09-30",
+                "gallery_sharing_profile": "2020-09-30",
+                "images": "2020-12-01",
+                "log_analytics": "2020-12-01",
+                "operations": "2020-12-01",
+                "proximity_placement_groups": "2020-12-01",
+                "resource_skus": "2019-04-01",
+                "shared_galleries": "2020-09-30",
+                "shared_gallery_image_versions": "2020-09-30",
+                "shared_gallery_images": "2020-09-30",
+                "snapshots": "2020-12-01",
+                "ssh_public_keys": "2020-12-01",
+                "usage": "2020-12-01",
+                "virtual_machine_extension_images": "2020-12-01",
+                "virtual_machine_extensions": "2020-12-01",
+                "virtual_machine_images": "2020-12-01",
+                "virtual_machine_images_edge_zone": "2020-12-01",
+                "virtual_machine_run_commands": "2020-12-01",
+                "virtual_machine_scale_set_extensions": "2020-12-01",
+                "virtual_machine_scale_set_rolling_upgrades": "2020-12-01",
+                "virtual_machine_scale_set_vm_extensions": "2020-12-01",
+                "virtual_machine_scale_set_vm_run_commands": "2020-12-01",
+                "virtual_machine_scale_set_vms": "2020-12-01",
+                "virtual_machine_scale_sets": "2020-12-01",
+                "virtual_machine_sizes": "2020-12-01",
+                "virtual_machines": "2020-12-01",
+            }
+        },
+        AZURE_COMPUTE_MGMT_PROFILE_TAG + " osm",
+    )
+
+    AZURE_RESOURCE_MGMT_CLIENT_API_VERSION = "2020-10-01"
+    AZURE_RESOURCE_MGMT_PROFILE_TAG = (
+        "azure.mgmt.resource.resources.ResourceManagementClient"
+    )
+    AZURE_RESOURCE_MGMT_PROFILE = ProfileDefinition(
+        {
+            AZURE_RESOURCE_MGMT_PROFILE_TAG: {
+                None: AZURE_RESOURCE_MGMT_CLIENT_API_VERSION,
+            }
+        },
+        AZURE_RESOURCE_MGMT_PROFILE_TAG + " osm",
+    )
+
+    AZURE_NETWORK_MGMT_CLIENT_API_VERSION = "2020-11-01"
+    AZURE_NETWORK_MGMT_PROFILE_TAG = "azure.mgmt.network.NetworkManagementClient"
+    AZURE_NETWORK_MGMT_PROFILE = ProfileDefinition(
+        {
+            AZURE_NETWORK_MGMT_PROFILE_TAG: {
+                None: AZURE_NETWORK_MGMT_CLIENT_API_VERSION,
+                "firewall_policy_rule_groups": "2020-04-01",
+                "interface_endpoints": "2019-02-01",
+                "p2_svpn_server_configurations": "2019-07-01",
+            }
+        },
+        AZURE_NETWORK_MGMT_PROFILE_TAG + " osm",
+    )
 
     def __init__(
         self,
@@ -117,11 +199,10 @@ class vimconnector(vimconn.VimConnector):
         self.reload_client = True
 
         self.vnet_address_space = None
+
         # LOGGER
         self.logger = logging.getLogger("ro.vim.azure")
-
         if log_level:
-            logging.basicConfig()
             self.logger.setLevel(getattr(logging, log_level))
 
         self.tenant = tenant_id or tenant_name
@@ -160,8 +241,13 @@ class vimconnector(vimconn.VimConnector):
         if "vnet_name" in config:
             self.vnet_name = config["vnet_name"]
 
+        # TODO - not used, do anything about it?
         # public ssh key
         self.pub_key = config.get("pub_key")
+
+        # TODO - check default user for azure
+        # default admin user
+        self._default_admin_user = "azureuser"
 
         # flavor pattern regex
         if "flavors_pattern" in config:
@@ -175,19 +261,25 @@ class vimconnector(vimconn.VimConnector):
             self.logger.debug("reloading azure client")
 
             try:
-                self.credentials = ServicePrincipalCredentials(
+                self.credentials = ClientSecretCredential(
                     client_id=self._config["user"],
-                    secret=self._config["passwd"],
-                    tenant=self._config["tenant"],
+                    client_secret=self._config["passwd"],
+                    tenant_id=self._config["tenant"],
                 )
                 self.conn = ResourceManagementClient(
-                    self.credentials, self._config["subscription_id"]
+                    self.credentials,
+                    self._config["subscription_id"],
+                    profile=self.AZURE_RESOURCE_MGMT_PROFILE,
                 )
                 self.conn_compute = ComputeManagementClient(
-                    self.credentials, self._config["subscription_id"]
+                    self.credentials,
+                    self._config["subscription_id"],
+                    profile=self.AZURE_COMPUTE_MGMT_PROFILE,
                 )
                 self.conn_vnet = NetworkManagementClient(
-                    self.credentials, self._config["subscription_id"]
+                    self.credentials,
+                    self._config["subscription_id"],
+                    profile=self.AZURE_NETWORK_MGMT_PROFILE,
                 )
                 self._check_or_create_resource_group()
                 self._check_or_create_vnet()
@@ -248,6 +340,7 @@ class vimconnector(vimconn.VimConnector):
 
     def _check_subnets_for_vm(self, net_list):
         # All subnets must belong to the same resource group and vnet
+        # All subnets must belong to the same resource group anded vnet
         rg_vnet = set(
             self._get_resource_group_name_from_resource_id(net["net_id"])
             + self._get_net_name_from_resource_id(net["net_id"])
@@ -263,8 +356,9 @@ class vimconnector(vimconn.VimConnector):
         """
         Transforms a generic or azure exception to a vimcommException
         """
+        self.logger.error("Azure plugin error: {}".format(e))
         if isinstance(e, vimconn.VimConnException):
-            raise
+            raise e
         elif isinstance(e, AuthenticationError):
             raise vimconn.VimConnAuthException(type(e).__name__ + ": " + str(e))
         elif isinstance(e, ConnectionError):
@@ -318,7 +412,7 @@ class vimconnector(vimconn.VimConnector):
             self.vnet_address_space = "10.0.0.0/8"
 
             self.logger.debug("create base vnet: %s", self.vnet_name)
-            self.conn_vnet.virtual_networks.create_or_update(
+            self.conn_vnet.virtual_networks.begin_create_or_update(
                 self.resource_group, self.vnet_name, vnet_params
             )
             vnet = self.conn_vnet.virtual_networks.get(
@@ -401,10 +495,11 @@ class vimconnector(vimconn.VimConnector):
             subnet_name = self._get_unused_subnet_name(net_name)
 
             self.logger.debug("creating subnet_name: {}".format(subnet_name))
-            async_creation = self.conn_vnet.subnets.create_or_update(
+            async_creation = self.conn_vnet.subnets.begin_create_or_update(
                 self.resource_group, self.vnet_name, subnet_name, subnet_params
             )
             async_creation.wait()
+            # TODO - do not wait here, check where it is used
             self.logger.debug("created subnet_name: {}".format(subnet_name))
 
             return "{}/subnets/{}".format(self.vnet_id, subnet_name), None
@@ -456,8 +551,10 @@ class vimconnector(vimconn.VimConnector):
             if mac_address:
                 net_ifz["mac_address"] = mac_address
 
-            async_nic_creation = self.conn_vnet.network_interfaces.create_or_update(
-                self.resource_group, nic_name, net_ifz
+            async_nic_creation = (
+                self.conn_vnet.network_interfaces.begin_create_or_update(
+                    self.resource_group, nic_name, net_ifz
+                )
             )
             nic_data = async_nic_creation.result()
             created_items[nic_data.id] = True
@@ -470,8 +567,10 @@ class vimconnector(vimconn.VimConnector):
                     "public_ip_allocation_method": "Dynamic",
                 }
                 public_ip_name = nic_name + "-public-ip"
-                async_public_ip = self.conn_vnet.public_ip_addresses.create_or_update(
-                    self.resource_group, public_ip_name, public_ip_address_params
+                async_public_ip = (
+                    self.conn_vnet.public_ip_addresses.begin_create_or_update(
+                        self.resource_group, public_ip_name, public_ip_address_params
+                    )
                 )
                 public_ip = async_public_ip.result()
                 self.logger.debug("created public IP: {}".format(public_ip))
@@ -484,7 +583,7 @@ class vimconnector(vimconn.VimConnector):
                 nic_data.ip_configurations[0].public_ip_address = public_ip
                 created_items[public_ip.id] = True
 
-                self.conn_vnet.network_interfaces.create_or_update(
+                self.conn_vnet.network_interfaces.begin_create_or_update(
                     self.resource_group, nic_name, nic_data
                 )
 
@@ -558,9 +657,15 @@ class vimconnector(vimconn.VimConnector):
                             # if version is defined get directly version, else list images
                             if len(params) == 4 and params[3]:
                                 version = params[3]
-                                image_list = self._get_version_image_list(
-                                    publisher, offer, sku, version
-                                )
+                                if version == "latest":
+                                    image_list = self._get_sku_image_list(
+                                        publisher, offer, sku
+                                    )
+                                    image_list = [image_list[-1]]
+                                else:
+                                    image_list = self._get_version_image_list(
+                                        publisher, offer, sku, version
+                                    )
                             else:
                                 image_list = self._get_sku_image_list(
                                     publisher, offer, sku
@@ -788,51 +893,9 @@ class vimconnector(vimconn.VimConnector):
                 vm_nics.append({"id": str(vm_nic.id)})
                 net["vim_id"] = vm_nic.id
 
-            # cloud-init configuration
-            # cloud config
-            if cloud_config:
-                config_drive, userdata = self._create_user_data(cloud_config)
-                custom_data = base64.b64encode(userdata.encode("utf-8")).decode(
-                    "latin-1"
-                )
-                key_data = None
-                key_pairs = cloud_config.get("key-pairs")
-                if key_pairs:
-                    key_data = key_pairs[0]
-
-                if cloud_config.get("users"):
-                    user_name = cloud_config.get("users")[0].get("name", "osm")
-                else:
-                    user_name = "osm"  # DEFAULT USER IS OSM
-
-                os_profile = {
-                    "computer_name": vm_name,
-                    "admin_username": user_name,
-                    "linux_configuration": {
-                        "disable_password_authentication": True,
-                        "ssh": {
-                            "public_keys": [
-                                {
-                                    "path": "/home/{}/.ssh/authorized_keys".format(
-                                        user_name
-                                    ),
-                                    "key_data": key_data,
-                                }
-                            ]
-                        },
-                    },
-                    "custom_data": custom_data,
-                }
-            else:
-                os_profile = {
-                    "computer_name": vm_name,
-                    "admin_username": "osm",
-                    "admin_password": "Osm4u!",
-                }
-
             vm_parameters = {
                 "location": self.region,
-                "os_profile": os_profile,
+                "os_profile": self._build_os_profile(vm_name, cloud_config, image_id),
                 "hardware_profile": {"vm_size": flavor_id},
                 "storage_profile": {"image_reference": image_reference},
             }
@@ -854,12 +917,14 @@ class vimconnector(vimconn.VimConnector):
                 vm_parameters["zones"] = [vm_zone]
 
             self.logger.debug("create vm name: %s", vm_name)
-            creation_result = self.conn_compute.virtual_machines.create_or_update(
-                self.resource_group, vm_name, vm_parameters
+            creation_result = self.conn_compute.virtual_machines.begin_create_or_update(
+                self.resource_group, vm_name, vm_parameters, polling=False
             )
+            self.logger.debug("obtained creation result: %s", creation_result)
             virtual_machine = creation_result.result()
             self.logger.debug("created vm name: %s", vm_name)
 
+            """ Por ahora no hacer polling para ver si tarda menos
             # Add disks if they are provided
             if disk_list:
                 for disk_index, disk in enumerate(disk_list):
@@ -875,6 +940,7 @@ class vimconnector(vimconn.VimConnector):
             if start:
                 self.conn_compute.virtual_machines.start(self.resource_group, vm_name)
             # start_result.wait()
+            """
 
             return virtual_machine.id, created_items
 
@@ -899,6 +965,71 @@ class vimconnector(vimconn.VimConnector):
 
             self.logger.debug("Exception creating new vminstance: %s", e, exc_info=True)
             self._format_vimconn_exception(e)
+
+    def _build_os_profile(self, vm_name, cloud_config, image_id):
+
+        # initial os_profile
+        os_profile = {"computer_name": vm_name}
+
+        # for azure os_profile admin_username is required
+        if cloud_config and cloud_config.get("users"):
+            admin_username = cloud_config.get("users")[0].get(
+                "name", self._get_default_admin_user(image_id)
+            )
+        else:
+            admin_username = self._get_default_admin_user(image_id)
+        os_profile["admin_username"] = admin_username
+
+        # if there is a cloud-init load it
+        if cloud_config:
+            _, userdata = self._create_user_data(cloud_config)
+            custom_data = base64.b64encode(userdata.encode("utf-8")).decode("latin-1")
+            os_profile["custom_data"] = custom_data
+
+        # either password of ssh-keys are required
+        # we will always use ssh-keys, in case it is not available we will generate it
+        if cloud_config and cloud_config.get("key-pairs"):
+            key_data = cloud_config.get("key-pairs")[0]
+        else:
+            _, key_data = self._generate_keys()
+
+        os_profile["linux_configuration"] = {
+            "ssh": {
+                "public_keys": [
+                    {
+                        "path": "/home/{}/.ssh/authorized_keys".format(admin_username),
+                        "key_data": key_data,
+                    }
+                ]
+            },
+        }
+
+        return os_profile
+
+    def _generate_keys(self):
+        """Method used to generate a pair of private/public keys.
+        This method is used because to create a vm in Azure we always need a key or a password
+        In some cases we may have a password in a cloud-init file but it may not be available
+        """
+        key = rsa.generate_private_key(
+            backend=crypto_default_backend(), public_exponent=65537, key_size=2048
+        )
+        private_key = key.private_bytes(
+            crypto_serialization.Encoding.PEM,
+            crypto_serialization.PrivateFormat.PKCS8,
+            crypto_serialization.NoEncryption(),
+        )
+        public_key = key.public_key().public_bytes(
+            crypto_serialization.Encoding.OpenSSH,
+            crypto_serialization.PublicFormat.OpenSSH,
+        )
+        private_key = private_key.decode("utf8")
+        # Change first line because Paramiko needs a explicit start with 'BEGIN RSA PRIVATE KEY'
+        i = private_key.find("\n")
+        private_key = "-----BEGIN RSA PRIVATE KEY-----" + private_key[i:]
+        public_key = public_key.decode("utf8")
+
+        return private_key, public_key
 
     def _get_unused_vm_name(self, vm_name):
         """
@@ -969,7 +1100,7 @@ class vimconnector(vimconn.VimConnector):
             disk_name = vm_name + "_DataDisk_" + str(disk_index)
             if not disk.get("image_id"):
                 self.logger.debug("create new data disk name: %s", disk_name)
-                async_disk_creation = self.conn_compute.disks.create_or_update(
+                async_disk_creation = self.conn_compute.disks.begin_create_or_update(
                     self.resource_group,
                     disk_name,
                     {
@@ -993,16 +1124,18 @@ class vimconnector(vimconn.VimConnector):
                     if type == "snapshots" or type == "disks":
                         self.logger.debug("create disk from copy name: %s", image_name)
                         # ¿Should check that snapshot exists?
-                        async_disk_creation = self.conn_compute.disks.create_or_update(
-                            self.resource_group,
-                            disk_name,
-                            {
-                                "location": self.region,
-                                "creation_data": {
-                                    "create_option": "Copy",
-                                    "source_uri": image_id,
+                        async_disk_creation = (
+                            self.conn_compute.disks.begin_create_or_update(
+                                self.resource_group,
+                                disk_name,
+                                {
+                                    "location": self.region,
+                                    "creation_data": {
+                                        "create_option": "Copy",
+                                        "source_uri": image_id,
+                                    },
                                 },
-                            },
+                            )
                         )
                         data_disk = async_disk_creation.result()
                         created_items[data_disk.id] = True
@@ -1026,7 +1159,7 @@ class vimconnector(vimconn.VimConnector):
             }
         )
         self.logger.debug("attach disk name: %s", disk_name)
-        self.conn_compute.virtual_machines.create_or_update(
+        self.conn_compute.virtual_machines.begin_create_or_update(
             self.resource_group, virtual_machine.name, virtual_machine
         )
 
@@ -1091,26 +1224,32 @@ class vimconnector(vimconn.VimConnector):
             self._reload_connection()
             vm_sizes_list = [
                 vm_size.serialize()
-                for vm_size in self.conn_compute.virtual_machine_sizes.list(self.region)
+                for vm_size in self.conn_compute.resource_skus.list(
+                    "location={}".format(self.region)
+                )
             ]
 
             cpus = filter_dict.get("vcpus") or 0
             memMB = filter_dict.get("ram") or 0
+            numberInterfaces = len(filter_dict.get("interfaces", [])) or 0
 
             # Filter
             if self._config.get("flavors_pattern"):
                 filtered_sizes = [
                     size
                     for size in vm_sizes_list
-                    if size["numberOfCores"] >= cpus
-                    and size["memoryInMB"] >= memMB
+                    if size["capabilities"]["vCPUs"] >= cpus
+                    and size["capabilities"]["MemoryGB"] >= memMB / 1024
+                    and size["capabilities"]["MaxNetworkInterfaces"] >= numberInterfaces
                     and re.search(self._config.get("flavors_pattern"), size["name"])
                 ]
             else:
                 filtered_sizes = [
                     size
                     for size in vm_sizes_list
-                    if size["numberOfCores"] >= cpus and size["memoryInMB"] >= memMB
+                    if size["capabilities"]["vCPUs"] >= cpus
+                    and size["capabilities"]["MemoryGB"] >= memMB / 1024
+                    and size["capabilities"]["MaxNetworkInterfaces"] >= numberInterfaces
                 ]
 
             # Sort
@@ -1138,7 +1277,9 @@ class vimconnector(vimconn.VimConnector):
             self._reload_connection()
             vm_sizes_list = [
                 vm_size.serialize()
-                for vm_size in self.conn_compute.virtual_machine_sizes.list(self.region)
+                for vm_size in self.conn_compute.resource_skus.list(
+                    "location={}".format(self.region)
+                )
             ]
 
             output_flavor = None
@@ -1182,22 +1323,39 @@ class vimconnector(vimconn.VimConnector):
 
         self._reload_connection()
         res_name = self._get_resource_name_from_resource_id(net_id)
-        filter_dict = {"name": res_name}
-        network_list = self.get_network_list(filter_dict)
-        if not network_list:
-            raise vimconn.VimConnNotFoundException(
-                "network '{}' not found".format(net_id)
-            )
 
         try:
+            # Obtain subnets ant try to delete nic first
+            subnet = self.conn_vnet.subnets.get(
+                self.resource_group, self.vnet_name, res_name
+            )
+            if not subnet:
+                raise vimconn.VimConnNotFoundException(
+                    "network '{}' not found".format(net_id)
+                )
+
+            # TODO - for a quick-fix delete nics sequentially but should not wait
+            # for each in turn
+            if subnet.ip_configurations:
+                for ip_configuration in subnet.ip_configurations:
+                    # obtain nic_name from ip_configuration
+                    parsed_id = azure_tools.parse_resource_id(ip_configuration.id)
+                    nic_name = parsed_id["name"]
+                    self.delete_inuse_nic(nic_name)
+
             # Subnet API fails (CloudError: Azure Error: ResourceNotFound)
             # Put the initial virtual_network API
-            async_delete = self.conn_vnet.subnets.delete(
+            async_delete = self.conn_vnet.subnets.begin_delete(
                 self.resource_group, self.vnet_name, res_name
             )
             async_delete.wait()
+
             return net_id
 
+        except ResourceNotFoundError:
+            raise vimconn.VimConnNotFoundException(
+                "network '{}' not found".format(net_id)
+            )
         except CloudError as e:
             if e.error.error and "notfound" in e.error.error.lower():
                 raise vimconn.VimConnNotFoundException(
@@ -1207,6 +1365,62 @@ class vimconnector(vimconn.VimConnector):
                 self._format_vimconn_exception(e)
         except Exception as e:
             self._format_vimconn_exception(e)
+
+    def delete_inuse_nic(self, nic_name):
+
+        # Obtain nic data
+        nic_data = self.conn_vnet.network_interfaces.get(self.resource_group, nic_name)
+
+        # Obtain vm associated to nic in case it exists
+        if nic_data.virtual_machine:
+            vm_name = azure_tools.parse_resource_id(nic_data.virtual_machine.id)["name"]
+            self.logger.debug("vm_name: {}".format(vm_name))
+            virtual_machine = self.conn_compute.virtual_machines.get(
+                self.resource_group, vm_name
+            )
+            self.logger.debug("obtained vm")
+
+            # Deattach nic from vm if it has netwolk machines attached
+            network_interfaces = virtual_machine.network_profile.network_interfaces
+            network_interfaces[:] = [
+                interface
+                for interface in network_interfaces
+                if self._get_resource_name_from_resource_id(interface.id) != nic_name
+            ]
+
+            # TODO - check if there is a public ip to delete and delete it
+            if network_interfaces:
+
+                # Deallocate the vm
+                async_vm_deallocate = (
+                    self.conn_compute.virtual_machines.begin_deallocate(
+                        self.resource_group, vm_name
+                    )
+                )
+                self.logger.debug("deallocating vm")
+                async_vm_deallocate.wait()
+                self.logger.debug("vm deallocated")
+
+                async_vm_update = (
+                    self.conn_compute.virtual_machines.begin_create_or_update(
+                        self.resource_group, vm_name, virtual_machine
+                    )
+                )
+                virtual_machine = async_vm_update.result()
+                self.logger.debug("nic removed from interface")
+
+            else:
+                self.logger.debug("There are no interfaces left, delete vm")
+                self.delete_vminstance(virtual_machine.id)
+                self.logger.debug("Delete vm")
+
+        # Delete nic
+        self.logger.debug("delete NIC name: %s", nic_name)
+        nic_delete = self.conn_vnet.network_interfaces.begin_delete(
+            self.resource_group, nic_name
+        )
+        nic_delete.wait()
+        self.logger.debug("deleted NIC name: %s", nic_name)
 
     def delete_vminstance(self, vm_id, created_items=None):
         """Deletes a vm instance from the vim."""
@@ -1228,25 +1442,27 @@ class vimconnector(vimconn.VimConnector):
                 # vm_stop = self.conn_compute.virtual_machines.power_off(self.resource_group, resName)
                 # vm_stop.wait()
 
-                vm_delete = self.conn_compute.virtual_machines.delete(
+                vm_delete = self.conn_compute.virtual_machines.begin_delete(
                     self.resource_group, res_name
                 )
                 vm_delete.wait()
                 self.logger.debug("deleted VM name: %s", res_name)
 
-                # Delete OS Disk
-                os_disk_name = vm.storage_profile.os_disk.name
-                self.logger.debug("delete OS DISK: %s", os_disk_name)
-                async_disk_delete = self.conn_compute.disks.delete(
-                    self.resource_group, os_disk_name
-                )
-                async_disk_delete.wait()
-                # os disks are created always with the machine
-                self.logger.debug("deleted OS DISK name: %s", os_disk_name)
+                # Delete OS Disk, check if exists, in case of error creating
+                # it may not be fully created
+                if vm.storage_profile.os_disk:
+                    os_disk_name = vm.storage_profile.os_disk.name
+                    self.logger.debug("delete OS DISK: %s", os_disk_name)
+                    async_disk_delete = self.conn_compute.disks.begin_delete(
+                        self.resource_group, os_disk_name
+                    )
+                    async_disk_delete.wait()
+                    # os disks are created always with the machine
+                    self.logger.debug("deleted OS DISK name: %s", os_disk_name)
 
                 for data_disk in vm.storage_profile.data_disks:
                     self.logger.debug("delete data_disk: %s", data_disk.name)
-                    async_disk_delete = self.conn_compute.disks.delete(
+                    async_disk_delete = self.conn_compute.disks.begin_delete(
                         self.resource_group, data_disk.name
                     )
                     async_disk_delete.wait()
@@ -1280,7 +1496,7 @@ class vimconnector(vimconn.VimConnector):
                         # Public ip must be deleted afterwards of nic that is attached
 
                     self.logger.debug("delete NIC name: %s", nic_name)
-                    nic_delete = self.conn_vnet.network_interfaces.delete(
+                    nic_delete = self.conn_vnet.network_interfaces.begin_delete(
                         self.resource_group, nic_name
                     )
                     nic_delete.wait()
@@ -1290,7 +1506,7 @@ class vimconnector(vimconn.VimConnector):
                     # Delete list of public ips
                     if public_ip_name:
                         self.logger.debug("delete PUBLIC IP - " + public_ip_name)
-                        ip_delete = self.conn_vnet.public_ip_addresses.delete(
+                        ip_delete = self.conn_vnet.public_ip_addresses.begin_delete(
                             self.resource_group, public_ip_name
                         )
                         ip_delete.wait()
@@ -1299,6 +1515,10 @@ class vimconnector(vimconn.VimConnector):
             # Delete created items
             self._delete_created_items(created_items)
 
+        except ResourceNotFoundError:
+            raise vimconn.VimConnNotFoundException(
+                "No vm instance found '{}'".format(vm_id)
+            )
         except CloudError as e:
             if e.error.error and "notfound" in e.error.error.lower():
                 raise vimconn.VimConnNotFoundException(
@@ -1319,6 +1539,7 @@ class vimconnector(vimconn.VimConnector):
         virtual machine fails creating or in other cases of error
         """
         self.logger.debug("Created items: %s", created_items)
+        # TODO - optimize - should not wait until it is deleted
         # Must delete in order first nics, then public_ips
         # As dictionaries don't preserve order, first get items to be deleted then delete them
         nics_to_delete = []
@@ -1345,7 +1566,7 @@ class vimconnector(vimconn.VimConnector):
         for item_name in nics_to_delete:
             try:
                 self.logger.debug("deleting nic name %s:", item_name)
-                nic_delete = self.conn_vnet.network_interfaces.delete(
+                nic_delete = self.conn_vnet.network_interfaces.begin_delete(
                     self.resource_group, item_name
                 )
                 nic_delete.wait()
@@ -1358,7 +1579,7 @@ class vimconnector(vimconn.VimConnector):
         for item_name in publics_ip_to_delete:
             try:
                 self.logger.debug("deleting public ip name %s:", item_name)
-                ip_delete = self.conn_vnet.public_ip_addresses.delete(
+                ip_delete = self.conn_vnet.public_ip_addresses.begin_delete(
                     self.resource_group, name
                 )
                 ip_delete.wait()
@@ -1371,7 +1592,7 @@ class vimconnector(vimconn.VimConnector):
         for item_name in disks_to_delete:
             try:
                 self.logger.debug("deleting data disk name %s:", name)
-                async_disk_delete = self.conn_compute.disks.delete(
+                async_disk_delete = self.conn_compute.disks.begin_delete(
                     self.resource_group, item_name
                 )
                 async_disk_delete.wait()
@@ -1392,21 +1613,29 @@ class vimconnector(vimconn.VimConnector):
             resName = self._get_resource_name_from_resource_id(vm_id)
 
             if "start" in action_dict:
-                self.conn_compute.virtual_machines.start(self.resource_group, resName)
+                self.conn_compute.virtual_machines.begin_start(
+                    self.resource_group, resName
+                )
             elif (
                 "stop" in action_dict
                 or "shutdown" in action_dict
                 or "shutoff" in action_dict
             ):
-                self.conn_compute.virtual_machines.power_off(
+                self.conn_compute.virtual_machines.begin_power_off(
                     self.resource_group, resName
                 )
             elif "terminate" in action_dict:
-                self.conn_compute.virtual_machines.delete(self.resource_group, resName)
+                self.conn_compute.virtual_machines.begin_delete(
+                    self.resource_group, resName
+                )
             elif "reboot" in action_dict:
-                self.conn_compute.virtual_machines.restart(self.resource_group, resName)
+                self.conn_compute.virtual_machines.begin_restart(
+                    self.resource_group, resName
+                )
 
             return None
+        except ResourceNotFoundError:
+            raise vimconn.VimConnNotFoundException("No vm found '{}'".format(vm_id))
         except CloudError as e:
             if e.error.error and "notfound" in e.error.error.lower():
                 raise vimconn.VimConnNotFoundException("No vm found '{}'".format(vm_id))
@@ -1439,6 +1668,10 @@ class vimconnector(vimconn.VimConnector):
         try:
             resName = self._get_resource_name_from_resource_id(vm_id)
             vm = self.conn_compute.virtual_machines.get(self.resource_group, resName)
+        except ResourceNotFoundError:
+            raise vimconn.VimConnNotFoundException(
+                "No vminstance found '{}'".format(vm_id)
+            )
         except CloudError as e:
             if e.error.error and "notfound" in e.error.error.lower():
                 raise vimconn.VimConnNotFoundException(
@@ -1693,15 +1926,32 @@ class vimconnector(vimconn.VimConnector):
             return interface_list
         except Exception as e:
             self.logger.error(
-                "Exception %s obtaining interface data for vm: %s, error: %s",
-                vm_id,
+                "Exception %s obtaining interface data for vm: %s",
                 e,
+                vm_id,
                 exc_info=True,
             )
             self._format_vimconn_exception(e)
 
+    def _get_default_admin_user(self, image_id):
+        if "ubuntu" in image_id.lower():
+            return "ubuntu"
+        else:
+            return self._default_admin_user
+
 
 if __name__ == "__main__":
+    # Init logger
+    log_format = "%(asctime)s %(levelname)s %(name)s %(filename)s:%(lineno)s %(funcName)s(): %(message)s"
+    log_formatter = logging.Formatter(log_format, datefmt="%Y-%m-%dT%H:%M:%S")
+    handler = logging.StreamHandler()
+    handler.setFormatter(log_formatter)
+    logger = logging.getLogger("ro.vim.azure")
+    # logger.setLevel(level=logging.ERROR)
+    # logger.setLevel(level=logging.INFO)
+    logger.setLevel(level=logging.DEBUG)
+    logger.addHandler(handler)
+
     # Making some basic test
     vim_id = "azure"
     vim_name = "azure"
@@ -1724,32 +1974,12 @@ if __name__ == "__main__":
         test_params[param] = value
 
     config = {
-        "region_name": getenv("AZURE_REGION_NAME", "westeurope"),
+        "region_name": getenv("AZURE_REGION_NAME", "northeurope"),
         "resource_group": getenv("AZURE_RESOURCE_GROUP"),
         "subscription_id": getenv("AZURE_SUBSCRIPTION_ID"),
         "pub_key": getenv("AZURE_PUB_KEY", None),
-        "vnet_name": getenv("AZURE_VNET_NAME", "myNetwork"),
+        "vnet_name": getenv("AZURE_VNET_NAME", "osm_vnet"),
     }
-
-    virtualMachine = {
-        "name": "sergio",
-        "description": "new VM",
-        "status": "running",
-        "image": {
-            "publisher": "Canonical",
-            "offer": "UbuntuServer",
-            "sku": "16.04.0-LTS",
-            "version": "latest",
-        },
-        "hardware_profile": {"vm_size": "Standard_DS1_v2"},
-        "networks": ["sergio"],
-    }
-
-    vnet_config = {
-        "subnet_address": "10.1.2.0/24",
-        # "subnet_name": "subnet-oam"
-    }
-    ###########################
 
     azure = vimconnector(
         vim_id,
@@ -1764,18 +1994,125 @@ if __name__ == "__main__":
         config=config,
     )
 
-    # azure.get_flavor_id_from_data("here")
-    # subnets=azure.get_network_list()
-    # azure.new_vminstance(virtualMachine["name"], virtualMachine["description"], virtualMachine["status"],
-    #                      virtualMachine["image"], virtualMachine["hardware_profile"]["vm_size"], subnets)
+    """
+    logger.debug("List images")
+    image = azure.get_image_list({"name": "Canonical:UbuntuServer:18.04-LTS:18.04.201809110"})
+    logger.debug("image: {}".format(image))
 
-    azure.new_network("mynet", None)
-    net_id = (
-        "/subscriptions/82f80cc1-876b-4591-9911-1fb5788384fd/resourceGroups/osmRG/providers/Microsoft."
-        "Network/virtualNetworks/test"
-    )
-    net_id_not_found = (
-        "/subscriptions/82f80cc1-876b-4591-9911-1fb5788384fd/resourceGroups/osmRG/providers/"
-        "Microsoft.Network/virtualNetworks/testALF"
-    )
-    azure.refresh_nets_status([net_id, net_id_not_found])
+    logger.debug("List networks")
+    network_list = azure.get_network_list({"name": "internal"})
+    logger.debug("Network_list: {}".format(network_list))
+
+    logger.debug("List flavors")
+    flavors = azure.get_flavor_id_from_data({"vcpu": "2"})
+    logger.debug("flavors: {}".format(flavors))
+    """
+
+    """
+    # Create network and test machine
+    #new_network_id, _ = azure.new_network("testnet1", "data")
+    new_network_id = ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers")
+                      "/Microsoft.Network/virtualNetworks/osm_vnet/subnets/testnet1"
+                      ).format(test_params["resource_group"])
+    logger.debug("new_network_id: {}".format(new_network_id))
+
+    logger.debug("Delete network")
+    new_network_id = azure.delete_network(new_network_id)
+    logger.debug("deleted network_id: {}".format(new_network_id))
+    """
+
+    """
+    logger.debug("List networks")
+    network_list = azure.get_network_list({"name": "internal"})
+    logger.debug("Network_list: {}".format(network_list))
+    
+    logger.debug("Show machine isabelvm")
+    vmachine = azure.get_vminstance( ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}"
+                                      "/providers/Microsoft.Compute/virtualMachines/isabelVM"
+                                      ).format(test_params["resource_group"])
+                                    )
+    logger.debug("Vmachine: {}".format(vmachine))
+    """
+
+    logger.debug("List images")
+    image = azure.get_image_list({"name": "Canonical:UbuntuServer:16.04"})
+    # image = azure.get_image_list({"name": "Canonical:UbuntuServer:18.04-LTS"})
+    logger.debug("image: {}".format(image))
+
+    """
+    # Create network and test machine
+    new_network_id, _ = azure.new_network("testnet1", "data")
+    image_id = ("/Subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/Providers/Microsoft.Compute"
+                "/Locations/northeurope/Publishers/Canonical/ArtifactTypes/VMImage/Offers/UbuntuServer"
+                "/Skus/18.04-LTS/Versions/18.04.201809110")
+    """
+    """
+    
+    network_id = ("subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}
+                  "/providers/Microsoft.Network/virtualNetworks/osm_vnet/subnets/internal"
+                 ).format(test_params["resource_group"])
+    """
+
+    """
+    logger.debug("Create machine")
+    image_id = ("/Subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/Providers/Microsoft.Compute/Locations"
+                "/northeurope/Publishers/Canonical/ArtifactTypes/VMImage/Offers/UbuntuServer/Skus/18.04-LTS"
+                "/Versions/18.04.202103151")
+    cloud_config = {"user-data": (
+                    "#cloud-config\n"
+                    "password: osm4u\n"
+                    "chpasswd: { expire: False }\n"
+                    "ssh_pwauth: True\n\n"
+                    "write_files:\n"
+                    "-   content: |\n"
+                    "        # My new helloworld file\n\n"
+                    "    owner: root:root\n"
+                    "    permissions: '0644'\n"
+                    "    path: /root/helloworld.txt",
+                    "key-pairs": [
+                        ("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC/p7fuw/W0+6uhx9XNPY4dN/K2cXZweDfjJN8W/sQ1AhKvn"
+                         "j0MF+dbBdsd2tfq6XUhx5LiKoGTunRpRonOw249ivH7pSyNN7FYpdLaij7Krn3K+QRNEOahMI4eoqdglVftA3"
+                         "vlw4Oe/aZOU9BXPdRLxfr9hRKzg5zkK91/LBkEViAijpCwK6ODPZLDDUwY4iihYK9R5eZ3fmM4+3k3Jd0hPRk"
+                         "B5YbtDQOu8ASWRZ9iTAWqr1OwQmvNc6ohSVg1tbq3wSxj/5bbz0J24A7TTpY0giWctne8Qkl/F2e0ZSErvbBB"
+                         "GXKxfnq7sc23OK1hPxMAuS+ufzyXsnL1+fB4t2iF azureuser@osm-test-client\n"
+                        )]
+    }
+    network_id = ("subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers"
+                  "/Microsoft.Network/virtualNetworks/osm_vnet/subnets/internal"
+                 ).format(test_params["resource_group"])
+    vm = azure.new_vminstance(name="isabelvm",
+                            description="testvm",
+                            start=True,
+                            image_id=image_id,
+                            flavor_id="Standard_B1ls",
+                            net_list = [{"net_id": network_id, "name": "internal", "use": "mgmt", "floating_ip":True}],
+                            cloud_config = cloud_config)
+    logger.debug("vm: {}".format(vm))
+    """
+
+    """
+    # Delete nonexistent vm
+    try:
+        logger.debug("Delete machine")
+        vm_id = ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers/Microsoft.Compute/"
+                "virtualMachines/isabelvm"
+                ).format(test_params["resource_group"])
+        created_items = {
+            ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers/Microsoft.Network"
+             "/networkInterfaces/isabelvm-nic-0"
+            ).format(test_params["resource_group"]): True,
+            ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers/Microsoft.Network"
+             "/publicIPAddresses/isabelvm-nic-0-public-ip"
+            ).format(test_params["resource_group"]): True
+        }
+        azure.delete_vminstance(vm_id, created_items)
+    except vimconn.VimConnNotFoundException as e:
+        print("Ok: excepcion no encontrada")
+    """
+
+    """
+    network_id = ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers/Microsoft.Network"
+                  "/virtualNetworks/osm_vnet/subnets/hfcloudinit-internal-1"
+                 ).format(test_params["resource_group"])
+    azure.delete_network(network_id)
+    """
