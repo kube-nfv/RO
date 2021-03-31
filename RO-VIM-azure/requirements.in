@@ -17,4 +17,10 @@
 PyYAML
 requests
 netaddr
-azure==4.0.0
+azure-common
+azure-identity
+azure-mgmt-compute
+azure-mgmt-network
+azure-mgmt-resource
+msrestazure
+msrest
