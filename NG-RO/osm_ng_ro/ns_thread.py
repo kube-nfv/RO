@@ -32,7 +32,7 @@ import yaml
 from copy import deepcopy
 from http import HTTPStatus
 from os import mkdir
-from pkg_resources import iter_entry_points
+from importlib_metadata import entry_points
 from shutil import rmtree
 from unittest.mock import Mock
 
@@ -1229,8 +1229,8 @@ class NsWorker(threading.Thread):
             return self.plugins[name]
 
         try:
-            for v in iter_entry_points("osm_ro{}.plugins".format(type), name):
-                self.plugins[name] = v.load()
+            for ep in entry_points(group="osm_ro{}.plugins".format(type), name=name):
+                self.plugins[name] = ep.load()
         except Exception as e:
             raise NsWorkerException("Cannot load plugin osm_{}: {}".format(name, e))
 

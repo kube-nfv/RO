@@ -23,6 +23,7 @@ fog05==0.2.0
 fog05-sdk==0.2.0
 # TODO py3 genisoimage
 logutils
+importlib-metadata
 netaddr
 networking-l2gw
 oca
