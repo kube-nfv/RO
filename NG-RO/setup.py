@@ -38,12 +38,12 @@ setup(
     include_package_data=True,
     install_requires=[
         "CherryPy==18.1.2",
-        "osm-common @ git+https://osm.etsi.org/gerrit/osm/common.git#egg=osm-common",
+        "osm-common",
         "jsonschema",
         "PyYAML",
         "requests",
         "cryptography",  # >=2.5  installed right version with the debian post-install script
-        "osm-ro-plugin @ git+https://osm.etsi.org/gerrit/osm/RO.git#egg=osm-ro-plugin&subdirectory=RO-plugin",
+        "osm-ro-plugin",
     ],
     setup_requires=["setuptools-version-command"],
 )
