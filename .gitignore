@@ -1,7 +1,5 @@
-##
-# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
-# This file is part of openmano
-# All Rights Reserved.
+############################################################################
+# Copyright 2021 ETSI
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -14,44 +12,41 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-#
-# For those usages not covered by the Apache License, Version 2.0 please
-# contact with: nfvlabs@tid.es
-##
+############################################################################
 
-# This is a template with common files to be igonored, after clone make a copy to .gitignore
-# cp .gitignore-common .gitignore
-
+# TOX
 .tox/
+
+# Virtualenv
 venv/
 
+# Coverage
 .coverage
 cover
 coverage.xml
 nosetests.xml
 
+# Python
 *.pyc
 *.pyo
-
 *.eggs/
 *.egg-info/
 
-#auto-ignore
-.gitignore
+# logs of openmano
+logs
 
-#logs of openmano
-logs 
-
-#pycharm
+# pycharm
 .idea
 
-#eclipse
-.project     
+# eclipse
+.project
 .pydevproject
 .settings
 
+# vscode
+.vscode
+
 #local stuff files that end in ".local" or folders called "local"
-*.local
 vnfs/*.local
 test/*.local
 scenarios/*.local
@@ -65,4 +60,3 @@ scenarios/local
 instance-scenarios/local
 database_utils/local
 scripts/local
-
