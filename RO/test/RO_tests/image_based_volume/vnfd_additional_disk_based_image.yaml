@@ -1,0 +1,58 @@
+##
+# Copyright 2015 Telefonica Investigacion y Desarrollo, S.A.U.
+# This file is part of openmano
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+#
+##
+---
+vnfd-catalog:
+    vnfd:
+    -   connection-point:
+        -   name: mgmt0
+            type: VPORT
+        name: vnf_additional_disk_based_image
+        description: VNF with additional volume based on image
+        id: additional_disk_based_image
+        # short-name: 2disks
+        vendor: ROtest
+        version: '1.0'
+        mgmt-interface:
+            cp: mgmt0
+        vdu:
+        -   id: VM1
+            name: VM1-name
+            image: US1604
+            alternative-images:
+            -   vim-type: openstack
+                image: cirros
+            -   vim-type: openvim
+                image: cirros034
+            volumes:
+            -   name: vdb
+                device-type: disk
+                image: cirros034
+                # image-checksum: 4a293322f18827af81a9450e3792947c
+                size: 8
+            interface:
+            -   name: iface11
+                type: EXTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                external-connection-point-ref: mgmt0
+                mac-address:   "52:33:44:55:66:77"
+            vm-flavor:
+                memory-mb: '2048'
+                storage-gb: '8'
+                vcpu-count: '1'

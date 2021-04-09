@@ -1,0 +1,106 @@
+##
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+##
+vnfd-catalog:
+    vnfd:
+    -   connection-point:
+        -   name: eth0
+            type: VPORT
+        -   name: eth1
+            type: VPORT
+        -   name: eth4
+            type: VPORT
+        description: VNF with internal VLD and set IP and mac
+        id: test_2vdu
+        name: test_2vdu_name
+        short-name: test_2vdu_sname
+        mgmt-interface:
+            cp: eth0
+        internal-vld:
+        -   description: Internal VL
+            id:          net_internal
+            name:        internal_vld1
+            short-name:  net_internal_sname
+            type:        ELAN
+            internal-connection-point:
+            -   id-ref:     eth2
+                ip-address: 10.10.135.4
+            -   id-ref:     eth3
+                ip-address: 10.10.135.5
+            ip-profile-ref: ip-profile1
+        ip-profiles:
+        -   description: Inter VNF Link
+            ip-profile-params:
+                gateway-address: null
+                ip-version:      ipv4
+                subnet-address:  10.10.135.0/24
+                dhcp-params:
+                  count:         100
+                  start-address: 10.10.135.20
+            name: ip-profile1
+        vdu:
+        -   id: VM1
+            name: VM11
+            image: US1604
+            interface:
+            -   name: iface11
+                type: EXTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                external-connection-point-ref: eth0
+                mac-address:   "52:33:44:55:66:77"
+            -   name: iface12
+                type: INTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                internal-connection-point-ref: eth2
+                mac-address:   "52:33:44:55:66:78"
+            -   name: iface13
+                type: EXTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                external-connection-point-ref: eth4
+            internal-connection-point:
+            -   name: eth2-icp
+                id:   eth2
+                type: VPORT
+            vm-flavor:
+                memory-mb: '2048'
+                storage-gb: '8'
+                vcpu-count: '1'
+        -   id: VM2
+            image: US1604
+            name: VM12
+            interface:
+            -   name: iface21
+                type: EXTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                external-connection-point-ref: eth1
+                mac-address:   52:33:44:55:66:79
+            -   name: iface22
+                type: INTERNAL
+                virtual-interface:
+                    type: VIRTIO
+                internal-connection-point-ref: eth3
+                mac-address:   52:33:44:55:66:80
+            internal-connection-point:
+            -   name: eth3-icp
+                id:   eth3
+                type: VPORT
+            vm-flavor:
+                memory-mb: '2048'
+                storage-gb: '8'
+                vcpu-count: '1'
+        vendor: ROtest
+        version: '1.0'
