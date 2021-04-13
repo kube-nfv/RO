@@ -14,35 +14,21 @@
 # limitations under the License.
 ##
 
-azure==4.0.0
-boto
-CherryPy==18.1.2
-cryptography>=2.5
-cvprac
-fog05==0.2.0
-fog05-sdk==0.2.0
-# TODO py3 genisoimage
-logutils
-importlib-metadata
-netaddr
-networking-l2gw
-oca
-paramiko
-prettytable
-progressbar
-pyangbind
-pyone
-python-cinderclient
-python-glanceclient
-python-keystoneclient
-python-neutronclient
-python-novaclient
-python-openstackclient
-pyvcloud==19.1.1
-pyvmomi
-pyyaml
-requests
-sphinx
-yaks==0.3.0.post1
-uuid
-zenoh==0.3.0
+-r NG-RO/requirements.in
+-r RO-plugin/requirements.in
+-r RO-SDN-arista_cloudvision/requirements.in
+-r RO-SDN-dpb/requirements.in
+-r RO-SDN-dynpac/requirements.in
+-r RO-SDN-floodlight_openflow/requirements.in
+-r RO-SDN-ietfl2vpn/requirements.in
+-r RO-SDN-juniper_contrail/requirements.in
+-r RO-SDN-odl_openflow/requirements.in
+-r RO-SDN-onos_openflow/requirements.in
+-r RO-SDN-onos_vpls/requirements.in
+-r RO-VIM-aws/requirements.in
+-r RO-VIM-azure/requirements.in
+-r RO-VIM-fos/requirements.in
+-r RO-VIM-opennebula/requirements.in
+-r RO-VIM-openstack/requirements.in
+-r RO-VIM-openvim/requirements.in
+-r RO-VIM-vmware/requirements.in

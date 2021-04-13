@@ -1,5 +1,5 @@
-#!/bin/bash
-
+# Copyright ETSI Contributors and Others.
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,7 +12,11 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+##
 
-echo launching tox
-OUTPUT=$(TOX_PARALLEL_NO_SPINNER=1 tox --parallel=auto)
-printf '%s\n' "$OUTPUT"
+PyYAML
+CherryPy==18.1.2
+requests
+cryptography
+logutils
+importlib-metadata
