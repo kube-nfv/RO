@@ -158,6 +158,11 @@ class VimDummyConnector(vimconn.VimConnector):
 
             nets.append(net)
 
+        # if no network is returned and search by name create a new one
+        if not nets and filter_dict and filter_dict.get("name"):
+            net_id, net = self.new_network(filter_dict.get("name"), "mgmt")
+            nets.append(net)
+
         return nets
 
     def get_network(self, net_id):
