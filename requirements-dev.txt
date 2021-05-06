@@ -14,5 +14,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
-git+https://osm.etsi.org/gerrit/osm/common.git@master#egg=osm-common
+git+https://osm.etsi.org/gerrit/osm/common.git@ng-ro-refactor#egg=osm-common
     # via -r requirements-dev.in
