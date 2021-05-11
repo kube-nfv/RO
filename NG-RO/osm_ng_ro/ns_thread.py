@@ -596,7 +596,7 @@ class VimInteractionImage(VimInteractionBase):
                     )
                 elif len(vim_images) > 1:
                     raise NsWorkerException(
-                        "More than one network found with this criteria: '{}'".format(
+                        "More than one image found with this criteria: '{}'".format(
                             task["find_params"]
                         )
                     )
