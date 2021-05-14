@@ -172,7 +172,7 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
             if len(connection_points) < 2:
                 raise SdnConnectorError("Connections must be of at least 2 endpoints")
 
-            """ First step, create the vpn service """
+            """First step, create the vpn service"""
             uuid_l2vpn = str(uuid.uuid4())
             vpn_service = {}
             vpn_service["vpn-id"] = uuid_l2vpn
@@ -214,7 +214,7 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
                     http_code=response_service_creation.status_code,
                 )
 
-            """ Second step, create the connections and vpn attachments """
+            """Second step, create the connections and vpn attachments"""
             for connection_point in connection_points:
                 connection_point_wan_info = self.search_mapp(connection_point)
                 site_network_access = {}
@@ -225,7 +225,7 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
                         connection_point["service_endpoint_encapsulation_type"]
                         == "dot1q"
                     ):
-                        """ The connection is a VLAN """
+                        """The connection is a VLAN"""
                         connection["encapsulation-type"] = "dot1q-vlan-tagged"
                         tagged = {}
                         tagged_interf = {}
@@ -383,7 +383,7 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
 
             if connection_point["service_endpoint_encapsulation_type"] != "none":
                 if connection_point["service_endpoint_encapsulation_type"] == "dot1q":
-                    """ The connection is a VLAN """
+                    """The connection is a VLAN"""
                     connection["encapsulation-type"] = "dot1q-vlan-tagged"
                     tagged = {}
                     tagged_interf = {}
