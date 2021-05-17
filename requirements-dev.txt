@@ -14,5 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
-git+https://osm.etsi.org/gerrit/osm/common.git@master#egg=osm-common
+aiokafka==0.7.0
+    # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=sol006v331
+dataclasses==0.6
+    # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=sol006v331
+kafka-python==2.0.2
+    # via
+    #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=sol006v331
+    #   aiokafka
+git+https://osm.etsi.org/gerrit/osm/common.git@sol006v331#egg=osm-common
     # via -r requirements-dev.in
+pycrypto==2.6.1
+    # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=sol006v331
+pymongo==3.11.3
+    # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=sol006v331
+pyyaml==5.4.1
+    # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=sol006v331
