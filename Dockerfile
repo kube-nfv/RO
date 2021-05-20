@@ -34,3 +34,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
 
 RUN python3 -m easy_install pip==21.0.1
 RUN pip3 install tox==3.22.0
+
+ENV LC_ALL C.UTF-8
+ENV LANG C.UTF-8
