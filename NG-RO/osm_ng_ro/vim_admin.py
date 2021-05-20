@@ -277,9 +277,10 @@ class VimAdminThread(threading.Thread):
             try:
                 if not self.aiomain_task_kafka:
                     # await self.msg.aiowrite("admin", "echo", "dummy message", loop=self.loop)
-                    await self.msg.aiowrite(
-                        "vim_account", "echo", "dummy message", loop=self.loop
-                    )
+                    for kafka_topic in self.kafka_topics:
+                        await self.msg.aiowrite(
+                            kafka_topic, "echo", "dummy message", loop=self.loop
+                        )
                     kafka_working = True
                     self.logger.debug("Starting vim_account subscription task")
                     self.aiomain_task_kafka = asyncio.ensure_future(
