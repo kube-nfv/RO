@@ -49,6 +49,14 @@ if getenv("OSMRO_PDB_DEBUG"):
     pdb.set_trace()
 
 
+def find_in_list(the_list, condition_lambda):
+    for item in the_list:
+        if condition_lambda(item):
+            return item
+    else:
+        return None
+
+
 class vimconnector(vimconn.VimConnector):
 
     # Translate azure provisioning state to OSM provision state
@@ -252,6 +260,13 @@ class vimconnector(vimconn.VimConnector):
         # flavor pattern regex
         if "flavors_pattern" in config:
             self._config["flavors_pattern"] = config["flavors_pattern"]
+
+    def _find_in_capabilities(self, capabilities, name):
+        cap = find_in_list(capabilities, lambda c: c["name"] == name)
+        if cap:
+            return cap.get("value")
+        else:
+            return None
 
     def _reload_connection(self):
         """
@@ -1223,9 +1238,9 @@ class vimconnector(vimconn.VimConnector):
         try:
             self._reload_connection()
             vm_sizes_list = [
-                vm_size.serialize()
+                vm_size.as_dict()
                 for vm_size in self.conn_compute.resource_skus.list(
-                    "location={}".format(self.region)
+                    "location eq '{}'".format(self.region)
                 )
             ]
 
@@ -1234,31 +1249,56 @@ class vimconnector(vimconn.VimConnector):
             numberInterfaces = len(filter_dict.get("interfaces", [])) or 0
 
             # Filter
-            if self._config.get("flavors_pattern"):
-                filtered_sizes = [
-                    size
-                    for size in vm_sizes_list
-                    if size["capabilities"]["vCPUs"] >= cpus
-                    and size["capabilities"]["MemoryGB"] >= memMB / 1024
-                    and size["capabilities"]["MaxNetworkInterfaces"] >= numberInterfaces
-                    and re.search(self._config.get("flavors_pattern"), size["name"])
-                ]
-            else:
-                filtered_sizes = [
-                    size
-                    for size in vm_sizes_list
-                    if size["capabilities"]["vCPUs"] >= cpus
-                    and size["capabilities"]["MemoryGB"] >= memMB / 1024
-                    and size["capabilities"]["MaxNetworkInterfaces"] >= numberInterfaces
-                ]
+            filtered_sizes = []
+            for size in vm_sizes_list:
+                if size["resource_type"] == "virtualMachines":
+                    size_cpus = int(
+                        self._find_in_capabilities(size["capabilities"], "vCPUs")
+                    )
+                    size_memory = float(
+                        self._find_in_capabilities(size["capabilities"], "MemoryGB")
+                    )
+                    size_interfaces = self._find_in_capabilities(
+                        size["capabilities"], "MaxNetworkInterfaces"
+                    )
+                    if size_interfaces:
+                        size_interfaces = int(size_interfaces)
+                    else:
+                        self.logger.debug(
+                            "Flavor with no defined MaxNetworkInterfaces: {}".format(
+                                size["name"]
+                            )
+                        )
+                        continue
+                    if (
+                        size_cpus >= cpus
+                        and size_memory >= memMB / 1024
+                        and size_interfaces >= numberInterfaces
+                    ):
+                        if self._config.get("flavors_pattern"):
+                            if re.search(
+                                self._config.get("flavors_pattern"), size["name"]
+                            ):
+                                new_size = {
+                                    e["name"]: e["value"] for e in size["capabilities"]
+                                }
+                                new_size["name"] = size["name"]
+                                filtered_sizes.append(new_size)
+                        else:
+                            new_size = {
+                                e["name"]: e["value"] for e in size["capabilities"]
+                            }
+                            new_size["name"] = size["name"]
+                            filtered_sizes.append(new_size)
 
             # Sort
             listedFilteredSizes = sorted(
                 filtered_sizes,
                 key=lambda k: (
-                    k["numberOfCores"],
-                    k["memoryInMB"],
-                    k["resourceDiskSizeInMB"],
+                    int(k["vCPUs"]),
+                    float(k["MemoryGB"]),
+                    int(k["MaxNetworkInterfaces"]),
+                    int(k["MaxResourceVolumeMB"]),
                 ),
             )
 
@@ -1276,9 +1316,9 @@ class vimconnector(vimconn.VimConnector):
         try:
             self._reload_connection()
             vm_sizes_list = [
-                vm_size.serialize()
+                vm_size.as_dict()
                 for vm_size in self.conn_compute.resource_skus.list(
-                    "location={}".format(self.region)
+                    "location eq '{}'".format(self.region)
                 )
             ]
 
@@ -2004,7 +2044,7 @@ if __name__ == "__main__":
     logger.debug("Network_list: {}".format(network_list))
 
     logger.debug("List flavors")
-    flavors = azure.get_flavor_id_from_data({"vcpu": "2"})
+    flavors = azure.get_flavor_id_from_data({"vcpus": 2})
     logger.debug("flavors: {}".format(flavors))
     """
 
@@ -2034,10 +2074,12 @@ if __name__ == "__main__":
     logger.debug("Vmachine: {}".format(vmachine))
     """
 
+    """
     logger.debug("List images")
     image = azure.get_image_list({"name": "Canonical:UbuntuServer:16.04"})
     # image = azure.get_image_list({"name": "Canonical:UbuntuServer:18.04-LTS"})
     logger.debug("image: {}".format(image))
+    """
 
     """
     # Create network and test machine
