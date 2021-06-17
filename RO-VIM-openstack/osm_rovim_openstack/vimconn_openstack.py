@@ -864,6 +864,14 @@ class vimconnector(vimconn.VimConnector):
             if self.config.get("disable_network_port_security"):
                 network_dict["port_security_enabled"] = False
 
+            if self.config.get("neutron_availability_zone_hints"):
+                hints = self.config.get("neutron_availability_zone_hints")
+
+                if isinstance(hints, str):
+                    hints = [hints]
+
+                network_dict["availability_zone_hints"] = hints
+
             new_net = self.neutron.create_network({"network": network_dict})
             # print new_net
             # create subnetwork, even if there is no profile
