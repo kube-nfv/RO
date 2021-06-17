@@ -225,7 +225,7 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
                         connection_point["service_endpoint_encapsulation_type"]
                         == "dot1q"
                     ):
-                        """ The connection is a VLAN """
+                        """The connection is a VLAN"""
                         connection["encapsulation-type"] = "dot1q-vlan-tagged"
                         tagged = {}
                         tagged_interf = {}
@@ -383,7 +383,7 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
 
             if connection_point["service_endpoint_encapsulation_type"] != "none":
                 if connection_point["service_endpoint_encapsulation_type"] == "dot1q":
-                    """ The connection is a VLAN """
+                    """The connection is a VLAN"""
                     connection["encapsulation-type"] = "dot1q-vlan-tagged"
                     tagged = {}
                     tagged_interf = {}

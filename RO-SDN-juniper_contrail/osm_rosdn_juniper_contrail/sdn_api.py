@@ -26,7 +26,7 @@ from osm_rosdn_juniper_contrail.rest_lib import NotFound
 
 
 class UnderlayApi:
-    """ Class with CRUD operations for the underlay API """
+    """Class with CRUD operations for the underlay API"""
 
     def __init__(self, url, config=None, user=None, password=None, logger=None):
         self.logger = logger or logging.getLogger("ro.sdn.junipercontrail.sdnapi")

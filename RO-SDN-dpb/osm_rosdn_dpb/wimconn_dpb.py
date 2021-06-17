@@ -36,7 +36,7 @@ from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 
 
 class DpbSshInterface:
-    """ Communicate with the DPB via SSH """
+    """Communicate with the DPB via SSH"""
 
     __LOGGER_NAME_EXT = ".ssh"
     __FUNCTION_MAP_POS = 1
@@ -191,7 +191,7 @@ class DpbSshInterface:
 
 
 class DpbRestInterface:
-    """ Communicate with the DPB via the REST API """
+    """Communicate with the DPB via the REST API"""
 
     __LOGGER_NAME_EXT = ".rest"
     __FUNCTION_MAP_POS = 0
@@ -230,7 +230,7 @@ class DpbRestInterface:
 
 
 class DpbConnector(SdnConnectorBase):
-    """ Use the DPB to establish multipoint connections """
+    """Use the DPB to establish multipoint connections"""
 
     __LOGGER_NAME = "ro.sdn.dpb"
     __SUPPORTED_SERV_TYPES = ["ELAN (L2)", "ELINE (L2)"]

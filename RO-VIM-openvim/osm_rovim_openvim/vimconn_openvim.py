@@ -798,7 +798,7 @@ class vimconnector(vimconn.VimConnector):
             self._format_request_exception(e)
 
     def new_image(self, image_dict):
-        """ Adds a tenant image to VIM, returns image_id"""
+        """Adds a tenant image to VIM, returns image_id"""
         try:
             self._get_my_tenant()
             new_image_dict = {"name": image_dict["name"][:64]}
