@@ -19,9 +19,7 @@ python-openstackclient
 python-neutronclient
 requests
 netaddr
-networking-l2gw
 python-novaclient
 python-keystoneclient
 python-glanceclient
-python-cinderclient
-pyroute2==0.5.18
+python-cinderclient<8.0.0
