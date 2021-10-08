@@ -36,6 +36,7 @@ tox -e dist_ro_vim_opennebula &
 tox -e dist_ro_vim_openstack &
 tox -e dist_ro_vim_openvim &
 tox -e dist_ro_vim_vmware &
+tox -e dist_ro_vim_gcp &
 
 while true; do
   wait -n || {
@@ -51,7 +52,7 @@ cp RO-plugin/deb_dist/python3-osm-ro-plugin_*.deb deb_dist/
 # NG-RO
 cp NG-RO/deb_dist/python3-osm-ng-ro_*.deb deb_dist/
 
-# VIM plugings:  vmware, openstack, AWS, fos, azure, Opennebula,
+# VIM plugins:  vmware, openstack, AWS, fos, azure, Opennebula, GCP
 for vim_plugin in RO-VIM-*
 do
     cp ${vim_plugin}/deb_dist/python3-osm-rovim*.deb deb_dist/

@@ -82,6 +82,9 @@ RUN python3 -m build /build/RO-SDN-arista_cloudvision && \
 RUN python3 -m build /build/RO-SDN-juniper_contrail && \
     python3 -m pip install /build/RO-SDN-juniper_contrail/dist/*.whl
 
+RUN python3 -m build /build/RO-VIM-gcp && \
+    python3 -m pip install /build/RO-VIM-gcp/dist/*.whl
+
 FROM ubuntu:18.04
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get --yes update && \
