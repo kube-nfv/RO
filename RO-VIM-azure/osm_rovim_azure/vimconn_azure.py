@@ -229,20 +229,20 @@ class vimconnector(vimconn.VimConnector):
         else:
             raise vimconn.VimConnException("Subscription not specified")
 
-        # REGION
-        if "region_name" in config:
-            self.region = config.get("region_name")
-        else:
-            raise vimconn.VimConnException(
-                "Azure region_name is not specified at config"
-            )
-
         # RESOURCE_GROUP
         if "resource_group" in config:
             self.resource_group = config.get("resource_group")
         else:
             raise vimconn.VimConnException(
                 "Azure resource_group is not specified at config"
+            )
+
+        # REGION
+        if "region_name" in config:
+            self.region = config.get("region_name")
+        else:
+            raise vimconn.VimConnException(
+                "Azure region_name is not specified at config"
             )
 
         # VNET_NAME
@@ -543,12 +543,12 @@ class vimconnector(vimconn.VimConnector):
 
         return name
 
-    def _create_nic(self, net, nic_name, static_ip=None, created_items={}):
+    def _create_nic(self, net, nic_name, region=None, static_ip=None, created_items={}):
         self.logger.debug("create nic name %s, net_name %s", nic_name, net)
         self._reload_connection()
 
         subnet_id = net["net_id"]
-        location = self._get_location_from_resource_group(self.resource_group)
+        location = self.region or self._get_location_from_resource_group(self.resource_group)
         try:
             net_ifz = {"location": location}
             net_ip_config = {
@@ -903,7 +903,7 @@ class vimconnector(vimconn.VimConnector):
                 # subnet_id=net["net_id"]
                 nic_name = vm_name + "-nic-" + str(idx)
                 vm_nic, nic_items = self._create_nic(
-                    net, nic_name, net.get("ip_address"), created_items
+                    net, nic_name, self.region, net.get("ip_address"), created_items
                 )
                 vm_nics.append({"id": str(vm_nic.id)})
                 net["vim_id"] = vm_nic.id
