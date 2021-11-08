@@ -926,12 +926,12 @@ class vimconnector(vimconn.VimConnector):
                         ] = "regions/%s/subnetworks/" % self.region + net.get("name")
                 else:
                     net_iface["subnetwork"] = net.get("net_id")
-                # According to documentation "type" can be only ONE_TO_ONE_NAT and the recomended value for "name" is "External NAT",
-                # so an external IP will be generated for the instance
-                # TODO: check if it's possible to allow internet access to the instance with no external IP
-                net_iface["accessConfigs"] = [
-                   {"type": "ONE_TO_ONE_NAT", "name": "External NAT"}
-                ]
+                # In order to get an external IP address, the key "accessConfigs" must be used
+                # in the interace. It has to be of type "ONE_TO_ONE_NAT" and name "External NAT"
+                if net.get("floating_ip", False) or (net["use"] == "mgmt" and self.config.get("use_floating_ip")):
+                    net_iface["accessConfigs"] = [
+                        {"type": "ONE_TO_ONE_NAT", "name": "External NAT"}
+                    ]
 
                 network_interfaces.append(net_iface)
 
