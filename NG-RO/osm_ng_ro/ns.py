@@ -877,6 +877,15 @@ class Ns(object):
                 if ssh_keys:
                     cloud_config["key-pairs"] = ssh_keys
 
+                disk_list = None
+                if target_vdu.get("virtual-storages"):
+                    disk_list = [
+                        {"size": disk["size-of-storage"]}
+                        for disk in target_vdu["virtual-storages"]
+                        if disk.get("type-of-storage")
+                        == "persistent-storage:persistent-storage"
+                    ]
+
                 extra_dict["params"] = {
                     "name": "{}-{}-{}-{}".format(
                         indata["name"][:16],
@@ -890,7 +899,7 @@ class Ns(object):
                     "flavor_id": "TASK-" + flavor_text,
                     "net_list": net_list,
                     "cloud_config": cloud_config or None,
-                    "disk_list": None,  # TODO
+                    "disk_list": disk_list,
                     "availability_zone_index": None,  # TODO
                     "availability_zone_list": None,  # TODO
                 }
