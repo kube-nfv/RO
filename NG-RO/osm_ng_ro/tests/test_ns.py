@@ -1,0 +1,68 @@
+#######################################################################################
+# Copyright ETSI Contributors and Others.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#######################################################################################
+
+import unittest
+
+from osm_ng_ro.ns import Ns
+
+
+__author__ = "Eduardo Sousa"
+__date__ = "$19-NOV-2021 00:00:00$"
+
+
+class TestNs(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def test__create_task(self):
+        expected_result = {
+            "target_id": "vim_openstack_1",
+            "action_id": "123456",
+            "nsr_id": "654321",
+            "task_id": "123456:1",
+            "status": "SCHEDULED",
+            "action": "CREATE",
+            "item": "test_item",
+            "target_record": "test_target_record",
+            "target_record_id": "test_target_record_id",
+            # values coming from extra_dict
+            "params": "test_params",
+            "find_params": "test_find_params",
+            "depends_on": "test_depends_on",
+        }
+        deployment_info = {
+            "action_id": "123456",
+            "nsr_id": "654321",
+            "task_index": 1,
+        }
+
+        task = Ns._create_task(
+            deployment_info=deployment_info,
+            target_id="vim_openstack_1",
+            item="test_item",
+            action="CREATE",
+            target_record="test_target_record",
+            target_record_id="test_target_record_id",
+            extra_dict={
+                "params": "test_params",
+                "find_params": "test_find_params",
+                "depends_on": "test_depends_on",
+            },
+        )
+
+        self.assertEqual(deployment_info.get("task_index"), 2)
+        self.assertDictEqual(task, expected_result)

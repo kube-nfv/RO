@@ -35,10 +35,10 @@ __author__ = "Sergio G.R."
 __date__ = "$05-nov-2021 12:00:00$"
 
 
-class TestGCPOperations():
+class TestGCPOperations:
 
     gcp_conn = None
-    time_id = datetime.today().strftime('%Y%m%d%H%M%S')
+    time_id = datetime.today().strftime("%Y%m%d%H%M%S")
     vim_id = "gcp-test-" + time_id
     vim_name = vim_id
     vm_name = "gcp-test-vm-" + time_id
@@ -57,7 +57,7 @@ class TestGCPOperations():
         credentials_file,
         image_id,
         image_connector_id,
-        flavor_id
+        flavor_id,
     ):
         self.config["project_name"] = project_name
         self.config["region_name"] = region_name
@@ -66,7 +66,8 @@ class TestGCPOperations():
                 self.config["credentials"] = json.load(file)
         except ValueError:
             raise Exception(
-                "Not possible to read credentials JSON file %s", self.config["credentials"]
+                "Not possible to read credentials JSON file %s",
+                self.config["credentials"],
             )
         self.image_id = image_id
         self.image_connector_id = image_connector_id
@@ -87,8 +88,12 @@ class TestGCPOperations():
         )
 
     def test_networks(self):
-        net_id_1 = self.gcp_conn.new_network(self.net_name, None, {"subnet_address": "10.0.0.0/25"})
-        net_id_2 = self.gcp_conn.new_network(self.net_name, None, {"subnet_address": "10.9.0.0/25"})
+        net_id_1 = self.gcp_conn.new_network(
+            self.net_name, None, {"subnet_address": "10.0.0.0/25"}
+        )
+        net_id_2 = self.gcp_conn.new_network(
+            self.net_name, None, {"subnet_address": "10.9.0.0/25"}
+        )
         _ = self.gcp_conn.delete_network(net_id_1[0])
         _ = self.gcp_conn.delete_network(net_id_2[0])
 
@@ -105,8 +110,12 @@ class TestGCPOperations():
         _ = self.gcp_conn.delete_vminstance(vm_id_1[0])
 
     def test_vminstances_2_nets(self):
-        net_id_1 = self.gcp_conn.new_network(self.net_name, None, {"subnet_address": "10.0.0.0/25"})
-        net_id_2 = self.gcp_conn.new_network(self.net_name, None, {"subnet_address": "10.9.0.0/25"})
+        net_id_1 = self.gcp_conn.new_network(
+            self.net_name, None, {"subnet_address": "10.0.0.0/25"}
+        )
+        net_id_2 = self.gcp_conn.new_network(
+            self.net_name, None, {"subnet_address": "10.9.0.0/25"}
+        )
 
         vm_id_1 = self.gcp_conn.new_vminstance(
             name=self.vm_name,
@@ -114,14 +123,16 @@ class TestGCPOperations():
             start=True,
             image_id=self.image_id,
             flavor_id=self.flavor_id,
-            net_list=[{"net_id": net_id_1[0], "use": "mgmt"}, {"net_id": net_id_2[0], "use": "internal"}],
+            net_list=[
+                {"net_id": net_id_1[0], "use": "mgmt"},
+                {"net_id": net_id_2[0], "use": "internal"},
+            ],
             cloud_config=self.cloud_config,
         )
         _ = self.gcp_conn.delete_vminstance(vm_id_1[0])
 
         _ = self.gcp_conn.delete_network(net_id_1[0])
         _ = self.gcp_conn.delete_network(net_id_2[0])
-
 
     def test_vminstances_image_connector_id(self):
         image_id = self.gcp_conn.get_image_list({"name": self.image_connector_id})
@@ -138,7 +149,12 @@ class TestGCPOperations():
 
     def test_vminstances_flavor(self):
         machine_type = self.gcp_conn.get_flavor_id_from_data(
-            {'disk': 10, 'ram': 2048, 'vcpus': 1, 'extended': {'mempage-size': 'LARGE', 'numas': [{'threads': 1}]}}
+            {
+                "disk": 10,
+                "ram": 2048,
+                "vcpus": 1,
+                "extended": {"mempage-size": "LARGE", "numas": [{"threads": 1}]},
+            }
         )
         vm_id_1 = self.gcp_conn.new_vminstance(
             name=self.vm_name,
@@ -168,7 +184,7 @@ if __name__ == "__main__":
     try:
         with open(gcp_env_file) as f:
             for line in f:
-                var, value = line.replace('\n', '').split("=")
+                var, value = line.replace("\n", "").split("=")
                 if var == "GCP_PROJECT":
                     project_name = value
                 elif var == "GCP_REGION":
@@ -182,9 +198,7 @@ if __name__ == "__main__":
                 elif var == "GCP_FLAVOR":
                     flavor_id = value
     except ValueError:
-        raise Exception(
-            "Wrong format of GCP test environment file"
-        )
+        raise Exception("Wrong format of GCP test environment file")
 
     if (
         project_name is None
@@ -206,11 +220,10 @@ if __name__ == "__main__":
         credentials_file,
         image_id,
         image_connector_id,
-        flavor_id
+        flavor_id,
     )
     test_gcp.test_networks()
     test_gcp.test_vminstances_default()
     test_gcp.test_vminstances_2_nets()
     test_gcp.test_vminstances_connector_id()
     test_gcp.test_vminstances_flavor()
-
