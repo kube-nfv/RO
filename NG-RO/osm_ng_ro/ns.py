@@ -468,6 +468,37 @@ class Ns(object):
 
         return db_ro_task
 
+    @staticmethod
+    def _process_image_params(
+        target_image: Dict[str, Any],
+        vim_info: Dict[str, Any],
+        target_record_id: str,
+    ) -> Dict[str, Any]:
+        """Function to process VDU image parameters.
+
+        Args:
+            target_image (Dict[str, Any]): [description]
+            vim_info (Dict[str, Any]): [description]
+            target_record_id (str): [description]
+
+        Returns:
+            Dict[str, Any]: [description]
+        """
+        find_params = {}
+
+        if target_image.get("image"):
+            find_params["filter_dict"] = {"name": target_image.get("image")}
+
+        if target_image.get("vim_image_id"):
+            find_params["filter_dict"] = {"id": target_image.get("vim_image_id")}
+
+        if target_image.get("image_checksum"):
+            find_params["filter_dict"] = {
+                "checksum": target_image.get("image_checksum")
+            }
+
+        return {"find_params": find_params}
+
     def deploy(self, session, indata, version, nsr_id, *args, **kwargs):
         self.logger.debug("ns.deploy nsr_id={} indata={}".format(nsr_id, indata))
         validate_input(indata, deploy_schema)
@@ -523,24 +554,6 @@ class Ns(object):
                         break
 
                     index += 1
-
-            def _process_image_params(target_image, vim_info, target_record_id):
-                find_params = {}
-
-                if target_image.get("image"):
-                    find_params["filter_dict"] = {"name": target_image.get("image")}
-
-                if target_image.get("vim_image_id"):
-                    find_params["filter_dict"] = {
-                        "id": target_image.get("vim_image_id")
-                    }
-
-                if target_image.get("image_checksum"):
-                    find_params["filter_dict"] = {
-                        "checksum": target_image.get("image_checksum")
-                    }
-
-                return {"find_params": find_params}
 
             def _process_flavor_params(target_flavor, vim_info, target_record_id):
                 def _get_resource_allocation_params(quota_descriptor):
@@ -1176,7 +1189,7 @@ class Ns(object):
                         db_update=db_nsr_update,
                         db_path="image",
                         item="image",
-                        process_params=_process_image_params,
+                        process_params=Ns._process_image_params,
                     )
 
                     step = "process NS flavors"

@@ -29,6 +29,36 @@ class TestNs(unittest.TestCase):
     def setUp(self):
         pass
 
+    def test__create_task_without_extra_dict(self):
+        expected_result = {
+            "target_id": "vim_openstack_1",
+            "action_id": "123456",
+            "nsr_id": "654321",
+            "task_id": "123456:1",
+            "status": "SCHEDULED",
+            "action": "CREATE",
+            "item": "test_item",
+            "target_record": "test_target_record",
+            "target_record_id": "test_target_record_id",
+        }
+        deployment_info = {
+            "action_id": "123456",
+            "nsr_id": "654321",
+            "task_index": 1,
+        }
+
+        task = Ns._create_task(
+            deployment_info=deployment_info,
+            target_id="vim_openstack_1",
+            item="test_item",
+            action="CREATE",
+            target_record="test_target_record",
+            target_record_id="test_target_record_id",
+        )
+
+        self.assertEqual(deployment_info.get("task_index"), 2)
+        self.assertDictEqual(task, expected_result)
+
     def test__create_task(self):
         expected_result = {
             "target_id": "vim_openstack_1",
@@ -113,3 +143,85 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(ro_task, expected_result)
+
+    def test__process_image_params_with_empty_target_image(self):
+        expected_result = {
+            "find_params": {},
+        }
+        target_image = {}
+
+        result = Ns._process_image_params(
+            target_image=target_image,
+            vim_info=None,
+            target_record_id=None,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__process_image_params_with_wrong_target_image(self):
+        expected_result = {
+            "find_params": {},
+        }
+        target_image = {"no_image": "to_see_here"}
+
+        result = Ns._process_image_params(
+            target_image=target_image,
+            vim_info=None,
+            target_record_id=None,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__process_image_params_with_image(self):
+        expected_result = {
+            "find_params": {
+                "filter_dict": {
+                    "name": "cirros",
+                },
+            },
+        }
+        target_image = {"image": "cirros"}
+
+        result = Ns._process_image_params(
+            target_image=target_image,
+            vim_info=None,
+            target_record_id=None,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__process_image_params_with_vim_image_id(self):
+        expected_result = {
+            "find_params": {
+                "filter_dict": {
+                    "id": "123456",
+                },
+            },
+        }
+        target_image = {"vim_image_id": "123456"}
+
+        result = Ns._process_image_params(
+            target_image=target_image,
+            vim_info=None,
+            target_record_id=None,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__process_image_params_with_image_checksum(self):
+        expected_result = {
+            "find_params": {
+                "filter_dict": {
+                    "checksum": "e3fc50a88d0a364313df4b21ef20c29e",
+                },
+            },
+        }
+        target_image = {"image_checksum": "e3fc50a88d0a364313df4b21ef20c29e"}
+
+        result = Ns._process_image_params(
+            target_image=target_image,
+            vim_info=None,
+            target_record_id=None,
+        )
+
+        self.assertDictEqual(expected_result, result)
