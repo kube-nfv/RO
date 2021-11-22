@@ -1177,6 +1177,8 @@ class vimconnector(vimconn.VimConnector):
                 flavor_dict["ram"],
                 flavor_dict["vcpus"],
                 flavor_dict["disk"],
+                flavor_dict.get("ephemeral", 0),
+                flavor_dict.get("swap", 0),
             )
             # numa=None
             extended = flavor_dict.get("extended", {})
@@ -1196,7 +1198,13 @@ class vimconnector(vimconn.VimConnector):
                     continue
                     # TODO
 
-                flavor_data = (flavor.ram, flavor.vcpus, flavor.disk)
+                flavor_data = (
+                    flavor.ram,
+                    flavor.vcpus,
+                    flavor.disk,
+                    flavor.ephemeral,
+                    flavor.swap,
+                )
                 if flavor_data == flavor_target:
                     return flavor.id
                 elif (
@@ -1351,6 +1359,7 @@ class vimconnector(vimconn.VimConnector):
                         vcpus=vcpus,
                         disk=flavor_data.get("disk", 0),
                         ephemeral=flavor_data.get("ephemeral", 0),
+                        swap=flavor_data.get("swap", 0),
                         is_public=flavor_data.get("is_public", True),
                     )
                     # add metadata
