@@ -162,7 +162,9 @@ class TestNs(unittest.TestCase):
         expected_result = {
             "find_params": {},
         }
-        target_image = {"no_image": "to_see_here"}
+        target_image = {
+            "no_image": "to_see_here",
+        }
 
         result = Ns._process_image_params(
             target_image=target_image,
@@ -180,7 +182,9 @@ class TestNs(unittest.TestCase):
                 },
             },
         }
-        target_image = {"image": "cirros"}
+        target_image = {
+            "image": "cirros",
+        }
 
         result = Ns._process_image_params(
             target_image=target_image,
@@ -198,7 +202,9 @@ class TestNs(unittest.TestCase):
                 },
             },
         }
-        target_image = {"vim_image_id": "123456"}
+        target_image = {
+            "vim_image_id": "123456",
+        }
 
         result = Ns._process_image_params(
             target_image=target_image,
@@ -216,12 +222,96 @@ class TestNs(unittest.TestCase):
                 },
             },
         }
-        target_image = {"image_checksum": "e3fc50a88d0a364313df4b21ef20c29e"}
+        target_image = {
+            "image_checksum": "e3fc50a88d0a364313df4b21ef20c29e",
+        }
 
         result = Ns._process_image_params(
             target_image=target_image,
             vim_info=None,
             target_record_id=None,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__get_resource_allocation_params_with_empty_target_image(self):
+        expected_result = {}
+        quota_descriptor = {}
+
+        result = Ns._get_resource_allocation_params(
+            quota_descriptor=quota_descriptor,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__get_resource_allocation_params_with_wrong_target_image(self):
+        expected_result = {}
+        quota_descriptor = {
+            "no_quota": "present_here",
+        }
+
+        result = Ns._get_resource_allocation_params(
+            quota_descriptor=quota_descriptor,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__get_resource_allocation_params_with_limit(self):
+        expected_result = {
+            "limit": 10,
+        }
+        quota_descriptor = {
+            "limit": "10",
+        }
+
+        result = Ns._get_resource_allocation_params(
+            quota_descriptor=quota_descriptor,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__get_resource_allocation_params_with_reserve(self):
+        expected_result = {
+            "reserve": 20,
+        }
+        quota_descriptor = {
+            "reserve": "20",
+        }
+
+        result = Ns._get_resource_allocation_params(
+            quota_descriptor=quota_descriptor,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__get_resource_allocation_params_with_shares(self):
+        expected_result = {
+            "shares": 30,
+        }
+        quota_descriptor = {
+            "shares": "30",
+        }
+
+        result = Ns._get_resource_allocation_params(
+            quota_descriptor=quota_descriptor,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__get_resource_allocation_params(self):
+        expected_result = {
+            "limit": 10,
+            "reserve": 20,
+            "shares": 30,
+        }
+        quota_descriptor = {
+            "limit": "10",
+            "reserve": "20",
+            "shares": "30",
+        }
+
+        result = Ns._get_resource_allocation_params(
+            quota_descriptor=quota_descriptor,
         )
 
         self.assertDictEqual(expected_result, result)

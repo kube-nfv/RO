@@ -499,6 +499,32 @@ class Ns(object):
 
         return {"find_params": find_params}
 
+    @staticmethod
+    def _get_resource_allocation_params(
+        quota_descriptor: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Read the quota_descriptor from vnfd and fetch the resource allocation properties from the
+        descriptor object.
+
+        Args:
+            quota_descriptor (Dict[str, Any]): cpu/mem/vif/disk-io quota descriptor
+
+        Returns:
+            Dict[str, Any]: quota params for limit, reserve, shares from the descriptor object
+        """
+        quota = {}
+
+        if quota_descriptor.get("limit"):
+            quota["limit"] = int(quota_descriptor["limit"])
+
+        if quota_descriptor.get("reserve"):
+            quota["reserve"] = int(quota_descriptor["reserve"])
+
+        if quota_descriptor.get("shares"):
+            quota["shares"] = int(quota_descriptor["shares"])
+
+        return quota
+
     def deploy(self, session, indata, version, nsr_id, *args, **kwargs):
         self.logger.debug("ns.deploy nsr_id={} indata={}".format(nsr_id, indata))
         validate_input(indata, deploy_schema)
@@ -556,26 +582,6 @@ class Ns(object):
                     index += 1
 
             def _process_flavor_params(target_flavor, vim_info, target_record_id):
-                def _get_resource_allocation_params(quota_descriptor):
-                    """
-                    read the quota_descriptor from vnfd and fetch the resource allocation properties from the
-                     descriptor object
-                    :param quota_descriptor: cpu/mem/vif/disk-io quota descriptor
-                    :return: quota params for limit, reserve, shares from the descriptor object
-                    """
-                    quota = {}
-
-                    if quota_descriptor.get("limit"):
-                        quota["limit"] = int(quota_descriptor["limit"])
-
-                    if quota_descriptor.get("reserve"):
-                        quota["reserve"] = int(quota_descriptor["reserve"])
-
-                    if quota_descriptor.get("shares"):
-                        quota["shares"] = int(quota_descriptor["shares"])
-
-                    return quota
-
                 nonlocal indata
 
                 flavor_data = {
@@ -686,7 +692,7 @@ class Ns(object):
                             epa_vcpu_set = True
 
                     if target_flavor["guest-epa"].get("cpu-quota") and not epa_vcpu_set:
-                        cpuquota = _get_resource_allocation_params(
+                        cpuquota = Ns._get_resource_allocation_params(
                             target_flavor["guest-epa"].get("cpu-quota")
                         )
 
@@ -694,7 +700,7 @@ class Ns(object):
                             extended["cpu-quota"] = cpuquota
 
                     if target_flavor["guest-epa"].get("mem-quota"):
-                        vduquota = _get_resource_allocation_params(
+                        vduquota = Ns._get_resource_allocation_params(
                             target_flavor["guest-epa"].get("mem-quota")
                         )
 
@@ -702,7 +708,7 @@ class Ns(object):
                             extended["mem-quota"] = vduquota
 
                     if target_flavor["guest-epa"].get("disk-io-quota"):
-                        diskioquota = _get_resource_allocation_params(
+                        diskioquota = Ns._get_resource_allocation_params(
                             target_flavor["guest-epa"].get("disk-io-quota")
                         )
 
@@ -710,7 +716,7 @@ class Ns(object):
                             extended["disk-io-quota"] = diskioquota
 
                     if target_flavor["guest-epa"].get("vif-quota"):
-                        vifquota = _get_resource_allocation_params(
+                        vifquota = Ns._get_resource_allocation_params(
                             target_flavor["guest-epa"].get("vif-quota")
                         )
 
