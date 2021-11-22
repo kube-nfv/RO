@@ -1177,6 +1177,7 @@ class vimconnector(vimconn.VimConnector):
                 flavor_dict["ram"],
                 flavor_dict["vcpus"],
                 flavor_dict["disk"],
+                flavor_dict.get("ephemeral", 0),
             )
             # numa=None
             extended = flavor_dict.get("extended", {})
@@ -1196,7 +1197,12 @@ class vimconnector(vimconn.VimConnector):
                     continue
                     # TODO
 
-                flavor_data = (flavor.ram, flavor.vcpus, flavor.disk)
+                flavor_data = (
+                    flavor.ram,
+                    flavor.vcpus,
+                    flavor.disk,
+                    flavor.ephemeral,
+                )
                 if flavor_data == flavor_target:
                     return flavor.id
                 elif (
@@ -1346,10 +1352,11 @@ class vimconnector(vimconn.VimConnector):
 
                     # create flavor
                     new_flavor = self.nova.flavors.create(
-                        name,
-                        ram,
-                        vcpus,
-                        flavor_data.get("disk", 0),
+                        name=name,
+                        ram=ram,
+                        vcpus=vcpus,
+                        disk=flavor_data.get("disk", 0),
+                        ephemeral=flavor_data.get("ephemeral", 0),
                         is_public=flavor_data.get("is_public", True),
                     )
                     # add metadata
