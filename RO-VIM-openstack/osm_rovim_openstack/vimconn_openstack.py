@@ -1346,10 +1346,11 @@ class vimconnector(vimconn.VimConnector):
 
                     # create flavor
                     new_flavor = self.nova.flavors.create(
-                        name,
-                        ram,
-                        vcpus,
-                        flavor_data.get("disk", 0),
+                        name=name,
+                        ram=ram,
+                        vcpus=vcpus,
+                        disk=flavor_data.get("disk", 0),
+                        ephemeral=flavor_data.get("ephemeral", 0),
                         is_public=flavor_data.get("is_public", True),
                     )
                     # add metadata
