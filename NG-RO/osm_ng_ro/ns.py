@@ -539,6 +539,8 @@ class Ns(object):
 
                     return quota
 
+                nonlocal indata
+
                 flavor_data = {
                     "disk": int(target_flavor["storage-gb"]),
                     "ram": int(target_flavor["memory-mb"]),
@@ -546,6 +548,21 @@ class Ns(object):
                 }
                 numa = {}
                 extended = {}
+
+                target_vdur = None
+                for vnf in indata.get("vnf", []):
+                    for vdur in vnf.get("vdur", []):
+                        if vdur.get("ns-flavor-id") == target_flavor["id"]:
+                            target_vdur = vdur
+
+                for storage in target_vdur.get("virtual-storages", []):
+                    if (
+                        storage.get("type-of-storage")
+                        == "etsi-nfv-descriptors:ephemeral-storage"
+                    ):
+                        flavor_data["ephemeral"] = int(
+                            storage.get("size-of-storage", 0)
+                        )
 
                 if target_flavor.get("guest-epa"):
                     extended = {}
