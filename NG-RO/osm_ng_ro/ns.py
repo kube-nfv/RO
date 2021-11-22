@@ -563,6 +563,11 @@ class Ns(object):
                         flavor_data["ephemeral"] = int(
                             storage.get("size-of-storage", 0)
                         )
+                    elif (
+                        storage.get("type-of-storage")
+                        == "etsi-nfv-descriptors:swap-storage"
+                    ):
+                        flavor_data["swap"] = int(storage.get("size-of-storage", 0))
 
                 if target_flavor.get("guest-epa"):
                     extended = {}
