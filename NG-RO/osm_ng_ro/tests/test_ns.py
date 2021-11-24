@@ -152,6 +152,7 @@ class TestNs(unittest.TestCase):
 
         result = Ns._process_image_params(
             target_image=target_image,
+            indata=None,
             vim_info=None,
             target_record_id=None,
         )
@@ -168,6 +169,7 @@ class TestNs(unittest.TestCase):
 
         result = Ns._process_image_params(
             target_image=target_image,
+            indata=None,
             vim_info=None,
             target_record_id=None,
         )
@@ -188,6 +190,7 @@ class TestNs(unittest.TestCase):
 
         result = Ns._process_image_params(
             target_image=target_image,
+            indata=None,
             vim_info=None,
             target_record_id=None,
         )
@@ -208,6 +211,7 @@ class TestNs(unittest.TestCase):
 
         result = Ns._process_image_params(
             target_image=target_image,
+            indata=None,
             vim_info=None,
             target_record_id=None,
         )
@@ -228,6 +232,7 @@ class TestNs(unittest.TestCase):
 
         result = Ns._process_image_params(
             target_image=target_image,
+            indata=None,
             vim_info=None,
             target_record_id=None,
         )
@@ -315,3 +320,1471 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_empty_quota_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {}
+        guest_epa_quota = {}
+        epa_vcpu_set = True
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(resource_allocation.called)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_empty_quota_false_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {}
+        guest_epa_quota = {}
+        epa_vcpu_set = False
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(resource_allocation.called)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_wrong_quota_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {}
+        guest_epa_quota = {
+            "no-quota": "nothing",
+        }
+        epa_vcpu_set = True
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(resource_allocation.called)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_wrong_quota_false_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {}
+        guest_epa_quota = {
+            "no-quota": "nothing",
+        }
+        epa_vcpu_set = False
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(resource_allocation.called)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_cpu_quota_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {}
+        guest_epa_quota = {
+            "cpu-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+        }
+        epa_vcpu_set = True
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(resource_allocation.called)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_cpu_quota_false_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {
+            "cpu-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+        }
+        guest_epa_quota = {
+            "cpu-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+        }
+        epa_vcpu_set = False
+
+        resource_allocation_param = {
+            "limit": "10",
+            "reserve": "20",
+            "shares": "30",
+        }
+        resource_allocation.return_value = {
+            "limit": 10,
+            "reserve": 20,
+            "shares": 30,
+        }
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        resource_allocation.assert_called_once_with(resource_allocation_param)
+        self.assertDictEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_mem_quota_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {
+            "mem-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+        }
+        guest_epa_quota = {
+            "mem-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+        }
+        epa_vcpu_set = True
+
+        resource_allocation_param = {
+            "limit": "10",
+            "reserve": "20",
+            "shares": "30",
+        }
+        resource_allocation.return_value = {
+            "limit": 10,
+            "reserve": 20,
+            "shares": 30,
+        }
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        resource_allocation.assert_called_once_with(resource_allocation_param)
+        self.assertDictEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_mem_quota_false_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {
+            "mem-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+        }
+        guest_epa_quota = {
+            "mem-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+        }
+        epa_vcpu_set = False
+
+        resource_allocation_param = {
+            "limit": "10",
+            "reserve": "20",
+            "shares": "30",
+        }
+        resource_allocation.return_value = {
+            "limit": 10,
+            "reserve": 20,
+            "shares": 30,
+        }
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        resource_allocation.assert_called_once_with(resource_allocation_param)
+        self.assertDictEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_disk_io_quota_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {
+            "disk-io-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+        }
+        guest_epa_quota = {
+            "disk-io-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+        }
+        epa_vcpu_set = True
+
+        resource_allocation_param = {
+            "limit": "10",
+            "reserve": "20",
+            "shares": "30",
+        }
+        resource_allocation.return_value = {
+            "limit": 10,
+            "reserve": 20,
+            "shares": 30,
+        }
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        resource_allocation.assert_called_once_with(resource_allocation_param)
+        self.assertDictEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_disk_io_quota_false_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {
+            "disk-io-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+        }
+        guest_epa_quota = {
+            "disk-io-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+        }
+        epa_vcpu_set = False
+
+        resource_allocation_param = {
+            "limit": "10",
+            "reserve": "20",
+            "shares": "30",
+        }
+        resource_allocation.return_value = {
+            "limit": 10,
+            "reserve": 20,
+            "shares": 30,
+        }
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        resource_allocation.assert_called_once_with(resource_allocation_param)
+        self.assertDictEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_vif_quota_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {
+            "vif-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+        }
+        guest_epa_quota = {
+            "vif-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+        }
+        epa_vcpu_set = True
+
+        resource_allocation_param = {
+            "limit": "10",
+            "reserve": "20",
+            "shares": "30",
+        }
+        resource_allocation.return_value = {
+            "limit": 10,
+            "reserve": 20,
+            "shares": 30,
+        }
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        resource_allocation.assert_called_once_with(resource_allocation_param)
+        self.assertDictEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_vif_quota_false_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {
+            "vif-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+        }
+        guest_epa_quota = {
+            "vif-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+        }
+        epa_vcpu_set = False
+
+        resource_allocation_param = {
+            "limit": "10",
+            "reserve": "20",
+            "shares": "30",
+        }
+        resource_allocation.return_value = {
+            "limit": 10,
+            "reserve": 20,
+            "shares": 30,
+        }
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        resource_allocation.assert_called_once_with(resource_allocation_param)
+        self.assertDictEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_quota_epa_cpu(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {
+            "mem-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+            "disk-io-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+            "vif-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+        }
+        guest_epa_quota = {
+            "cpu-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+            "mem-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+            "disk-io-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+            "vif-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+        }
+        epa_vcpu_set = True
+
+        resource_allocation.return_value = {
+            "limit": 10,
+            "reserve": 20,
+            "shares": 30,
+        }
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertTrue(resource_allocation.called)
+        self.assertDictEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._get_resource_allocation_params")
+    def test__process_guest_epa_quota_params_with_quota_epa_cpu_no_set(
+        self,
+        resource_allocation,
+    ):
+        expected_result = {
+            "cpu-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+            "mem-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+            "disk-io-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+            "vif-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+        }
+        guest_epa_quota = {
+            "cpu-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+            "mem-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+            "disk-io-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+            "vif-quota": {
+                "limit": "10",
+                "reserve": "20",
+                "shares": "30",
+            },
+        }
+        epa_vcpu_set = False
+
+        resource_allocation.return_value = {
+            "limit": 10,
+            "reserve": 20,
+            "shares": 30,
+        }
+
+        result = Ns._process_guest_epa_quota_params(
+            guest_epa_quota=guest_epa_quota,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertTrue(resource_allocation.called)
+        self.assertDictEqual(expected_result, result)
+
+    def test__process_guest_epa_numa_params_with_empty_numa_params(self):
+        expected_numa_result = {}
+        expected_epa_vcpu_set_result = False
+        guest_epa_quota = {}
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_wrong_numa_params(self):
+        expected_numa_result = {}
+        expected_epa_vcpu_set_result = False
+        guest_epa_quota = {"no_nume": "here"}
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_numa_node_policy(self):
+        expected_numa_result = {}
+        expected_epa_vcpu_set_result = False
+        guest_epa_quota = {"numa-node-policy": {}}
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_no_node(self):
+        expected_numa_result = {}
+        expected_epa_vcpu_set_result = False
+        guest_epa_quota = {
+            "numa-node-policy": {
+                "node": [],
+            },
+        }
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_1_node_num_cores(self):
+        expected_numa_result = {"cores": 3}
+        expected_epa_vcpu_set_result = True
+        guest_epa_quota = {
+            "numa-node-policy": {
+                "node": [
+                    {
+                        "num-cores": 3,
+                    },
+                ],
+            },
+        }
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_1_node_paired_threads(self):
+        expected_numa_result = {"paired-threads": 3}
+        expected_epa_vcpu_set_result = True
+        guest_epa_quota = {
+            "numa-node-policy": {
+                "node": [
+                    {
+                        "paired-threads": {"num-paired-threads": "3"},
+                    },
+                ],
+            },
+        }
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_1_node_paired_threads_ids(self):
+        expected_numa_result = {
+            "paired-threads-id": [("0", "1"), ("4", "5")],
+        }
+        expected_epa_vcpu_set_result = False
+        guest_epa_quota = {
+            "numa-node-policy": {
+                "node": [
+                    {
+                        "paired-threads": {
+                            "paired-thread-ids": [
+                                {
+                                    "thread-a": 0,
+                                    "thread-b": 1,
+                                },
+                                {
+                                    "thread-a": 4,
+                                    "thread-b": 5,
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        }
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_1_node_num_threads(self):
+        expected_numa_result = {"threads": 3}
+        expected_epa_vcpu_set_result = True
+        guest_epa_quota = {
+            "numa-node-policy": {
+                "node": [
+                    {
+                        "num-threads": "3",
+                    },
+                ],
+            },
+        }
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_1_node_memory_mb(self):
+        expected_numa_result = {"memory": 2}
+        expected_epa_vcpu_set_result = False
+        guest_epa_quota = {
+            "numa-node-policy": {
+                "node": [
+                    {
+                        "memory-mb": 2048,
+                    },
+                ],
+            },
+        }
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_1_node(self):
+        expected_numa_result = {
+            "cores": 3,
+            "paired-threads": 3,
+            "paired-threads-id": [("0", "1"), ("4", "5")],
+            "threads": 3,
+            "memory": 2,
+        }
+        expected_epa_vcpu_set_result = True
+        guest_epa_quota = {
+            "numa-node-policy": {
+                "node": [
+                    {
+                        "num-cores": 3,
+                        "paired-threads": {
+                            "num-paired-threads": "3",
+                            "paired-thread-ids": [
+                                {
+                                    "thread-a": 0,
+                                    "thread-b": 1,
+                                },
+                                {
+                                    "thread-a": 4,
+                                    "thread-b": 5,
+                                },
+                            ],
+                        },
+                        "num-threads": "3",
+                        "memory-mb": 2048,
+                    },
+                ],
+            },
+        }
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_2_nodes(self):
+        expected_numa_result = {
+            "cores": 3,
+            "paired-threads": 3,
+            "paired-threads-id": [("0", "1"), ("4", "5")],
+            "threads": 3,
+            "memory": 2,
+        }
+        expected_epa_vcpu_set_result = True
+        guest_epa_quota = {
+            "numa-node-policy": {
+                "node": [
+                    {
+                        "num-cores": 3,
+                        "paired-threads": {
+                            "num-paired-threads": "3",
+                            "paired-thread-ids": [
+                                {
+                                    "thread-a": 0,
+                                    "thread-b": 1,
+                                },
+                                {
+                                    "thread-a": 4,
+                                    "thread-b": 5,
+                                },
+                            ],
+                        },
+                        "num-threads": "3",
+                        "memory-mb": 2048,
+                    },
+                    {
+                        "num-cores": 7,
+                        "paired-threads": {
+                            "num-paired-threads": "7",
+                            "paired-thread-ids": [
+                                {
+                                    "thread-a": 2,
+                                    "thread-b": 3,
+                                },
+                                {
+                                    "thread-a": 5,
+                                    "thread-b": 6,
+                                },
+                            ],
+                        },
+                        "num-threads": "4",
+                        "memory-mb": 4096,
+                    },
+                ],
+            },
+        }
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_cpu_pinning_params_with_empty_params(self):
+        expected_numa_result = {}
+        expected_epa_vcpu_set_result = False
+        guest_epa_quota = {}
+        vcpu_count = 0
+        epa_vcpu_set = False
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_cpu_pinning_params(
+            guest_epa_quota=guest_epa_quota,
+            vcpu_count=vcpu_count,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_cpu_pinning_params_with_wrong_params(self):
+        expected_numa_result = {}
+        expected_epa_vcpu_set_result = False
+        guest_epa_quota = {
+            "no-cpu-pinning-policy": "here",
+        }
+        vcpu_count = 0
+        epa_vcpu_set = False
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_cpu_pinning_params(
+            guest_epa_quota=guest_epa_quota,
+            vcpu_count=vcpu_count,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_cpu_pinning_params_with_epa_vcpu_set(self):
+        expected_numa_result = {}
+        expected_epa_vcpu_set_result = True
+        guest_epa_quota = {
+            "cpu-pinning-policy": "DEDICATED",
+        }
+        vcpu_count = 0
+        epa_vcpu_set = True
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_cpu_pinning_params(
+            guest_epa_quota=guest_epa_quota,
+            vcpu_count=vcpu_count,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_cpu_pinning_params_with_threads(self):
+        expected_numa_result = {"threads": 3}
+        expected_epa_vcpu_set_result = True
+        guest_epa_quota = {
+            "cpu-pinning-policy": "DEDICATED",
+            "cpu-thread-pinning-policy": "PREFER",
+        }
+        vcpu_count = 3
+        epa_vcpu_set = False
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_cpu_pinning_params(
+            guest_epa_quota=guest_epa_quota,
+            vcpu_count=vcpu_count,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_cpu_pinning_params(self):
+        expected_numa_result = {"cores": 3}
+        expected_epa_vcpu_set_result = True
+        guest_epa_quota = {
+            "cpu-pinning-policy": "DEDICATED",
+        }
+        vcpu_count = 3
+        epa_vcpu_set = False
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_cpu_pinning_params(
+            guest_epa_quota=guest_epa_quota,
+            vcpu_count=vcpu_count,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_quota_params")
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_cpu_pinning_params")
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_numa_params")
+    def test__process_guest_epa_params_with_empty_params(
+        self,
+        guest_epa_numa_params,
+        guest_epa_cpu_pinning_params,
+        guest_epa_quota_params,
+    ):
+        expected_result = {}
+        target_flavor = {}
+
+        result = Ns._process_epa_params(
+            target_flavor=target_flavor,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(guest_epa_numa_params.called)
+        self.assertFalse(guest_epa_cpu_pinning_params.called)
+        self.assertFalse(guest_epa_quota_params.called)
+
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_quota_params")
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_cpu_pinning_params")
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_numa_params")
+    def test__process_guest_epa_params_with_wrong_params(
+        self,
+        guest_epa_numa_params,
+        guest_epa_cpu_pinning_params,
+        guest_epa_quota_params,
+    ):
+        expected_result = {}
+        target_flavor = {
+            "no-guest-epa": "here",
+        }
+
+        result = Ns._process_epa_params(
+            target_flavor=target_flavor,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(guest_epa_numa_params.called)
+        self.assertFalse(guest_epa_cpu_pinning_params.called)
+        self.assertFalse(guest_epa_quota_params.called)
+
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_quota_params")
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_cpu_pinning_params")
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_numa_params")
+    def test__process_guest_epa_params(
+        self,
+        guest_epa_numa_params,
+        guest_epa_cpu_pinning_params,
+        guest_epa_quota_params,
+    ):
+        expected_result = {}
+        target_flavor = {
+            "guest-epa": {
+                "vcpu-count": 1,
+            },
+        }
+
+        guest_epa_numa_params.return_value = ({}, False)
+        guest_epa_cpu_pinning_params.return_value = ({}, False)
+        guest_epa_quota_params.return_value = {}
+
+        result = Ns._process_epa_params(
+            target_flavor=target_flavor,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertTrue(guest_epa_numa_params.called)
+        self.assertTrue(guest_epa_cpu_pinning_params.called)
+        self.assertTrue(guest_epa_quota_params.called)
+
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_quota_params")
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_cpu_pinning_params")
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_numa_params")
+    def test__process_guest_epa_params_with_mempage_size(
+        self,
+        guest_epa_numa_params,
+        guest_epa_cpu_pinning_params,
+        guest_epa_quota_params,
+    ):
+        expected_result = {
+            "mempage-size": "1G",
+        }
+        target_flavor = {
+            "guest-epa": {"vcpu-count": 1, "mempage-size": "1G"},
+        }
+
+        guest_epa_numa_params.return_value = ({}, False)
+        guest_epa_cpu_pinning_params.return_value = ({}, False)
+        guest_epa_quota_params.return_value = {}
+
+        result = Ns._process_epa_params(
+            target_flavor=target_flavor,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertTrue(guest_epa_numa_params.called)
+        self.assertTrue(guest_epa_cpu_pinning_params.called)
+        self.assertTrue(guest_epa_quota_params.called)
+
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_quota_params")
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_cpu_pinning_params")
+    @patch("osm_ng_ro.ns.Ns._process_guest_epa_numa_params")
+    def test__process_guest_epa_params_with_numa(
+        self,
+        guest_epa_numa_params,
+        guest_epa_cpu_pinning_params,
+        guest_epa_quota_params,
+    ):
+        expected_result = {
+            "mempage-size": "1G",
+            "numas": [
+                {
+                    "cores": 3,
+                    "memory": 2,
+                    "paired-threads": 3,
+                    "paired-threads-id": [("0", "1"), ("4", "5")],
+                    "threads": 3,
+                }
+            ],
+            "cpu-quota": {"limit": 10, "reserve": 20, "shares": 30},
+            "disk-io-quota": {"limit": 10, "reserve": 20, "shares": 30},
+            "mem-quota": {"limit": 10, "reserve": 20, "shares": 30},
+            "vif-quota": {"limit": 10, "reserve": 20, "shares": 30},
+        }
+        target_flavor = {
+            "guest-epa": {
+                "vcpu-count": 1,
+                "mempage-size": "1G",
+                "cpu-pinning-policy": "DEDICATED",
+                "cpu-thread-pinning-policy": "PREFER",
+                "numa-node-policy": {
+                    "node": [
+                        {
+                            "num-cores": 3,
+                            "paired-threads": {
+                                "num-paired-threads": "3",
+                                "paired-thread-ids": [
+                                    {
+                                        "thread-a": 0,
+                                        "thread-b": 1,
+                                    },
+                                    {
+                                        "thread-a": 4,
+                                        "thread-b": 5,
+                                    },
+                                ],
+                            },
+                            "num-threads": "3",
+                            "memory-mb": 2048,
+                        },
+                    ],
+                },
+                "cpu-quota": {
+                    "limit": "10",
+                    "reserve": "20",
+                    "shares": "30",
+                },
+                "mem-quota": {
+                    "limit": "10",
+                    "reserve": "20",
+                    "shares": "30",
+                },
+                "disk-io-quota": {
+                    "limit": "10",
+                    "reserve": "20",
+                    "shares": "30",
+                },
+                "vif-quota": {
+                    "limit": "10",
+                    "reserve": "20",
+                    "shares": "30",
+                },
+            },
+        }
+
+        guest_epa_numa_params.return_value = (
+            {
+                "cores": 3,
+                "paired-threads": 3,
+                "paired-threads-id": [("0", "1"), ("4", "5")],
+                "threads": 3,
+                "memory": 2,
+            },
+            True,
+        )
+        guest_epa_cpu_pinning_params.return_value = (
+            {
+                "threads": 3,
+            },
+            True,
+        )
+        guest_epa_quota_params.return_value = {
+            "cpu-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+            "mem-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+            "disk-io-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+            "vif-quota": {
+                "limit": 10,
+                "reserve": 20,
+                "shares": 30,
+            },
+        }
+
+        result = Ns._process_epa_params(
+            target_flavor=target_flavor,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertTrue(guest_epa_numa_params.called)
+        self.assertTrue(guest_epa_cpu_pinning_params.called)
+        self.assertTrue(guest_epa_quota_params.called)
+
+    @patch("osm_ng_ro.ns.Ns._process_epa_params")
+    def test__process_flavor_params_with_empty_target_flavor(
+        self,
+        epa_params,
+    ):
+        target_flavor = {}
+        indata = {}
+        vim_info = {}
+        target_record_id = ""
+
+        with self.assertRaises(KeyError):
+            Ns._process_flavor_params(
+                target_flavor=target_flavor,
+                indata=indata,
+                vim_info=vim_info,
+                target_record_id=target_record_id,
+            )
+
+        self.assertFalse(epa_params.called)
+
+    @patch("osm_ng_ro.ns.Ns._process_epa_params")
+    def test__process_flavor_params_with_wrong_target_flavor(
+        self,
+        epa_params,
+    ):
+        target_flavor = {
+            "no-target-flavor": "here",
+        }
+        indata = {}
+        vim_info = {}
+        target_record_id = ""
+
+        with self.assertRaises(KeyError):
+            Ns._process_flavor_params(
+                target_flavor=target_flavor,
+                indata=indata,
+                vim_info=vim_info,
+                target_record_id=target_record_id,
+            )
+
+        self.assertFalse(epa_params.called)
+
+    @patch("osm_ng_ro.ns.Ns._process_epa_params")
+    def test__process_flavor_params_with_empty_indata(
+        self,
+        epa_params,
+    ):
+        expected_result = {
+            "find_params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "ram": 1024,
+                    "vcpus": 2,
+                },
+            },
+            "params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "name": "test",
+                    "ram": 1024,
+                    "vcpus": 2,
+                },
+            },
+        }
+        target_flavor = {
+            "name": "test",
+            "storage-gb": "10",
+            "memory-mb": "1024",
+            "vcpu-count": "2",
+        }
+        indata = {}
+        vim_info = {}
+        target_record_id = ""
+
+        epa_params.return_value = {}
+
+        result = Ns._process_flavor_params(
+            target_flavor=target_flavor,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertTrue(epa_params.called)
+        self.assertDictEqual(result, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._process_epa_params")
+    def test__process_flavor_params_with_wrong_indata(
+        self,
+        epa_params,
+    ):
+        expected_result = {
+            "find_params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "ram": 1024,
+                    "vcpus": 2,
+                },
+            },
+            "params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "name": "test",
+                    "ram": 1024,
+                    "vcpus": 2,
+                },
+            },
+        }
+        target_flavor = {
+            "name": "test",
+            "storage-gb": "10",
+            "memory-mb": "1024",
+            "vcpu-count": "2",
+        }
+        indata = {
+            "no-vnf": "here",
+        }
+        vim_info = {}
+        target_record_id = ""
+
+        epa_params.return_value = {}
+
+        result = Ns._process_flavor_params(
+            target_flavor=target_flavor,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertTrue(epa_params.called)
+        self.assertDictEqual(result, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._process_epa_params")
+    def test__process_flavor_params_with_ephemeral_disk(
+        self,
+        epa_params,
+    ):
+        expected_result = {
+            "find_params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "ram": 1024,
+                    "vcpus": 2,
+                    "ephemeral": 10,
+                },
+            },
+            "params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "name": "test",
+                    "ram": 1024,
+                    "vcpus": 2,
+                    "ephemeral": 10,
+                },
+            },
+        }
+        target_flavor = {
+            "id": "test_id",
+            "name": "test",
+            "storage-gb": "10",
+            "memory-mb": "1024",
+            "vcpu-count": "2",
+        }
+        indata = {
+            "vnf": [
+                {
+                    "vdur": [
+                        {
+                            "ns-flavor-id": "test_id",
+                            "virtual-storages": [
+                                {
+                                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+                                    "size-of-storage": "10",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }
+        vim_info = {}
+        target_record_id = ""
+
+        epa_params.return_value = {}
+
+        result = Ns._process_flavor_params(
+            target_flavor=target_flavor,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertTrue(epa_params.called)
+        self.assertDictEqual(result, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._process_epa_params")
+    def test__process_flavor_params_with_swap_disk(
+        self,
+        epa_params,
+    ):
+        expected_result = {
+            "find_params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "ram": 1024,
+                    "vcpus": 2,
+                    "swap": 20,
+                },
+            },
+            "params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "name": "test",
+                    "ram": 1024,
+                    "vcpus": 2,
+                    "swap": 20,
+                },
+            },
+        }
+        target_flavor = {
+            "id": "test_id",
+            "name": "test",
+            "storage-gb": "10",
+            "memory-mb": "1024",
+            "vcpu-count": "2",
+        }
+        indata = {
+            "vnf": [
+                {
+                    "vdur": [
+                        {
+                            "ns-flavor-id": "test_id",
+                            "virtual-storages": [
+                                {
+                                    "type-of-storage": "etsi-nfv-descriptors:swap-storage",
+                                    "size-of-storage": "20",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }
+        vim_info = {}
+        target_record_id = ""
+
+        epa_params.return_value = {}
+
+        result = Ns._process_flavor_params(
+            target_flavor=target_flavor,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertTrue(epa_params.called)
+        self.assertDictEqual(result, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._process_epa_params")
+    def test__process_flavor_params_with_epa_params(
+        self,
+        epa_params,
+    ):
+        expected_result = {
+            "find_params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "ram": 1024,
+                    "vcpus": 2,
+                    "extended": {
+                        "numa": "there-is-numa-here",
+                    },
+                },
+            },
+            "params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "name": "test",
+                    "ram": 1024,
+                    "vcpus": 2,
+                    "extended": {
+                        "numa": "there-is-numa-here",
+                    },
+                },
+            },
+        }
+        target_flavor = {
+            "id": "test_id",
+            "name": "test",
+            "storage-gb": "10",
+            "memory-mb": "1024",
+            "vcpu-count": "2",
+        }
+        indata = {}
+        vim_info = {}
+        target_record_id = ""
+
+        epa_params.return_value = {
+            "numa": "there-is-numa-here",
+        }
+
+        result = Ns._process_flavor_params(
+            target_flavor=target_flavor,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertTrue(epa_params.called)
+        self.assertDictEqual(result, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._process_epa_params")
+    def test__process_flavor_params(
+        self,
+        epa_params,
+    ):
+        expected_result = {
+            "find_params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "ram": 1024,
+                    "vcpus": 2,
+                    "ephemeral": 10,
+                    "swap": 20,
+                    "extended": {
+                        "numa": "there-is-numa-here",
+                    },
+                },
+            },
+            "params": {
+                "flavor_data": {
+                    "disk": 10,
+                    "name": "test",
+                    "ram": 1024,
+                    "vcpus": 2,
+                    "ephemeral": 10,
+                    "swap": 20,
+                    "extended": {
+                        "numa": "there-is-numa-here",
+                    },
+                },
+            },
+        }
+        target_flavor = {
+            "id": "test_id",
+            "name": "test",
+            "storage-gb": "10",
+            "memory-mb": "1024",
+            "vcpu-count": "2",
+        }
+        indata = {
+            "vnf": [
+                {
+                    "vdur": [
+                        {
+                            "ns-flavor-id": "test_id",
+                            "virtual-storages": [
+                                {
+                                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+                                    "size-of-storage": "10",
+                                },
+                                {
+                                    "type-of-storage": "etsi-nfv-descriptors:swap-storage",
+                                    "size-of-storage": "20",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }
+        vim_info = {}
+        target_record_id = ""
+
+        epa_params.return_value = {
+            "numa": "there-is-numa-here",
+        }
+
+        result = Ns._process_flavor_params(
+            target_flavor=target_flavor,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertTrue(epa_params.called)
+        self.assertDictEqual(result, expected_result)

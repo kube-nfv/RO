@@ -18,7 +18,7 @@
 
 # import yaml
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 from traceback import format_exc as traceback_format_exc
 from osm_ng_ro.ns_thread import NsWorker, NsWorkerException, deep_get
 from osm_ng_ro.validation import validate_input, deploy_schema
@@ -471,6 +471,7 @@ class Ns(object):
     @staticmethod
     def _process_image_params(
         target_image: Dict[str, Any],
+        indata: Dict[str, Any],
         vim_info: Dict[str, Any],
         target_record_id: str,
     ) -> Dict[str, Any]:
@@ -478,6 +479,7 @@ class Ns(object):
 
         Args:
             target_image (Dict[str, Any]): [description]
+            indata (Dict[str, Any]): [description]
             vim_info (Dict[str, Any]): [description]
             target_record_id (str): [description]
 
@@ -524,6 +526,234 @@ class Ns(object):
             quota["shares"] = int(quota_descriptor["shares"])
 
         return quota
+
+    @staticmethod
+    def _process_guest_epa_quota_params(
+        guest_epa_quota: Dict[str, Any],
+        epa_vcpu_set: bool,
+    ) -> Dict[str, Any]:
+        """Function to extract the guest epa quota parameters.
+
+        Args:
+            guest_epa_quota (Dict[str, Any]): [description]
+            epa_vcpu_set (bool): [description]
+
+        Returns:
+            Dict[str, Any]: [description]
+        """
+        result = {}
+
+        if guest_epa_quota.get("cpu-quota") and not epa_vcpu_set:
+            cpuquota = Ns._get_resource_allocation_params(
+                guest_epa_quota.get("cpu-quota")
+            )
+
+            if cpuquota:
+                result["cpu-quota"] = cpuquota
+
+        if guest_epa_quota.get("mem-quota"):
+            vduquota = Ns._get_resource_allocation_params(
+                guest_epa_quota.get("mem-quota")
+            )
+
+            if vduquota:
+                result["mem-quota"] = vduquota
+
+        if guest_epa_quota.get("disk-io-quota"):
+            diskioquota = Ns._get_resource_allocation_params(
+                guest_epa_quota.get("disk-io-quota")
+            )
+
+            if diskioquota:
+                result["disk-io-quota"] = diskioquota
+
+        if guest_epa_quota.get("vif-quota"):
+            vifquota = Ns._get_resource_allocation_params(
+                guest_epa_quota.get("vif-quota")
+            )
+
+            if vifquota:
+                result["vif-quota"] = vifquota
+
+        return result
+
+    @staticmethod
+    def _process_guest_epa_numa_params(
+        guest_epa_quota: Dict[str, Any],
+    ) -> Tuple[Dict[str, Any], bool]:
+        """[summary]
+
+        Args:
+            guest_epa_quota (Dict[str, Any]): [description]
+
+        Returns:
+            Tuple[Dict[str, Any], bool]: [description]
+        """
+        numa = {}
+        epa_vcpu_set = False
+
+        if guest_epa_quota.get("numa-node-policy"):
+            numa_node_policy = guest_epa_quota.get("numa-node-policy")
+
+            if numa_node_policy.get("node"):
+                numa_node = numa_node_policy["node"][0]
+
+                if numa_node.get("num-cores"):
+                    numa["cores"] = numa_node["num-cores"]
+                    epa_vcpu_set = True
+
+                paired_threads = numa_node.get("paired-threads", {})
+                if paired_threads.get("num-paired-threads"):
+                    numa["paired-threads"] = int(
+                        numa_node["paired-threads"]["num-paired-threads"]
+                    )
+                    epa_vcpu_set = True
+
+                if paired_threads.get("paired-thread-ids"):
+                    numa["paired-threads-id"] = []
+
+                    for pair in paired_threads["paired-thread-ids"]:
+                        numa["paired-threads-id"].append(
+                            (
+                                str(pair["thread-a"]),
+                                str(pair["thread-b"]),
+                            )
+                        )
+
+                if numa_node.get("num-threads"):
+                    numa["threads"] = int(numa_node["num-threads"])
+                    epa_vcpu_set = True
+
+                if numa_node.get("memory-mb"):
+                    numa["memory"] = max(int(int(numa_node["memory-mb"]) / 1024), 1)
+
+        return numa, epa_vcpu_set
+
+    @staticmethod
+    def _process_guest_epa_cpu_pinning_params(
+        guest_epa_quota: Dict[str, Any],
+        vcpu_count: int,
+        epa_vcpu_set: bool,
+    ) -> Tuple[Dict[str, Any], bool]:
+        """[summary]
+
+        Args:
+            guest_epa_quota (Dict[str, Any]): [description]
+            vcpu_count (int): [description]
+            epa_vcpu_set (bool): [description]
+
+        Returns:
+            Tuple[Dict[str, Any], bool]: [description]
+        """
+        numa = {}
+        local_epa_vcpu_set = epa_vcpu_set
+
+        if (
+            guest_epa_quota.get("cpu-pinning-policy") == "DEDICATED"
+            and not epa_vcpu_set
+        ):
+            numa[
+                "cores"
+                if guest_epa_quota.get("cpu-thread-pinning-policy") != "PREFER"
+                else "threads"
+            ] = max(vcpu_count, 1)
+            local_epa_vcpu_set = True
+
+        return numa, local_epa_vcpu_set
+
+    @staticmethod
+    def _process_epa_params(
+        target_flavor: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """[summary]
+
+        Args:
+            target_flavor (Dict[str, Any]): [description]
+
+        Returns:
+            Dict[str, Any]: [description]
+        """
+        extended = {}
+        numa = {}
+
+        if target_flavor.get("guest-epa"):
+            guest_epa = target_flavor["guest-epa"]
+
+            numa, epa_vcpu_set = Ns._process_guest_epa_numa_params(
+                guest_epa_quota=guest_epa
+            )
+
+            if guest_epa.get("mempage-size"):
+                extended["mempage-size"] = guest_epa.get("mempage-size")
+
+            tmp_numa, epa_vcpu_set = Ns._process_guest_epa_cpu_pinning_params(
+                guest_epa_quota=guest_epa,
+                vcpu_count=int(target_flavor.get("vcpu-count", 1)),
+                epa_vcpu_set=epa_vcpu_set,
+            )
+            numa.update(tmp_numa)
+
+            extended.update(
+                Ns._process_guest_epa_quota_params(
+                    guest_epa_quota=guest_epa,
+                    epa_vcpu_set=epa_vcpu_set,
+                )
+            )
+
+        if numa:
+            extended["numas"] = [numa]
+
+        return extended
+
+    @staticmethod
+    def _process_flavor_params(
+        target_flavor: Dict[str, Any],
+        indata: Dict[str, Any],
+        vim_info: Dict[str, Any],
+        target_record_id: str,
+    ) -> Dict[str, Any]:
+        """[summary]
+
+        Args:
+            target_flavor (Dict[str, Any]): [description]
+            indata (Dict[str, Any]): [description]
+            vim_info (Dict[str, Any]): [description]
+            target_record_id (str): [description]
+
+        Returns:
+            Dict[str, Any]: [description]
+        """
+        flavor_data = {
+            "disk": int(target_flavor["storage-gb"]),
+            "ram": int(target_flavor["memory-mb"]),
+            "vcpus": int(target_flavor["vcpu-count"]),
+        }
+
+        target_vdur = {}
+        for vnf in indata.get("vnf", []):
+            for vdur in vnf.get("vdur", []):
+                if vdur.get("ns-flavor-id") == target_flavor["id"]:
+                    target_vdur = vdur
+
+        for storage in target_vdur.get("virtual-storages", []):
+            if (
+                storage.get("type-of-storage")
+                == "etsi-nfv-descriptors:ephemeral-storage"
+            ):
+                flavor_data["ephemeral"] = int(storage.get("size-of-storage", 0))
+            elif storage.get("type-of-storage") == "etsi-nfv-descriptors:swap-storage":
+                flavor_data["swap"] = int(storage.get("size-of-storage", 0))
+
+        extended = Ns._process_epa_params(target_flavor)
+        if extended:
+            flavor_data["extended"] = extended
+
+        extra_dict = {"find_params": {"flavor_data": flavor_data}}
+        flavor_data_name = flavor_data.copy()
+        flavor_data_name["name"] = target_flavor["name"]
+        extra_dict["params"] = {"flavor_data": flavor_data_name}
+
+        return extra_dict
 
     def deploy(self, session, indata, version, nsr_id, *args, **kwargs):
         self.logger.debug("ns.deploy nsr_id={} indata={}".format(nsr_id, indata))
@@ -581,161 +811,6 @@ class Ns(object):
 
                     index += 1
 
-            def _process_flavor_params(target_flavor, vim_info, target_record_id):
-                nonlocal indata
-
-                flavor_data = {
-                    "disk": int(target_flavor["storage-gb"]),
-                    "ram": int(target_flavor["memory-mb"]),
-                    "vcpus": int(target_flavor["vcpu-count"]),
-                }
-                numa = {}
-                extended = {}
-
-                target_vdur = None
-                for vnf in indata.get("vnf", []):
-                    for vdur in vnf.get("vdur", []):
-                        if vdur.get("ns-flavor-id") == target_flavor["id"]:
-                            target_vdur = vdur
-
-                for storage in target_vdur.get("virtual-storages", []):
-                    if (
-                        storage.get("type-of-storage")
-                        == "etsi-nfv-descriptors:ephemeral-storage"
-                    ):
-                        flavor_data["ephemeral"] = int(
-                            storage.get("size-of-storage", 0)
-                        )
-                    elif (
-                        storage.get("type-of-storage")
-                        == "etsi-nfv-descriptors:swap-storage"
-                    ):
-                        flavor_data["swap"] = int(storage.get("size-of-storage", 0))
-
-                if target_flavor.get("guest-epa"):
-                    extended = {}
-                    epa_vcpu_set = False
-
-                    if target_flavor["guest-epa"].get("numa-node-policy"):
-                        numa_node_policy = target_flavor["guest-epa"].get(
-                            "numa-node-policy"
-                        )
-
-                        if numa_node_policy.get("node"):
-                            numa_node = numa_node_policy["node"][0]
-
-                            if numa_node.get("num-cores"):
-                                numa["cores"] = numa_node["num-cores"]
-                                epa_vcpu_set = True
-
-                            if numa_node.get("paired-threads"):
-                                if numa_node["paired-threads"].get(
-                                    "num-paired-threads"
-                                ):
-                                    numa["paired-threads"] = int(
-                                        numa_node["paired-threads"][
-                                            "num-paired-threads"
-                                        ]
-                                    )
-                                    epa_vcpu_set = True
-
-                                if len(
-                                    numa_node["paired-threads"].get("paired-thread-ids")
-                                ):
-                                    numa["paired-threads-id"] = []
-
-                                    for pair in numa_node["paired-threads"][
-                                        "paired-thread-ids"
-                                    ]:
-                                        numa["paired-threads-id"].append(
-                                            (
-                                                str(pair["thread-a"]),
-                                                str(pair["thread-b"]),
-                                            )
-                                        )
-
-                            if numa_node.get("num-threads"):
-                                numa["threads"] = int(numa_node["num-threads"])
-                                epa_vcpu_set = True
-
-                            if numa_node.get("memory-mb"):
-                                numa["memory"] = max(
-                                    int(numa_node["memory-mb"] / 1024), 1
-                                )
-
-                    if target_flavor["guest-epa"].get("mempage-size"):
-                        extended["mempage-size"] = target_flavor["guest-epa"].get(
-                            "mempage-size"
-                        )
-
-                    if (
-                        target_flavor["guest-epa"].get("cpu-pinning-policy")
-                        and not epa_vcpu_set
-                    ):
-                        if (
-                            target_flavor["guest-epa"]["cpu-pinning-policy"]
-                            == "DEDICATED"
-                        ):
-                            if (
-                                target_flavor["guest-epa"].get(
-                                    "cpu-thread-pinning-policy"
-                                )
-                                and target_flavor["guest-epa"][
-                                    "cpu-thread-pinning-policy"
-                                ]
-                                != "PREFER"
-                            ):
-                                numa["cores"] = max(flavor_data["vcpus"], 1)
-                            else:
-                                numa["threads"] = max(flavor_data["vcpus"], 1)
-
-                            epa_vcpu_set = True
-
-                    if target_flavor["guest-epa"].get("cpu-quota") and not epa_vcpu_set:
-                        cpuquota = Ns._get_resource_allocation_params(
-                            target_flavor["guest-epa"].get("cpu-quota")
-                        )
-
-                        if cpuquota:
-                            extended["cpu-quota"] = cpuquota
-
-                    if target_flavor["guest-epa"].get("mem-quota"):
-                        vduquota = Ns._get_resource_allocation_params(
-                            target_flavor["guest-epa"].get("mem-quota")
-                        )
-
-                        if vduquota:
-                            extended["mem-quota"] = vduquota
-
-                    if target_flavor["guest-epa"].get("disk-io-quota"):
-                        diskioquota = Ns._get_resource_allocation_params(
-                            target_flavor["guest-epa"].get("disk-io-quota")
-                        )
-
-                        if diskioquota:
-                            extended["disk-io-quota"] = diskioquota
-
-                    if target_flavor["guest-epa"].get("vif-quota"):
-                        vifquota = Ns._get_resource_allocation_params(
-                            target_flavor["guest-epa"].get("vif-quota")
-                        )
-
-                        if vifquota:
-                            extended["vif-quota"] = vifquota
-
-                if numa:
-                    extended["numas"] = [numa]
-
-                if extended:
-                    flavor_data["extended"] = extended
-
-                extra_dict = {"find_params": {"flavor_data": flavor_data}}
-                flavor_data_name = flavor_data.copy()
-                flavor_data_name["name"] = target_flavor["name"]
-                extra_dict["params"] = {"flavor_data": flavor_data_name}
-
-                return extra_dict
-
             def _ip_profile_2_ro(ip_profile):
                 if not ip_profile:
                     return None
@@ -765,8 +840,7 @@ class Ns(object):
 
                 return ro_ip_profile
 
-            def _process_net_params(target_vld, vim_info, target_record_id):
-                nonlocal indata
+            def _process_net_params(target_vld, indata, vim_info, target_record_id):
                 extra_dict = {}
 
                 if vim_info.get("sdn"):
@@ -818,10 +892,9 @@ class Ns(object):
 
                 return extra_dict
 
-            def _process_vdu_params(target_vdu, vim_info, target_record_id):
+            def _process_vdu_params(target_vdu, indata, vim_info, target_record_id):
                 nonlocal vnfr_id
                 nonlocal nsr_id
-                nonlocal indata
                 nonlocal vnfr
                 nonlocal vdu2cloud_init
                 nonlocal tasks_by_target_record_id
@@ -985,6 +1058,7 @@ class Ns(object):
                 nonlocal action_id
                 nonlocal nsr_id
                 nonlocal task_index
+                nonlocal indata
 
                 # ensure all the target_list elements has an "id". If not assign the index as id
                 for target_index, tl in enumerate(target_list):
@@ -1082,7 +1156,7 @@ class Ns(object):
                             target_record_id += ".sdn"
 
                         extra_dict = process_params(
-                            target_item, target_viminfo, target_record_id
+                            target_item, indata, target_viminfo, target_record_id
                         )
                         self._assign_vim(target_vim)
 
@@ -1228,7 +1302,7 @@ class Ns(object):
                         db_update=db_nsr_update,
                         db_path="flavor",
                         item="flavor",
-                        process_params=_process_flavor_params,
+                        process_params=Ns._process_flavor_params,
                     )
 
                     # VNF.vld
