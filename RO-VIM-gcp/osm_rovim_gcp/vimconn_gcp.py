@@ -157,9 +157,7 @@ class vimconnector(vimconn.VimConnector):
         self.logger.debug("Config: %s", config)
         scopes = ["https://www.googleapis.com/auth/cloud-platform"]
         self.credentials = None
-        if (
-            "credentials" in config
-        ):
+        if "credentials" in config:
             self.logger.debug("Setting credentials")
             # Settings Google Cloud credentials dict
             credentials_body = config["credentials"]
@@ -491,9 +489,7 @@ class vimconnector(vimconn.VimConnector):
         if not network_list:
             return []
         else:
-            self.logger.debug(
-                "get_network Return: network_list[0] %s", network_list[0]
-            )
+            self.logger.debug("get_network Return: network_list[0] %s", network_list[0])
             return network_list[0]
 
     def delete_network(self, net_id, created_items=None):
@@ -679,9 +675,7 @@ class vimconnector(vimconn.VimConnector):
         return vm_name_aux.lower()
 
     def get_flavor_id_from_data(self, flavor_dict):
-        self.logger.debug(
-            "get_flavor_id_from_data begin: flavor_dict %s", flavor_dict
-        )
+        self.logger.debug("get_flavor_id_from_data begin: flavor_dict %s", flavor_dict)
         filter_dict = flavor_dict or {}
 
         try:
@@ -695,7 +689,8 @@ class vimconnector(vimconn.VimConnector):
 
             cpus = filter_dict.get("vcpus") or 0
             memMB = filter_dict.get("ram") or 0
-            numberInterfaces = len(filter_dict.get("interfaces", [])) or 4 # Workaround (it should be 0)
+            # Workaround (it should be 0)
+            numberInterfaces = len(filter_dict.get("interfaces", [])) or 4
 
             # Filter
             filtered_machines = []
@@ -862,7 +857,9 @@ class vimconnector(vimconn.VimConnector):
                     self.logger.debug("New random name: %s", random_name)
                     break
                 else:
-                    self.logger.error("Exception generating random name (%s) for the instance", name)
+                    self.logger.error(
+                        "Exception generating random name (%s) for the instance", name
+                    )
                     self._format_vimconn_exception(e)
 
         return random_name
@@ -928,7 +925,9 @@ class vimconnector(vimconn.VimConnector):
                     net_iface["subnetwork"] = net.get("net_id")
                 # In order to get an external IP address, the key "accessConfigs" must be used
                 # in the interace. It has to be of type "ONE_TO_ONE_NAT" and name "External NAT"
-                if net.get("floating_ip", False) or (net["use"] == "mgmt" and self.config.get("use_floating_ip")):
+                if net.get("floating_ip", False) or (
+                    net["use"] == "mgmt" and self.config.get("use_floating_ip")
+                ):
                     net_iface["accessConfigs"] = [
                         {"type": "ONE_TO_ONE_NAT", "name": "External NAT"}
                     ]
@@ -1007,9 +1006,10 @@ class vimconnector(vimconn.VimConnector):
                     self.logger.error("new_vminstance rollback fail {}".format(e2))
 
             else:
-                self.logger.debug("Exception creating new vminstance: %s", e, exc_info=True)
+                self.logger.debug(
+                    "Exception creating new vminstance: %s", e, exc_info=True
+                )
                 self._format_vimconn_exception(e)
-
 
     def _build_metadata(self, vm_name, cloud_config):
 
@@ -1022,9 +1022,7 @@ class vimconnector(vimconn.VimConnector):
         if cloud_config:
             self.logger.debug("cloud config: %s", cloud_config)
             _, userdata = self._create_user_data(cloud_config)
-            metadata["items"].append(
-                {"key": "user-data", "value": userdata}
-            )
+            metadata["items"].append({"key": "user-data", "value": userdata})
 
         # either password of ssh-keys are required
         # we will always use ssh-keys, in case it is not available we will generate it
@@ -1057,7 +1055,6 @@ class vimconnector(vimconn.VimConnector):
 
         return metadata
 
-
     def _generate_keys(self):
         """Method used to generate a pair of private/public keys.
         This method is used because to create a vm in Azure we always need a key or a password
@@ -1082,7 +1079,6 @@ class vimconnector(vimconn.VimConnector):
         public_key = public_key.decode("utf8")
 
         return private_key, public_key
-
 
     def _get_unused_vm_name(self, vm_name):
         """
@@ -1514,4 +1510,3 @@ class vimconnector(vimconn.VimConnector):
                 )
             )
             self._format_vimconn_exception(e)
-

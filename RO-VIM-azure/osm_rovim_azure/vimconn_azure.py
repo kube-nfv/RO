@@ -548,7 +548,9 @@ class vimconnector(vimconn.VimConnector):
         self._reload_connection()
 
         subnet_id = net["net_id"]
-        location = self.region or self._get_location_from_resource_group(self.resource_group)
+        location = self.region or self._get_location_from_resource_group(
+            self.resource_group
+        )
         try:
             net_ifz = {"location": location}
             net_ip_config = {

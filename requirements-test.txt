@@ -16,7 +16,7 @@
 #######################################################################################
 -e RO-plugin
     # via -r requirements-test.in
-coverage==6.0
+coverage==6.2
     # via
     #   -r requirements-test.in
     #   nose2
