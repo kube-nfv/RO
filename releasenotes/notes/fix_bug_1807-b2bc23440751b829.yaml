@@ -14,10 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
-setuptools-version-command==99.9
-    # via -r requirements-dist.in
-stdeb==0.10.0
-    # via -r requirements-dist.in
-
-# The following packages are considered to be unsafe in a requirements file:
-# setuptools
+---
+fixes:
+  - |
+    Disabling the Open Nebula plugin because it has a dependency to a GPLv2 licensed
+    library. Due to licensing restrictions and has mentioned in bug 1807, this cannot be
+    happen, therefore the plugin will remain disabled until further notice.
