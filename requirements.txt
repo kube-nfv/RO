@@ -16,8 +16,6 @@
 #######################################################################################
 adal==1.2.7
     # via msrestazure
-aenum==3.1.0
-    # via pyone
 alabaster==0.7.12
     # via sphinx
 appdirs==1.4.4
@@ -34,56 +32,54 @@ azure-common==1.1.27
     #   azure-mgmt-compute
     #   azure-mgmt-network
     #   azure-mgmt-resource
-azure-core==1.17.0
+azure-core==1.20.1
     # via
     #   azure-identity
     #   azure-mgmt-core
-azure-identity==1.6.1
+azure-identity==1.7.1
     # via -r RO-VIM-azure/requirements.in
-azure-mgmt-compute==22.1.0
+azure-mgmt-compute==23.1.0
     # via -r RO-VIM-azure/requirements.in
 azure-mgmt-core==1.3.0
     # via
     #   azure-mgmt-compute
     #   azure-mgmt-network
     #   azure-mgmt-resource
-azure-mgmt-network==19.0.0
+azure-mgmt-network==19.3.0
     # via -r RO-VIM-azure/requirements.in
-azure-mgmt-resource==19.0.0
+azure-mgmt-resource==20.0.0
     # via -r RO-VIM-azure/requirements.in
 babel==2.9.1
     # via sphinx
 bcrypt==3.2.0
     # via paramiko
-bitarray==2.3.2
+bitarray==2.3.4
     # via pyangbind
 boto==2.49.0
     # via -r RO-VIM-aws/requirements.in
-certifi==2021.5.30
+certifi==2021.10.8
     # via
     #   msrest
     #   requests
-cffi==1.14.6
+cffi==1.15.0
     # via
     #   bcrypt
     #   cryptography
     #   pynacl
-charset-normalizer==2.0.4
+charset-normalizer==2.0.8
     # via requests
 cheroot==8.5.2
     # via cherrypy
 cherrypy==18.1.2
     # via -r NG-RO/requirements.in
-cliff==3.9.0
+cliff==3.10.0
     # via
     #   osc-lib
     #   python-neutronclient
     #   python-openstackclient
-cmd2==2.1.2
+cmd2==2.3.3
     # via cliff
-colorama==0.4.4
-    # via cmd2
-cryptography==3.4.8
+cryptography==36.0.0
     # via
     #   -r NG-RO/requirements.in
     #   adal
@@ -95,7 +91,7 @@ cryptography==3.4.8
     #   pyopenssl
 cvprac==1.0.7
     # via -r RO-SDN-arista_cloudvision/requirements.in
-debtcollector==2.2.0
+debtcollector==2.3.0
     # via
     #   oslo.config
     #   oslo.context
@@ -103,15 +99,13 @@ debtcollector==2.2.0
     #   oslo.utils
     #   python-keystoneclient
     #   python-neutronclient
-decorator==5.0.9
+decorator==5.1.0
     # via
     #   dogpile.cache
     #   openstacksdk
-dicttoxml==1.7.4
-    # via pyone
 docutils==0.17.1
     # via sphinx
-dogpile.cache==1.1.3
+dogpile.cache==1.1.4
     # via openstacksdk
 enum34==1.1.10
     # via pyangbind
@@ -125,15 +119,15 @@ fog05==0.2.0
     # via -r RO-VIM-fos/requirements.in
 hexdump==3.3
     # via yaks
-humanfriendly==9.2
+humanfriendly==10.0
     # via pyvcloud
-idna==3.2
+idna==3.3
     # via requests
-imagesize==1.2.0
+imagesize==1.3.0
     # via sphinx
-importlib-metadata==4.8.1
+importlib-metadata==4.8.2
     # via -r NG-RO/requirements.in
-iso8601==0.1.16
+iso8601==1.0.2
     # via
     #   keystoneauth1
     #   openstacksdk
@@ -143,11 +137,11 @@ iso8601==0.1.16
     #   python-openstackclient
 isodate==0.6.0
     # via msrest
-jaraco.functools==3.3.0
+jaraco.functools==3.4.0
     # via
     #   cheroot
     #   tempora
-jinja2==3.0.1
+jinja2==3.0.3
     # via sphinx
 jmespath==0.10.0
     # via openstacksdk
@@ -155,14 +149,14 @@ jsonpatch==1.32
     # via
     #   openstacksdk
     #   warlock
-jsonpointer==2.1
+jsonpointer==2.2
     # via jsonpatch
 jsonschema==3.2.0
     # via
     #   fog05
     #   fog05-sdk
     #   warlock
-keystoneauth1==4.3.1
+keystoneauth1==4.4.0
     # via
     #   openstacksdk
     #   osc-lib
@@ -173,26 +167,25 @@ keystoneauth1==4.3.1
     #   python-novaclient
 logutils==0.3.5
     # via -r NG-RO/requirements.in
-lxml==4.6.3
+lxml==4.6.4
     # via
     #   pyang
     #   pyangbind
-    #   pyone
     #   pyvcloud
 markupsafe==2.0.1
     # via jinja2
-more-itertools==8.8.0
+more-itertools==8.12.0
     # via
     #   cheroot
     #   cherrypy
     #   jaraco.functools
 msal-extensions==0.3.0
     # via azure-identity
-msal==1.14.0
+msal==1.16.0
     # via
     #   azure-identity
     #   msal-extensions
-msgpack==1.0.2
+msgpack==1.0.3
     # via oslo.serialization
 msrest==0.6.21
     # via
@@ -215,7 +208,6 @@ netaddr==0.8.0
     #   -r RO-VIM-aws/requirements.in
     #   -r RO-VIM-azure/requirements.in
     #   -r RO-VIM-fos/requirements.in
-    #   -r RO-VIM-opennebula/requirements.in
     #   -r RO-VIM-openstack/requirements.in
     #   -r RO-VIM-openvim/requirements.in
     #   -r RO-VIM-vmware/requirements.in
@@ -228,9 +220,7 @@ netifaces==0.11.0
     #   oslo.utils
 oauthlib==3.1.1
     # via requests-oauthlib
-oca==4.10.0
-    # via -r RO-VIM-opennebula/requirements.in
-openstacksdk==0.59.0
+openstacksdk==0.60.0
     # via
     #   os-client-config
     #   osc-lib
@@ -249,9 +239,9 @@ oslo.config==8.7.1
     # via
     #   oslo.log
     #   python-keystoneclient
-oslo.context==3.3.1
+oslo.context==3.4.0
     # via oslo.log
-oslo.i18n==5.0.1
+oslo.i18n==5.1.0
     # via
     #   osc-lib
     #   oslo.config
@@ -263,7 +253,7 @@ oslo.i18n==5.0.1
     #   python-neutronclient
     #   python-novaclient
     #   python-openstackclient
-oslo.log==4.6.0
+oslo.log==4.6.1
     # via python-neutronclient
 oslo.serialization==4.2.0
     # via
@@ -271,7 +261,7 @@ oslo.serialization==4.2.0
     #   python-keystoneclient
     #   python-neutronclient
     #   python-novaclient
-oslo.utils==4.10.0
+oslo.utils==4.12.0
     # via
     #   osc-lib
     #   oslo.log
@@ -282,17 +272,17 @@ oslo.utils==4.10.0
     #   python-neutronclient
     #   python-novaclient
     #   python-openstackclient
-packaging==21.0
+packaging==21.3
     # via
     #   oslo.utils
     #   sphinx
 papero==0.2.7
     # via yaks
-paramiko==2.7.2
+paramiko==2.8.1
     # via
     #   -r RO-SDN-dpb/requirements.in
     #   -r RO-plugin/requirements.in
-pbr==5.6.0
+pbr==5.8.0
     # via
     #   cliff
     #   debtcollector
@@ -314,9 +304,11 @@ pbr==5.6.0
     #   stevedore
 portalocker==1.7.1
     # via msal-extensions
-portend==2.7.1
-    # via cherrypy
-prettytable==2.2.0
+portend==3.0.0
+    # via
+    #   -r requirements.in
+    #   cherrypy
+prettytable==2.4.0
     # via
     #   -r RO-VIM-vmware/requirements.in
     #   cliff
@@ -331,7 +323,7 @@ pyangbind==0.8.1
     # via
     #   -r RO-VIM-fos/requirements.in
     #   fog05-sdk
-pycparser==2.20
+pycparser==2.21
     # via cffi
 pygments==2.10.0
     # via
@@ -339,17 +331,15 @@ pygments==2.10.0
     #   sphinx
 pyinotify==0.9.6
     # via oslo.log
-pyjwt[crypto]==2.1.0
+pyjwt[crypto]==2.3.0
     # via
     #   adal
     #   msal
 pynacl==1.4.0
     # via paramiko
-pyone==6.0.3
-    # via -r RO-VIM-opennebula/requirements.in
-pyopenssl==20.0.1
+pyopenssl==21.0.0
     # via python-glanceclient
-pyparsing==2.4.7
+pyparsing==3.0.6
     # via
     #   cliff
     #   oslo.utils
@@ -358,7 +348,7 @@ pyperclip==1.8.2
     # via cmd2
 pyrsistent==0.18.0
     # via jsonschema
-python-cinderclient==7.4.0
+python-cinderclient==7.4.1
     # via
     #   -r RO-VIM-openstack/requirements.in
     #   python-openstackclient
@@ -366,22 +356,22 @@ python-dateutil==2.8.2
     # via
     #   adal
     #   oslo.log
-python-glanceclient==3.4.0
+python-glanceclient==3.5.0
     # via -r RO-VIM-openstack/requirements.in
-python-keystoneclient==4.2.0
+python-keystoneclient==4.3.0
     # via
     #   -r RO-VIM-openstack/requirements.in
     #   python-neutronclient
     #   python-openstackclient
-python-neutronclient==7.5.0
+python-neutronclient==7.7.0
     # via -r RO-VIM-openstack/requirements.in
-python-novaclient==17.5.0
+python-novaclient==17.6.0
     # via
     #   -r RO-VIM-openstack/requirements.in
     #   python-openstackclient
-python-openstackclient==5.5.0
+python-openstackclient==5.7.0
     # via -r RO-VIM-openstack/requirements.in
-pytz==2021.1
+pytz==2021.3
     # via
     #   babel
     #   oslo.serialization
@@ -389,7 +379,7 @@ pytz==2021.1
     #   tempora
 pyvcloud==19.1.1
     # via -r RO-VIM-vmware/requirements.in
-pyvmomi==7.0.2
+pyvmomi==7.0.3
     # via -r RO-VIM-vmware/requirements.in
 pyyaml==5.4.1
     # via
@@ -397,16 +387,16 @@ pyyaml==5.4.1
     #   -r RO-VIM-aws/requirements.in
     #   -r RO-VIM-azure/requirements.in
     #   -r RO-VIM-fos/requirements.in
-    #   -r RO-VIM-opennebula/requirements.in
     #   -r RO-VIM-openstack/requirements.in
     #   -r RO-VIM-openvim/requirements.in
     #   -r RO-VIM-vmware/requirements.in
     #   -r RO-plugin/requirements.in
+    #   -r requirements.in
     #   cliff
     #   openstacksdk
     #   oslo.config
     #   pyvcloud
-regex==2021.8.28
+regex==2021.11.10
     # via pyangbind
 requests-oauthlib==1.3.0
     # via msrest
@@ -425,7 +415,6 @@ requests==2.26.0
     #   -r RO-VIM-aws/requirements.in
     #   -r RO-VIM-azure/requirements.in
     #   -r RO-VIM-fos/requirements.in
-    #   -r RO-VIM-opennebula/requirements.in
     #   -r RO-VIM-openstack/requirements.in
     #   -r RO-VIM-openvim/requirements.in
     #   -r RO-VIM-vmware/requirements.in
@@ -437,7 +426,6 @@ requests==2.26.0
     #   msal
     #   msrest
     #   oslo.config
-    #   pyone
     #   python-cinderclient
     #   python-glanceclient
     #   python-keystoneclient
@@ -450,7 +438,7 @@ requestsexceptions==1.4.0
     # via openstacksdk
 rfc3986==1.5.0
     # via oslo.config
-simplejson==3.17.5
+simplejson==3.17.6
     # via
     #   osc-lib
     #   python-cinderclient
@@ -467,18 +455,16 @@ six==1.16.0
     #   keystoneauth1
     #   msrestazure
     #   munch
-    #   oslo.i18n
     #   pyangbind
     #   pynacl
-    #   pyone
     #   pyopenssl
     #   python-dateutil
     #   python-keystoneclient
     #   pyvmomi
     #   warlock
-snowballstemmer==2.1.0
+snowballstemmer==2.2.0
     # via sphinx
-sphinx==4.1.2
+sphinx==4.3.1
     # via -r RO-VIM-fos/requirements.in
 sphinxcontrib-applehelp==1.0.2
     # via sphinx
@@ -492,7 +478,7 @@ sphinxcontrib-qthelp==1.0.3
     # via sphinx
 sphinxcontrib-serializinghtml==1.1.5
     # via sphinx
-stevedore==3.4.0
+stevedore==3.5.0
     # via
     #   cliff
     #   dogpile.cache
@@ -503,11 +489,9 @@ stevedore==3.4.0
     #   python-keystoneclient
     #   python-novaclient
     #   python-openstackclient
-tblib==1.7.0
-    # via pyone
-tempora==4.1.1
+tempora==4.1.2
     # via portend
-urllib3==1.26.6
+urllib3==1.26.7
     # via requests
 uuid==1.30
     # via -r RO-SDN-arista_cloudvision/requirements.in
@@ -517,12 +501,10 @@ wcwidth==0.2.5
     # via
     #   cmd2
     #   prettytable
-wrapt==1.12.1
+wrapt==1.13.3
     # via
     #   debtcollector
     #   python-glanceclient
-xmltodict==0.12.0
-    # via pyone
 yaks==0.3.0.post1
     # via
     #   -r RO-VIM-fos/requirements.in
@@ -532,7 +514,7 @@ zc.lockfile==2.0
     # via cherrypy
 zenoh==0.3.0
     # via -r RO-VIM-fos/requirements.in
-zipp==3.5.0
+zipp==3.6.0
     # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:

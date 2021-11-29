@@ -32,7 +32,7 @@ tox -e dist_ro_sdn_onos_vpls &
 tox -e dist_ro_vim_aws &
 tox -e dist_ro_vim_azure &
 tox -e dist_ro_vim_fos &
-tox -e dist_ro_vim_opennebula &
+#tox -e dist_ro_vim_opennebula &
 tox -e dist_ro_vim_openstack &
 tox -e dist_ro_vim_openvim &
 tox -e dist_ro_vim_vmware &
@@ -54,7 +54,9 @@ cp NG-RO/deb_dist/python3-osm-ng-ro_*.deb deb_dist/
 # VIM plugings:  vmware, openstack, AWS, fos, azure, Opennebula,
 for vim_plugin in RO-VIM-*
 do
-    cp ${vim_plugin}/deb_dist/python3-osm-rovim*.deb deb_dist/
+    if [ "$vim_plugin" != "RO-VIM-opennebula" ]; then
+        cp ${vim_plugin}/deb_dist/python3-osm-rovim*.deb deb_dist/
+    fi
 done
 
 # SDN plugins: DynPac, Ietfl2vpn, Onosof Floodlightof
@@ -62,4 +64,3 @@ for sdn_plugin in RO-SDN-*
 do
     cp ${sdn_plugin}/deb_dist/python3-osm-rosdn*.deb deb_dist/
 done
-
