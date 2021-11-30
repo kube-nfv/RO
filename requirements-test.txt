@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
--e file:///home/ed1000/git/RO/RO-plugin
+-e RO-plugin
     # via -r requirements-test.in
 coverage==6.2
     # via
