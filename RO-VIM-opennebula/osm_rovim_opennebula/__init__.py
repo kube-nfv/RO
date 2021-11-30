@@ -1,4 +1,4 @@
-#######################################################################################
+#!/usr/bin/env python3
 # Copyright ETSI Contributors and Others.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,16 +13,4 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#######################################################################################
--e file:///home/ed1000/git/RO/RO-plugin
-    # via -r requirements-test.in
-coverage==6.2
-    # via
-    #   -r requirements-test.in
-    #   nose2
-mock==4.0.3
-    # via -r requirements-test.in
-nose2==0.10.0
-    # via -r requirements-test.in
-six==1.16.0
-    # via nose2
+##
