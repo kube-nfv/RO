@@ -79,7 +79,7 @@ cliff==3.10.0
     #   osc-lib
     #   python-neutronclient
     #   python-openstackclient
-cmd2==2.3.2
+cmd2==2.3.3
     # via cliff
 cryptography==36.0.0
     # via
