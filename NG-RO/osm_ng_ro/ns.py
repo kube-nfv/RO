@@ -755,6 +755,44 @@ class Ns(object):
 
         return extra_dict
 
+    @staticmethod
+    def _ip_profile_to_ro(
+        ip_profile: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """[summary]
+
+        Args:
+            ip_profile (Dict[str, Any]): [description]
+
+        Returns:
+            Dict[str, Any]: [description]
+        """
+        if not ip_profile:
+            return None
+
+        ro_ip_profile = {
+            "ip_version": "IPv4"
+            if "v4" in ip_profile.get("ip-version", "ipv4")
+            else "IPv6",
+            "subnet_address": ip_profile.get("subnet-address"),
+            "gateway_address": ip_profile.get("gateway-address"),
+            "dhcp_enabled": ip_profile.get("dhcp-params", {}).get("enabled", False),
+            "dhcp_start_address": ip_profile.get("dhcp-params", {}).get(
+                "start-address", None
+            ),
+            "dhcp_count": ip_profile.get("dhcp-params", {}).get("count", None),
+        }
+
+        if ip_profile.get("dns-server"):
+            ro_ip_profile["dns_address"] = ";".join(
+                [v["address"] for v in ip_profile["dns-server"] if v.get("address")]
+            )
+
+        if ip_profile.get("security-group"):
+            ro_ip_profile["security_group"] = ip_profile["security-group"]
+
+        return ro_ip_profile
+
     def deploy(self, session, indata, version, nsr_id, *args, **kwargs):
         self.logger.debug("ns.deploy nsr_id={} indata={}".format(nsr_id, indata))
         validate_input(indata, deploy_schema)
@@ -811,35 +849,6 @@ class Ns(object):
 
                     index += 1
 
-            def _ip_profile_2_ro(ip_profile):
-                if not ip_profile:
-                    return None
-
-                ro_ip_profile = {
-                    "ip_version": "IPv4"
-                    if "v4" in ip_profile.get("ip-version", "ipv4")
-                    else "IPv6",
-                    "subnet_address": ip_profile.get("subnet-address"),
-                    "gateway_address": ip_profile.get("gateway-address"),
-                    "dhcp_enabled": ip_profile.get("dhcp-params", {}).get(
-                        "enabled", False
-                    ),
-                    "dhcp_start_address": ip_profile.get("dhcp-params", {}).get(
-                        "start-address", None
-                    ),
-                    "dhcp_count": ip_profile.get("dhcp-params", {}).get("count", None),
-                }
-
-                if ip_profile.get("dns-server"):
-                    ro_ip_profile["dns_address"] = ";".join(
-                        [v["address"] for v in ip_profile["dns-server"]]
-                    )
-
-                if ip_profile.get("security-group"):
-                    ro_ip_profile["security_group"] = ip_profile["security-group"]
-
-                return ro_ip_profile
-
             def _process_net_params(target_vld, indata, vim_info, target_record_id):
                 extra_dict = {}
 
@@ -879,7 +888,7 @@ class Ns(object):
                             indata["name"][:16],
                             target_vld.get("name", target_vld["id"])[:16],
                         ),
-                        "ip_profile": _ip_profile_2_ro(vim_info.get("ip_profile")),
+                        "ip_profile": Ns._ip_profile_to_ro(vim_info.get("ip_profile")),
                         "provider_network_profile": vim_info.get("provider_network"),
                     }
 

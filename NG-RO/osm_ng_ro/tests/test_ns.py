@@ -1788,3 +1788,206 @@ class TestNs(unittest.TestCase):
 
         self.assertTrue(epa_params.called)
         self.assertDictEqual(result, expected_result)
+
+    def test__ip_profile_to_ro_with_none(self):
+        ip_profile = None
+
+        result = Ns._ip_profile_to_ro(
+            ip_profile=ip_profile,
+        )
+
+        self.assertIsNone(result)
+
+    def test__ip_profile_to_ro_with_empty_profile(self):
+        ip_profile = {}
+
+        result = Ns._ip_profile_to_ro(
+            ip_profile=ip_profile,
+        )
+
+        self.assertIsNone(result)
+
+    def test__ip_profile_to_ro_with_wrong_profile(self):
+        ip_profile = {
+            "no-profile": "here",
+        }
+        expected_result = {
+            "ip_version": "IPv4",
+            "subnet_address": None,
+            "gateway_address": None,
+            "dhcp_enabled": False,
+            "dhcp_start_address": None,
+            "dhcp_count": None,
+        }
+
+        result = Ns._ip_profile_to_ro(
+            ip_profile=ip_profile,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__ip_profile_to_ro_with_ipv4_profile(self):
+        ip_profile = {
+            "ip-version": "ipv4",
+            "subnet-address": "192.168.0.0/24",
+            "gateway-address": "192.168.0.254",
+            "dhcp-params": {
+                "enabled": True,
+                "start-address": "192.168.0.10",
+                "count": 25,
+            },
+        }
+        expected_result = {
+            "ip_version": "IPv4",
+            "subnet_address": "192.168.0.0/24",
+            "gateway_address": "192.168.0.254",
+            "dhcp_enabled": True,
+            "dhcp_start_address": "192.168.0.10",
+            "dhcp_count": 25,
+        }
+
+        result = Ns._ip_profile_to_ro(
+            ip_profile=ip_profile,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__ip_profile_to_ro_with_ipv6_profile(self):
+        ip_profile = {
+            "ip-version": "ipv6",
+            "subnet-address": "2001:0200:0001::/48",
+            "gateway-address": "2001:0200:0001:ffff:ffff:ffff:ffff:fffe",
+            "dhcp-params": {
+                "enabled": True,
+                "start-address": "2001:0200:0001::0010",
+                "count": 25,
+            },
+        }
+        expected_result = {
+            "ip_version": "IPv6",
+            "subnet_address": "2001:0200:0001::/48",
+            "gateway_address": "2001:0200:0001:ffff:ffff:ffff:ffff:fffe",
+            "dhcp_enabled": True,
+            "dhcp_start_address": "2001:0200:0001::0010",
+            "dhcp_count": 25,
+        }
+
+        result = Ns._ip_profile_to_ro(
+            ip_profile=ip_profile,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__ip_profile_to_ro_with_dns_server(self):
+        ip_profile = {
+            "ip-version": "ipv4",
+            "subnet-address": "192.168.0.0/24",
+            "gateway-address": "192.168.0.254",
+            "dhcp-params": {
+                "enabled": True,
+                "start-address": "192.168.0.10",
+                "count": 25,
+            },
+            "dns-server": [
+                {
+                    "address": "8.8.8.8",
+                },
+                {
+                    "address": "1.1.1.1",
+                },
+                {
+                    "address": "1.0.0.1",
+                },
+            ],
+        }
+        expected_result = {
+            "ip_version": "IPv4",
+            "subnet_address": "192.168.0.0/24",
+            "gateway_address": "192.168.0.254",
+            "dhcp_enabled": True,
+            "dhcp_start_address": "192.168.0.10",
+            "dhcp_count": 25,
+            "dns_address": "8.8.8.8;1.1.1.1;1.0.0.1",
+        }
+
+        result = Ns._ip_profile_to_ro(
+            ip_profile=ip_profile,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__ip_profile_to_ro_with_security_group(self):
+        ip_profile = {
+            "ip-version": "ipv4",
+            "subnet-address": "192.168.0.0/24",
+            "gateway-address": "192.168.0.254",
+            "dhcp-params": {
+                "enabled": True,
+                "start-address": "192.168.0.10",
+                "count": 25,
+            },
+            "security-group": {
+                "some-security-group": "here",
+            },
+        }
+        expected_result = {
+            "ip_version": "IPv4",
+            "subnet_address": "192.168.0.0/24",
+            "gateway_address": "192.168.0.254",
+            "dhcp_enabled": True,
+            "dhcp_start_address": "192.168.0.10",
+            "dhcp_count": 25,
+            "security_group": {
+                "some-security-group": "here",
+            },
+        }
+
+        result = Ns._ip_profile_to_ro(
+            ip_profile=ip_profile,
+        )
+
+        self.assertDictEqual(expected_result, result)
+
+    def test__ip_profile_to_ro(self):
+        ip_profile = {
+            "ip-version": "ipv4",
+            "subnet-address": "192.168.0.0/24",
+            "gateway-address": "192.168.0.254",
+            "dhcp-params": {
+                "enabled": True,
+                "start-address": "192.168.0.10",
+                "count": 25,
+            },
+            "dns-server": [
+                {
+                    "address": "8.8.8.8",
+                },
+                {
+                    "address": "1.1.1.1",
+                },
+                {
+                    "address": "1.0.0.1",
+                },
+            ],
+            "security-group": {
+                "some-security-group": "here",
+            },
+        }
+        expected_result = {
+            "ip_version": "IPv4",
+            "subnet_address": "192.168.0.0/24",
+            "gateway_address": "192.168.0.254",
+            "dhcp_enabled": True,
+            "dhcp_start_address": "192.168.0.10",
+            "dhcp_count": 25,
+            "dns_address": "8.8.8.8;1.1.1.1;1.0.0.1",
+            "security_group": {
+                "some-security-group": "here",
+            },
+        }
+
+        result = Ns._ip_profile_to_ro(
+            ip_profile=ip_profile,
+        )
+
+        self.assertDictEqual(expected_result, result)
