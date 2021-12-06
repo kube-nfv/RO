@@ -793,6 +793,81 @@ class Ns(object):
 
         return ro_ip_profile
 
+    @staticmethod
+    def _process_net_params(
+        target_vld: Dict[str, Any],
+        indata: Dict[str, Any],
+        vim_info: Dict[str, Any],
+        target_record_id: str,
+    ) -> Dict[str, Any]:
+        """Function to process network parameters.
+
+        Args:
+            target_vld (Dict[str, Any]): [description]
+            indata (Dict[str, Any]): [description]
+            vim_info (Dict[str, Any]): [description]
+            target_record_id (str): [description]
+
+        Returns:
+            Dict[str, Any]: [description]
+        """
+        extra_dict = {}
+
+        if vim_info.get("sdn"):
+            # vnf_preffix = "vnfrs:{}".format(vnfr_id)
+            # ns_preffix = "nsrs:{}".format(nsr_id)
+            # remove the ending ".sdn
+            vld_target_record_id, _, _ = target_record_id.rpartition(".")
+            extra_dict["params"] = {
+                k: vim_info[k]
+                for k in ("sdn-ports", "target_vim", "vlds", "type")
+                if vim_info.get(k)
+            }
+
+            # TODO needed to add target_id in the dependency.
+            if vim_info.get("target_vim"):
+                extra_dict["depends_on"] = [
+                    f"{vim_info.get('target_vim')} {vld_target_record_id}"
+                ]
+
+            return extra_dict
+
+        if vim_info.get("vim_network_name"):
+            extra_dict["find_params"] = {
+                "filter_dict": {
+                    "name": vim_info.get("vim_network_name"),
+                },
+            }
+        elif vim_info.get("vim_network_id"):
+            extra_dict["find_params"] = {
+                "filter_dict": {
+                    "id": vim_info.get("vim_network_id"),
+                },
+            }
+        elif target_vld.get("mgmt-network"):
+            extra_dict["find_params"] = {
+                "mgmt": True,
+                "name": target_vld["id"],
+            }
+        else:
+            # create
+            extra_dict["params"] = {
+                "net_name": (
+                    f"{indata.get('name')[:16]}-{target_vld.get('name', target_vld.get('id'))[:16]}"
+                ),
+                "ip_profile": Ns._ip_profile_to_ro(vim_info.get("ip_profile")),
+                "provider_network_profile": vim_info.get("provider_network"),
+            }
+
+            if not target_vld.get("underlay"):
+                extra_dict["params"]["net_type"] = "bridge"
+            else:
+                extra_dict["params"]["net_type"] = (
+                    "ptp" if target_vld.get("type") == "ELINE" else "data"
+                )
+
+        return extra_dict
+
     def deploy(self, session, indata, version, nsr_id, *args, **kwargs):
         self.logger.debug("ns.deploy nsr_id={} indata={}".format(nsr_id, indata))
         validate_input(indata, deploy_schema)
@@ -848,58 +923,6 @@ class Ns(object):
                         break
 
                     index += 1
-
-            def _process_net_params(target_vld, indata, vim_info, target_record_id):
-                extra_dict = {}
-
-                if vim_info.get("sdn"):
-                    # vnf_preffix = "vnfrs:{}".format(vnfr_id)
-                    # ns_preffix = "nsrs:{}".format(nsr_id)
-                    # remove the ending ".sdn
-                    vld_target_record_id, _, _ = target_record_id.rpartition(".")
-                    extra_dict["params"] = {
-                        k: vim_info[k]
-                        for k in ("sdn-ports", "target_vim", "vlds", "type")
-                        if vim_info.get(k)
-                    }
-
-                    # TODO needed to add target_id in the dependency.
-                    if vim_info.get("target_vim"):
-                        extra_dict["depends_on"] = [
-                            vim_info.get("target_vim") + " " + vld_target_record_id
-                        ]
-
-                    return extra_dict
-
-                if vim_info.get("vim_network_name"):
-                    extra_dict["find_params"] = {
-                        "filter_dict": {"name": vim_info.get("vim_network_name")}
-                    }
-                elif vim_info.get("vim_network_id"):
-                    extra_dict["find_params"] = {
-                        "filter_dict": {"id": vim_info.get("vim_network_id")}
-                    }
-                elif target_vld.get("mgmt-network"):
-                    extra_dict["find_params"] = {"mgmt": True, "name": target_vld["id"]}
-                else:
-                    # create
-                    extra_dict["params"] = {
-                        "net_name": "{}-{}".format(
-                            indata["name"][:16],
-                            target_vld.get("name", target_vld["id"])[:16],
-                        ),
-                        "ip_profile": Ns._ip_profile_to_ro(vim_info.get("ip_profile")),
-                        "provider_network_profile": vim_info.get("provider_network"),
-                    }
-
-                    if not target_vld.get("underlay"):
-                        extra_dict["params"]["net_type"] = "bridge"
-                    else:
-                        extra_dict["params"]["net_type"] = (
-                            "ptp" if target_vld.get("type") == "ELINE" else "data"
-                        )
-
-                return extra_dict
 
             def _process_vdu_params(target_vdu, indata, vim_info, target_record_id):
                 nonlocal vnfr_id
@@ -1289,7 +1312,7 @@ class Ns(object):
                         db_update=db_nsr_update,
                         db_path="vld",
                         item="net",
-                        process_params=_process_net_params,
+                        process_params=Ns._process_net_params,
                     )
 
                     step = "process NS images"
@@ -1334,7 +1357,7 @@ class Ns(object):
                             db_update=db_vnfrs_update[vnfr["_id"]],
                             db_path="vld",
                             item="net",
-                            process_params=_process_net_params,
+                            process_params=Ns._process_net_params,
                         )
 
                         target_list = target_vnf.get("vdur") if target_vnf else None

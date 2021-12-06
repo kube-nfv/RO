@@ -1991,3 +1991,300 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
+    def test__process_net_params_with_empty_params(
+        self,
+        ip_profile_to_ro,
+    ):
+        target_vld = {
+            "name": "vld-name",
+        }
+        indata = {
+            "name": "ns-name",
+        }
+        vim_info = {
+            "provider_network": "some-profile-here",
+        }
+        target_record_id = ""
+        expected_result = {
+            "params": {
+                "net_name": "ns-name-vld-name",
+                "net_type": "bridge",
+                "ip_profile": {
+                    "some_ip_profile": "here",
+                },
+                "provider_network_profile": "some-profile-here",
+            }
+        }
+
+        ip_profile_to_ro.return_value = {
+            "some_ip_profile": "here",
+        }
+
+        result = Ns._process_net_params(
+            target_vld=target_vld,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertTrue(ip_profile_to_ro.called)
+
+    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
+    def test__process_net_params_with_vim_info_sdn(
+        self,
+        ip_profile_to_ro,
+    ):
+        target_vld = {
+            "name": "vld-name",
+        }
+        indata = {
+            "name": "ns-name",
+        }
+        vim_info = {
+            "sdn": "some-sdn",
+            "sdn-ports": ["some", "ports", "here"],
+            "vlds": ["some", "vlds", "here"],
+            "type": "sdn-type",
+        }
+        target_record_id = "vld.sdn.something"
+        expected_result = {
+            "params": {
+                "sdn-ports": ["some", "ports", "here"],
+                "vlds": ["some", "vlds", "here"],
+                "type": "sdn-type",
+            }
+        }
+
+        result = Ns._process_net_params(
+            target_vld=target_vld,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(ip_profile_to_ro.called)
+
+    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
+    def test__process_net_params_with_vim_info_sdn_target_vim(
+        self,
+        ip_profile_to_ro,
+    ):
+        target_vld = {
+            "name": "vld-name",
+        }
+        indata = {
+            "name": "ns-name",
+        }
+        vim_info = {
+            "sdn": "some-sdn",
+            "sdn-ports": ["some", "ports", "here"],
+            "vlds": ["some", "vlds", "here"],
+            "target_vim": "some-vim",
+            "type": "sdn-type",
+        }
+        target_record_id = "vld.sdn.something"
+        expected_result = {
+            "depends_on": ["some-vim vld.sdn"],
+            "params": {
+                "sdn-ports": ["some", "ports", "here"],
+                "vlds": ["some", "vlds", "here"],
+                "target_vim": "some-vim",
+                "type": "sdn-type",
+            },
+        }
+
+        result = Ns._process_net_params(
+            target_vld=target_vld,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(ip_profile_to_ro.called)
+
+    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
+    def test__process_net_params_with_vim_network_name(
+        self,
+        ip_profile_to_ro,
+    ):
+        target_vld = {
+            "name": "vld-name",
+        }
+        indata = {
+            "name": "ns-name",
+        }
+        vim_info = {
+            "vim_network_name": "some-network-name",
+        }
+        target_record_id = "vld.sdn.something"
+        expected_result = {
+            "find_params": {
+                "filter_dict": {
+                    "name": "some-network-name",
+                },
+            },
+        }
+
+        result = Ns._process_net_params(
+            target_vld=target_vld,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(ip_profile_to_ro.called)
+
+    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
+    def test__process_net_params_with_vim_network_id(
+        self,
+        ip_profile_to_ro,
+    ):
+        target_vld = {
+            "name": "vld-name",
+        }
+        indata = {
+            "name": "ns-name",
+        }
+        vim_info = {
+            "vim_network_id": "some-network-id",
+        }
+        target_record_id = "vld.sdn.something"
+        expected_result = {
+            "find_params": {
+                "filter_dict": {
+                    "id": "some-network-id",
+                },
+            },
+        }
+
+        result = Ns._process_net_params(
+            target_vld=target_vld,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(ip_profile_to_ro.called)
+
+    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
+    def test__process_net_params_with_mgmt_network(
+        self,
+        ip_profile_to_ro,
+    ):
+        target_vld = {
+            "id": "vld-id",
+            "name": "vld-name",
+            "mgmt-network": "some-mgmt-network",
+        }
+        indata = {
+            "name": "ns-name",
+        }
+        vim_info = {}
+        target_record_id = "vld.sdn.something"
+        expected_result = {
+            "find_params": {
+                "mgmt": True,
+                "name": "vld-id",
+            },
+        }
+
+        result = Ns._process_net_params(
+            target_vld=target_vld,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertFalse(ip_profile_to_ro.called)
+
+    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
+    def test__process_net_params_with_underlay_eline(
+        self,
+        ip_profile_to_ro,
+    ):
+        target_vld = {
+            "name": "vld-name",
+            "underlay": "some-underlay-here",
+            "type": "ELINE",
+        }
+        indata = {
+            "name": "ns-name",
+        }
+        vim_info = {
+            "provider_network": "some-profile-here",
+        }
+        target_record_id = ""
+        expected_result = {
+            "params": {
+                "ip_profile": {
+                    "some_ip_profile": "here",
+                },
+                "net_name": "ns-name-vld-name",
+                "net_type": "ptp",
+                "provider_network_profile": "some-profile-here",
+            }
+        }
+
+        ip_profile_to_ro.return_value = {
+            "some_ip_profile": "here",
+        }
+
+        result = Ns._process_net_params(
+            target_vld=target_vld,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertTrue(ip_profile_to_ro.called)
+
+    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
+    def test__process_net_params_with_underlay_elan(
+        self,
+        ip_profile_to_ro,
+    ):
+        target_vld = {
+            "name": "vld-name",
+            "underlay": "some-underlay-here",
+            "type": "ELAN",
+        }
+        indata = {
+            "name": "ns-name",
+        }
+        vim_info = {
+            "provider_network": "some-profile-here",
+        }
+        target_record_id = ""
+        expected_result = {
+            "params": {
+                "ip_profile": {
+                    "some_ip_profile": "here",
+                },
+                "net_name": "ns-name-vld-name",
+                "net_type": "data",
+                "provider_network_profile": "some-profile-here",
+            }
+        }
+
+        ip_profile_to_ro.return_value = {
+            "some_ip_profile": "here",
+        }
+
+        result = Ns._process_net_params(
+            target_vld=target_vld,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+        )
+
+        self.assertDictEqual(expected_result, result)
+        self.assertTrue(ip_profile_to_ro.called)
