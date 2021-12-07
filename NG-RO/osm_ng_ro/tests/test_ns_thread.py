@@ -16,34 +16,25 @@
 #######################################################################################
 
 import logging
-from types import ModuleType
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, patch
 
 from osm_ng_ro.ns_thread import VimInteractionNet
+from osm_ro_plugin.vimconn import VimConnConnectionException, VimConnException
 
 
 class TestVimInteractionNet(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
+    def setUp(self):
         module_name = "osm_ro_plugin"
-        osm_ro_plugin = ModuleType(module_name)
-        osm_ro_plugin.vimconn = Mock(name=module_name + ".vimconn")
-        osm_ro_plugin.vimconn.VimConnector = Mock(
-            name=module_name + "vimconn.VimConnector"
-        )
-        osm_ro_plugin.vimconn.VimConnException = Mock(
-            name=module_name + ".vimconn.VimConnException"
-        )
-        cls.target_vim = osm_ro_plugin.vimconn.VimConnector
-        cls.VimConnException = osm_ro_plugin.vimconn.VimConnException
-        cls.task_depends = None
+        self.target_vim = MagicMock(name=f"{module_name}.vimconn.VimConnector")
+        self.task_depends = None
 
-    @classmethod
-    def tearDownClass(cls):
-        del cls.target_vim
-        del cls.task_depends
-        del cls.VimConnException
+        patches = [patch(f"{module_name}.vimconn.VimConnector", self.target_vim)]
+
+        # Enabling mocks and add cleanups
+        for mock in patches:
+            mock.start()
+            self.addCleanup(mock.stop)
 
     def test__mgmt_net_id_in_find_params_mgmt_several_vim_nets(self):
         """
@@ -79,7 +70,7 @@ class TestVimInteractionNet(unittest.TestCase):
                         "target_record": "test_target_record",
                         "target_record_id": "test_target_record_id",
                         # values coming from extra_dict
-                        "params": "",
+                        "params": {},
                         "find_params": {
                             "mgmt": True,
                             "name": "some_mgmt_name",
@@ -139,7 +130,7 @@ class TestVimInteractionNet(unittest.TestCase):
                         "item": "test_item",
                         "target_record": "test_target_record",
                         "target_record_id": "test_target_record_id",
-                        "params": "",
+                        "params": {},
                         # values coming from extra_dict
                         "find_params": {
                             "mgmt": True,
@@ -198,7 +189,7 @@ class TestVimInteractionNet(unittest.TestCase):
                         "target_record": "test_target_record",
                         "target_record_id": "test_target_record_id",
                         # values coming from extra_dict
-                        "params": "",
+                        "params": {},
                         "find_params": {
                             "mgmt": True,
                             "name": "some_mgmt_name",
@@ -259,7 +250,7 @@ class TestVimInteractionNet(unittest.TestCase):
                         "target_record": "test_target_record",
                         "target_record_id": "test_target_record_id",
                         # values coming from extra_dict
-                        "params": "",
+                        "params": {},
                         "find_params": {
                             "mgmt": True,
                             "name": "some_mgmt_name",
@@ -316,7 +307,7 @@ class TestVimInteractionNet(unittest.TestCase):
                         "target_record": "test_target_record",
                         "target_record_id": "test_target_record_id",
                         # values coming from extra_dict
-                        "params": "",
+                        "params": {},
                         "find_params": {
                             "filter_dict": {
                                 "name": "some-network-name",
@@ -434,7 +425,9 @@ class TestVimInteractionNet(unittest.TestCase):
                         "target_record": "test_target_record",
                         "target_record_id": "test_target_record_id",
                         # values coming from extra_dict
-                        "params": "test_params",
+                        "params": {
+                            "net_name": "test_params",
+                        },
                         "find_params": {
                             "filter_dict": {
                                 "name": "some-network-name",
@@ -489,7 +482,7 @@ class TestVimInteractionNet(unittest.TestCase):
                         "target_record": "test_target_record",
                         "target_record_id": "test_target_record_id",
                         # values coming from extra_dict
-                        "params": "",
+                        "params": {},
                         "find_params": {
                             "filter_dict": {
                                 "name": "some-network-name",
@@ -548,7 +541,7 @@ class TestVimInteractionNet(unittest.TestCase):
                         "target_record": "test_target_record",
                         "target_record_id": "test_target_record_id",
                         # values coming from extra_dict
-                        "params": "",
+                        "params": {},
                         "find_params": {
                             "mgmt": True,
                             "name": "some_mgmt_name",
@@ -655,15 +648,19 @@ class TestVimInteractionNet(unittest.TestCase):
                         "target_record": "test_target_record",
                         "target_record_id": "test_target_record_id",
                         # values coming from extra_dict
-                        "params": "",
+                        "params": {},
                         "depends_on": "test_depends_on",
                     },
                 },
             }
 
             task_index = "task_index_12"
-            with self.assertRaises(TypeError):
+            self.target_vim.new_network.side_effect = VimConnConnectionException(
+                "VimConnConnectionException occurred."
+            )
+            with self.assertLogs() as captured:
                 instance.new(ro_task, task_index, self.task_depends)
+                self.assertEqual(captured.records[0].levelname, "ERROR")
 
     def test__refresh_ro_task_vim_status_active(self):
         """
@@ -823,7 +820,7 @@ class TestVimInteractionNet(unittest.TestCase):
             self.assertEqual(result[0], task_status)
             self.assertDictEqual(result[1], ro_vim_item_update)
 
-    def test__refresh_ro_task_VimConnException_occured(self):
+    def test__refresh_ro_task_VimConnException_occurred(self):
         """
         vimconn.VimConnException has occured
         """
@@ -858,12 +855,12 @@ class TestVimInteractionNet(unittest.TestCase):
                 "to_check_at": 1637324200.994312,
                 "tasks": {},
             }
-            self.target_vim.refresh_nets_status.side_effect = Mock(
-                side_effect=self.VimConnException("VimConnException occured")
+            self.target_vim.refresh_nets_status.side_effect = VimConnException(
+                "VimConnException occurred."
             )
-            with self.assertRaises(TypeError):
+            with self.assertLogs() as captured:
                 instance.refresh(ro_task)
-            self.target_vim.refresh_nets_status.side_effect = None
+                self.assertEqual(captured.records[0].levelname, "ERROR")
 
     def test__refresh_ro_task_vim_status_deleted(self):
         """

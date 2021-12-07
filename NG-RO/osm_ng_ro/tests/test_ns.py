@@ -16,9 +16,10 @@
 #######################################################################################
 
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
-from osm_ng_ro.ns import Ns
+from jinja2 import TemplateError, TemplateNotFound, UndefinedError
+from osm_ng_ro.ns import Ns, NsException
 
 
 __author__ = "Eduardo Sousa"
@@ -2288,3 +2289,176 @@ class TestNs(unittest.TestCase):
 
         self.assertDictEqual(expected_result, result)
         self.assertTrue(ip_profile_to_ro.called)
+
+    def test__get_cloud_init_exception(self):
+        db_mock = MagicMock(name="database mock")
+        fs_mock = None
+
+        location = ""
+
+        with self.assertRaises(NsException):
+            Ns._get_cloud_init(db=db_mock, fs=fs_mock, location=location)
+
+    def test__get_cloud_init_file_fs_exception(self):
+        db_mock = MagicMock(name="database mock")
+        fs_mock = None
+
+        location = "vnfr_id_123456:file:test_file"
+        db_mock.get_one.return_value = {
+            "_admin": {
+                "storage": {
+                    "folder": "/home/osm",
+                    "pkg-dir": "vnfr_test_dir",
+                },
+            },
+        }
+
+        with self.assertRaises(NsException):
+            Ns._get_cloud_init(db=db_mock, fs=fs_mock, location=location)
+
+    def test__get_cloud_init_file(self):
+        db_mock = MagicMock(name="database mock")
+        fs_mock = MagicMock(name="filesystem mock")
+        file_mock = MagicMock(name="file mock")
+
+        location = "vnfr_id_123456:file:test_file"
+        cloud_init_content = "this is a cloud init file content"
+
+        db_mock.get_one.return_value = {
+            "_admin": {
+                "storage": {
+                    "folder": "/home/osm",
+                    "pkg-dir": "vnfr_test_dir",
+                },
+            },
+        }
+        fs_mock.file_open.return_value = file_mock
+        file_mock.__enter__.return_value.read.return_value = cloud_init_content
+
+        result = Ns._get_cloud_init(db=db_mock, fs=fs_mock, location=location)
+
+        self.assertEqual(cloud_init_content, result)
+
+    def test__get_cloud_init_vdu(self):
+        db_mock = MagicMock(name="database mock")
+        fs_mock = None
+
+        location = "vnfr_id_123456:vdu:0"
+        cloud_init_content = "this is a cloud init file content"
+
+        db_mock.get_one.return_value = {
+            "vdu": {
+                0: {
+                    "cloud-init": cloud_init_content,
+                },
+            },
+        }
+
+        result = Ns._get_cloud_init(db=db_mock, fs=fs_mock, location=location)
+
+        self.assertEqual(cloud_init_content, result)
+
+    @patch("jinja2.Environment.__init__")
+    def test__parse_jinja2_undefined_error(self, env_mock: Mock):
+        cloud_init_content = None
+        params = None
+        context = None
+
+        env_mock.side_effect = UndefinedError("UndefinedError occurred.")
+
+        with self.assertRaises(NsException):
+            Ns._parse_jinja2(
+                cloud_init_content=cloud_init_content, params=params, context=context
+            )
+
+    @patch("jinja2.Environment.__init__")
+    def test__parse_jinja2_template_error(self, env_mock: Mock):
+        cloud_init_content = None
+        params = None
+        context = None
+
+        env_mock.side_effect = TemplateError("TemplateError occurred.")
+
+        with self.assertRaises(NsException):
+            Ns._parse_jinja2(
+                cloud_init_content=cloud_init_content, params=params, context=context
+            )
+
+    @patch("jinja2.Environment.__init__")
+    def test__parse_jinja2_template_not_found(self, env_mock: Mock):
+        cloud_init_content = None
+        params = None
+        context = None
+
+        env_mock.side_effect = TemplateNotFound("TemplateNotFound occurred.")
+
+        with self.assertRaises(NsException):
+            Ns._parse_jinja2(
+                cloud_init_content=cloud_init_content, params=params, context=context
+            )
+
+    def test__parse_jinja2(self):
+        pass
+
+    def test__process_vdu_params_empty_kargs(self):
+        pass
+
+    def test__process_vdu_params_interface_ns_vld_id(self):
+        pass
+
+    def test__process_vdu_params_interface_vnf_vld_id(self):
+        pass
+
+    def test__process_vdu_params_interface_unknown(self):
+        pass
+
+    def test__process_vdu_params_interface_port_security_enabled(self):
+        pass
+
+    def test__process_vdu_params_interface_port_security_disable_strategy(self):
+        pass
+
+    def test__process_vdu_params_interface_sriov(self):
+        pass
+
+    def test__process_vdu_params_interface_pci_passthrough(self):
+        pass
+
+    def test__process_vdu_params_interface_om_mgmt(self):
+        pass
+
+    def test__process_vdu_params_interface_mgmt_interface(self):
+        pass
+
+    def test__process_vdu_params_interface_mgmt_vnf(self):
+        pass
+
+    def test__process_vdu_params_interface_bridge(self):
+        pass
+
+    def test__process_vdu_params_interface_ip_address(self):
+        pass
+
+    def test__process_vdu_params_interface_mac_address(self):
+        pass
+
+    def test__process_vdu_params_vdu_cloud_init_missing(self):
+        pass
+
+    def test__process_vdu_params_vdu_cloud_init_present(self):
+        pass
+
+    def test__process_vdu_params_vdu_boot_data_drive(self):
+        pass
+
+    def test__process_vdu_params_vdu_ssh_keys(self):
+        pass
+
+    def test__process_vdu_params_vdu_ssh_access_required(self):
+        pass
+
+    def test__process_vdu_params_vdu_virtual_storages(self):
+        pass
+
+    def test__process_vdu_params(self):
+        pass
