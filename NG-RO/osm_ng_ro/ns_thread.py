@@ -125,6 +125,8 @@ class VimInteractionNet(VimInteractionBase):
         created = False
         created_items = {}
         target_vim = self.my_vims[ro_task["target_id"]]
+        mgmtnet = False
+        mgmtnet_defined_in_vim = False
 
         try:
             # FIND
@@ -132,13 +134,15 @@ class VimInteractionNet(VimInteractionBase):
                 # if management, get configuration of VIM
                 if task["find_params"].get("filter_dict"):
                     vim_filter = task["find_params"]["filter_dict"]
-                # mamagement network
+                # management network
                 elif task["find_params"].get("mgmt"):
+                    mgmtnet = True
                     if deep_get(
                         self.db_vims[ro_task["target_id"]],
                         "config",
                         "management_network_id",
                     ):
+                        mgmtnet_defined_in_vim = True
                         vim_filter = {
                             "id": self.db_vims[ro_task["target_id"]]["config"][
                                 "management_network_id"
@@ -149,6 +153,7 @@ class VimInteractionNet(VimInteractionBase):
                         "config",
                         "management_network_name",
                     ):
+                        mgmtnet_defined_in_vim = True
                         vim_filter = {
                             "name": self.db_vims[ro_task["target_id"]]["config"][
                                 "management_network_name"
@@ -163,11 +168,29 @@ class VimInteractionNet(VimInteractionBase):
 
                 vim_nets = target_vim.get_network_list(vim_filter)
                 if not vim_nets and not task.get("params"):
-                    raise NsWorkerExceptionNotFound(
-                        "Network not found with this criteria: '{}'".format(
-                            task.get("find_params")
+                    # If there is mgmt-network in the descriptor,
+                    # there is no mapping of that network to a VIM network in the descriptor,
+                    # also there is no mapping in the "--config" parameter or at VIM creation;
+                    # that mgmt-network will be created.
+                    if mgmtnet and not mgmtnet_defined_in_vim:
+                        net_name = (
+                            vim_filter.get("name")
+                            if vim_filter.get("name")
+                            else vim_filter.get("id")[:16]
                         )
-                    )
+                        vim_net_id, created_items = target_vim.new_network(
+                            net_name, None
+                        )
+                        self.logger.debug(
+                            "Created mgmt network vim_net_id: {}".format(vim_net_id)
+                        )
+                        created = True
+                    else:
+                        raise NsWorkerExceptionNotFound(
+                            "Network not found with this criteria: '{}'".format(
+                                task.get("find_params")
+                            )
+                        )
                 elif len(vim_nets) > 1:
                     raise NsWorkerException(
                         "More than one network found with this criteria: '{}'".format(
