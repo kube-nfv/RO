@@ -38,14 +38,15 @@ class TestVimInteractionNet(unittest.TestCase):
 
     def test__mgmt_net_id_in_find_params_mgmt_several_vim_nets(self):
         """
-        management_network_id in find_params.get('mgmt')
+        mgmt network is set in find_params
+        management_network_id in vim config
         More than one network found in the VIM
         """
         db = "test_db"
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_2": {
+            0: {
                 "config": {
                     "management_network_id": "test_mgmt_id",
                 },
@@ -55,12 +56,12 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
             instance, "logger", logging
-        ):
+        ), patch.object(instance, "db_vims", db_vims):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_2": {
-                        "target_id": "vim_openstack_2",
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -99,14 +100,15 @@ class TestVimInteractionNet(unittest.TestCase):
 
     def test__mgmt_net_id_in_find_params_mgmt_no_vim_nets(self):
         """
-        management_network_id in find_params.get('mgmt')
+        mgmt network is set in find_params
+        management_network_id in vim config
         The network could not be found in the VIM
         """
         db = "test_db"
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_3": {
+            0: {
                 "config": {
                     "management_network_id": "test_mgmt_id",
                 },
@@ -115,13 +117,13 @@ class TestVimInteractionNet(unittest.TestCase):
 
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
-            instance, "logger", logging
-        ):
+            instance, "db_vims", db_vims
+        ), patch.object(instance, "logger", logging):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_3": {
-                        "target_id": "vim_openstack_3",
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -155,16 +157,74 @@ class TestVimInteractionNet(unittest.TestCase):
                 self.assertEqual(result[1].get("created"), False)
                 self.assertEqual(result[1].get("vim_status"), "VIM_ERROR")
 
+    def test__mgmt_net_in_find_params_no_vim_config_no_vim_nets(self):
+        """
+        mgmt network is set in find_params
+        vim config does not have management_network_id or management_network_id
+        The network could not be found in the VIM
+        """
+        db = "test_db"
+        logger = "test_logger"
+        my_vims = "test-vim"
+        db_vims = {
+            0: {
+                "config": {},
+            },
+        }
+
+        instance = VimInteractionNet(db, logger, my_vims, db_vims)
+        with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
+            instance, "db_vims", db_vims
+        ), patch.object(instance, "logger", logging):
+            ro_task = {
+                "target_id": 0,
+                "tasks": {
+                    "task_index_3": {
+                        "target_id": 0,
+                        "action_id": "123456",
+                        "nsr_id": "654321",
+                        "task_id": "123456:1",
+                        "status": "SCHEDULED",
+                        "action": "CREATE",
+                        "item": "test_item",
+                        "target_record": "test_target_record",
+                        "target_record_id": "test_target_record_id",
+                        "params": {},
+                        # values coming from extra_dict
+                        "find_params": {
+                            "mgmt": True,
+                            "name": "some_mgmt_name",
+                        },
+                        "depends_on": "test_depends_on",
+                    },
+                },
+            }
+
+            task_index = "task_index_3"
+            self.target_vim.get_network_list.return_value = []
+            self.target_vim.new_network.return_value = "sample_net_id", {
+                "item1": "sample_created_item"
+            }
+            result = instance.new(ro_task, task_index, self.task_depends)
+            self.assertEqual(result[0], "BUILD")
+            self.assertEqual(result[1].get("vim_id"), "sample_net_id")
+            self.assertEqual(result[1].get("created"), True)
+            self.assertDictEqual(
+                result[1].get("created_items"), {"item1": "sample_created_item"}
+            )
+            self.assertEqual(result[1].get("vim_status"), "BUILD")
+
     def test__mgmt_net_name_in_find_params_mgmt_several_vim_nets(self):
         """
-        management_network_name in find_params.get('mgmt')
+        mgmt network is set in find_params
+        management_network_name in vim config
         More than one network found in the VIM
         """
         db = "test_db"
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_4": {
+            0: {
                 "config": {
                     "management_network_name": "test_mgmt_name",
                 },
@@ -174,12 +234,12 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
             instance, "logger", logging
-        ):
+        ), patch.object(instance, "db_vims", db_vims):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_4": {
-                        "target_id": "vim_openstack_4",
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -218,14 +278,15 @@ class TestVimInteractionNet(unittest.TestCase):
 
     def test__mgmt_net_name_in_find_params_mgmt_no_vim_nets(self):
         """
-        management_network_name in find_params.get('mgmt')
+        mgmt network is set in find_params
+        management_network_name in vim config
         The network could not be found in the VIM
         """
         db = "test_db"
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_5": {
+            0: {
                 "config": {
                     "management_network_name": "test_mgmt_name",
                 },
@@ -235,12 +296,12 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
             instance, "logger", logging
-        ):
+        ), patch.object(instance, "db_vims", db_vims):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_5": {
-                        "target_id": "vim_openstack_5",
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -276,14 +337,16 @@ class TestVimInteractionNet(unittest.TestCase):
 
     def test__mgmt_net_name_in_find_params_filterdict_several_vim_nets(self):
         """
-        management_network_name in find_params.get('filterdict')
+        mgmt network is set in find_params
+        management_network_name in vim config
+        network_name is set in find_params.get('filterdict')
         More than one network found in the VIM
         """
         db = "test_db"
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_6": {
+            0: {
                 "config": {
                     "management_network_name": "test_mgmt_name",
                 },
@@ -292,12 +355,12 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
             instance, "logger", logging
-        ):
+        ), patch.object(instance, "db_vims", db_vims):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_6": {
-                        "target_id": "vim_openstack_6",
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -347,7 +410,7 @@ class TestVimInteractionNet(unittest.TestCase):
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_7": {
+            0: {
                 "config": {
                     "management_network_name": "test_mgmt_name",
                 },
@@ -356,12 +419,12 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
             instance, "logger", logging
-        ):
+        ), patch.object(instance, "db_vims", db_vims):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_4": {
-                        "target_id": "vim_openstack_7",
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -371,7 +434,7 @@ class TestVimInteractionNet(unittest.TestCase):
                         "target_record": "test_target_record",
                         "target_record_id": "test_target_record_id",
                         # values coming from extra_dict
-                        "params": "",
+                        "params": {},
                         "find_params": {"wrong_param": "wrong_value"},
                         "depends_on": "test_depends_on",
                     },
@@ -401,7 +464,7 @@ class TestVimInteractionNet(unittest.TestCase):
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_8": {
+            0: {
                 "config": {
                     "management_network_name": "test_mgmt_name",
                 },
@@ -410,12 +473,12 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
             instance, "logger", logging
-        ):
+        ), patch.object(instance, "db_vims", db_vims):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_8": {
-                        "target_id": "vim_openstack_8",
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -451,14 +514,16 @@ class TestVimInteractionNet(unittest.TestCase):
 
     def test__mgmt_net_name_in_find_params_filterdict_no_vim_nets(self):
         """
-        management_network_name in find_params.get('filterdict')
+        mgmt network is set in find_params
+        management_network_name in vim config
+        network_name is set in find_params.get('filterdict')
         Any network could not be found in the VIM
         """
         db = "test_db"
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_9": {
+            0: {
                 "config": {
                     "management_network_name": "test_mgmt_name",
                 },
@@ -467,12 +532,72 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
             instance, "logger", logging
-        ):
+        ), patch.object(instance, "db_vims", db_vims):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_9": {
-                        "target_id": "vim_openstack_9",
+                        "target_id": 0,
+                        "action_id": "123456",
+                        "nsr_id": "654321",
+                        "task_id": "123456:1",
+                        "status": "SCHEDULED",
+                        "action": "CREATE",
+                        "item": "test_item",
+                        "target_record": "test_target_record",
+                        "target_record_id": "test_target_record_id",
+                        # values coming from extra_dict
+                        "params": "",
+                        "find_params": {
+                            "filter_dict": {
+                                "name": "some-network-name",
+                            },
+                            "mgmt": True,
+                            "name": "some_mgmt_name",
+                        },
+                        "depends_on": "test_depends_on",
+                    },
+                },
+            }
+
+            task_index = "task_index_9"
+            self.target_vim.get_network_list.return_value = []
+            with self.assertLogs() as captured:
+                result = instance.new(ro_task, task_index, self.task_depends)
+                self.assertEqual(len(captured.records), 1)
+                self.assertTrue(
+                    "Network not found with this criteria"
+                    in captured.records[0].getMessage()
+                )
+                self.assertEqual(captured.records[0].levelname, "ERROR")
+                self.assertEqual(result[0], "FAILED")
+                self.assertEqual(result[1].get("created"), False)
+                self.assertEqual(result[1].get("vim_status"), "VIM_ERROR")
+
+    def test__mgmt_net_in_find_params_filterdict_no_config_no_vim_nets(self):
+        """
+        mgmt network is set in find_params
+        vim config is empty
+        network_name is set in find_params.get('filterdict')
+        Any network could not be found in the VIM
+        """
+        db = "test_db"
+        logger = "test_logger"
+        my_vims = "test-vim"
+        db_vims = {
+            0: {
+                "config": {},
+            },
+        }
+        instance = VimInteractionNet(db, logger, my_vims, db_vims)
+        with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
+            instance, "logger", logging
+        ), patch.object(instance, "db_vims", db_vims):
+            ro_task = {
+                "target_id": 0,
+                "tasks": {
+                    "task_index_9": {
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -511,7 +636,7 @@ class TestVimInteractionNet(unittest.TestCase):
 
     def test__mgmt_net_name_in_find_params_mgmt_no_config_one_vim_net(self):
         """
-        name in find_params
+        mgmt network is set in find_params
         management_network_name is not in db_vims.get('config')
         One network found in the VIM
         """
@@ -519,19 +644,19 @@ class TestVimInteractionNet(unittest.TestCase):
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_10": {
+            0: {
                 "config": {},
             },
         }
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
             instance, "logger", logging
-        ):
+        ), patch.object(instance, "db_vims", db_vims):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_2": {
-                        "target_id": "vim_openstack_10",
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -569,7 +694,7 @@ class TestVimInteractionNet(unittest.TestCase):
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_11": {
+            0: {
                 "config": {
                     "management_network_name": "test_mgmt_name",
                 },
@@ -578,12 +703,12 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
             instance, "logger", logging
-        ):
+        ), patch.object(instance, "db_vims", db_vims):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_11": {
-                        "target_id": "vim_openstack_11",
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -624,7 +749,7 @@ class TestVimInteractionNet(unittest.TestCase):
         logger = "test_logger"
         my_vims = "test-vim"
         db_vims = {
-            "vim_openstack_13": {
+            0: {
                 "config": {
                     "management_network_name": "test_mgmt_name",
                 },
@@ -633,12 +758,12 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
             instance, "logger", logging
-        ):
+        ), patch.object(instance, "db_vims", db_vims):
             ro_task = {
                 "target_id": 0,
                 "tasks": {
                     "task_index_12": {
-                        "target_id": "vim_openstack_13",
+                        "target_id": 0,
                         "action_id": "123456",
                         "nsr_id": "654321",
                         "task_id": "123456:1",
@@ -677,7 +802,9 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(
             instance, "my_vims", {"vim_openstack_1": self.target_vim}
-        ), patch.object(instance, "logger", logging):
+        ), patch.object(instance, "logger", logging), patch.object(
+            instance, "db_vims", db_vims
+        ):
             ro_task = {
                 "_id": "122436:1",
                 "locked_by": None,
@@ -729,7 +856,9 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(
             instance, "my_vims", {"vim_openstack_1": self.target_vim}
-        ), patch.object(instance, "logger", logging):
+        ), patch.object(instance, "logger", logging), patch.object(
+            instance, "db_vims", db_vims
+        ):
             ro_task = {
                 "_id": "122436:1",
                 "locked_by": None,
@@ -782,7 +911,9 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(
             instance, "my_vims", {"vim_openstack_1": self.target_vim}
-        ), patch.object(instance, "logger", logging):
+        ), patch.object(instance, "logger", logging), patch.object(
+            instance, "db_vims", db_vims
+        ):
             ro_task = {
                 "_id": "122436:1",
                 "locked_by": None,
@@ -835,7 +966,9 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(
             instance, "my_vims", {"vim_openstack_1": self.target_vim}
-        ), patch.object(instance, "logger", logging):
+        ), patch.object(instance, "logger", logging), patch.object(
+            instance, "db_vims", db_vims
+        ):
             ro_task = {
                 "_id": "122436:1",
                 "locked_by": None,
@@ -877,7 +1010,9 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(
             instance, "my_vims", {"vim_openstack_1": self.target_vim}
-        ), patch.object(instance, "logger", logging):
+        ), patch.object(instance, "logger", logging), patch.object(
+            instance, "db_vims", db_vims
+        ):
             ro_task = {
                 "_id": "122436:1",
                 "locked_by": None,
@@ -931,7 +1066,9 @@ class TestVimInteractionNet(unittest.TestCase):
         instance = VimInteractionNet(db, logger, my_vims, db_vims)
         with patch.object(
             instance, "my_vims", {"vim_openstack_2": self.target_vim}
-        ), patch.object(instance, "logger", logging):
+        ), patch.object(instance, "logger", logging), patch.object(
+            instance, "db_vims", db_vims
+        ):
             ro_task = {
                 "_id": "128436:1",
                 "locked_by": None,
