@@ -20,3 +20,4 @@ requests
 cryptography
 logutils
 importlib-metadata
+Jinja2
