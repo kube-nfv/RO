@@ -31,7 +31,6 @@ tox -e dist_ro_sdn_onos_of &
 tox -e dist_ro_sdn_onos_vpls &
 tox -e dist_ro_vim_aws &
 tox -e dist_ro_vim_azure &
-tox -e dist_ro_vim_fos &
 tox -e dist_ro_vim_openstack &
 tox -e dist_ro_vim_openvim &
 tox -e dist_ro_vim_vmware &
@@ -50,7 +49,7 @@ cp RO-plugin/deb_dist/python3-osm-ro-plugin_*.deb deb_dist/
 # NG-RO
 cp NG-RO/deb_dist/python3-osm-ng-ro_*.deb deb_dist/
 
-# VIM plugings:  vmware, openstack, AWS, fos, azure
+# VIM plugins:  vmware, openstack, AWS, azure
 for vim_plugin in RO-VIM-*
 do
     cp ${vim_plugin}/deb_dist/python3-osm-rovim*.deb deb_dist/
