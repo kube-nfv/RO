@@ -15,10 +15,13 @@
 # under the License.
 #
 ##
-import logging
+
 from http import HTTPStatus
-from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
+import logging
 from uuid import uuid4
+
+from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
+
 
 """
 Implement an Abstract class 'OpenflowConn' and an engine 'SdnConnectorOpenFlow' used for base class for SDN plugings

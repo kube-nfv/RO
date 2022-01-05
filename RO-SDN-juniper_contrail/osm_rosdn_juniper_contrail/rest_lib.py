@@ -14,11 +14,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import requests
-import json
 import copy
-
+import json
 from time import time
+
+import requests
 from requests.exceptions import ConnectionError
 
 

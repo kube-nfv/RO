@@ -29,10 +29,8 @@ import unittest
 
 import mock
 from neutronclient.v2_0.client import Client
-
 from osm_ro_plugin import vimconn
 from osm_rovim_openstack.vimconn_openstack import vimconnector
-
 
 __author__ = "Igor D.C."
 __date__ = "$23-aug-2017 23:59:59$"

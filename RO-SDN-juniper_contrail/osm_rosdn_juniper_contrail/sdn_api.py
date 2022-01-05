@@ -14,8 +14,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import logging
 import json
+import logging
 
 from osm_ro_plugin.sdnconn import SdnConnectorError
 from osm_rosdn_juniper_contrail.rest_lib import ContrailHttp

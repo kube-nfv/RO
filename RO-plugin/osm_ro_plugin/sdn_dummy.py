@@ -20,10 +20,12 @@
 This WIM does nothing and allows using it for testing and when no WIM is needed
 """
 
+from http import HTTPStatus
 import logging
 from uuid import uuid4
+
 from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
-from http import HTTPStatus
+
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 

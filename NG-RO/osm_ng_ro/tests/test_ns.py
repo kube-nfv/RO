@@ -16,7 +16,7 @@
 #######################################################################################
 
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 from osm_ng_ro.ns import Ns
 

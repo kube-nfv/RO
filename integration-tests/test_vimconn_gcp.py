@@ -24,12 +24,11 @@ This module contains unit tests for the OpenStack VIM connector
 Run this directly with python2 or python3.
 """
 
-import logging
+from datetime import datetime
 import json
+import logging
 
 from osm_rovim_gcp.vimconn_gcp import vimconnector
-from datetime import datetime
-
 
 __author__ = "Sergio G.R."
 __date__ = "$05-nov-2021 12:00:00$"

@@ -28,15 +28,16 @@ It creates the class OF_conn to create dataplane connections
 with static rules based on packet destination MAC address
 """
 
-import json
-import requests
 import base64
+import json
 import logging
+
 from osm_ro_plugin.openflow_conn import (
     OpenflowConn,
     OpenflowConnConnectionException,
     OpenflowConnUnexpectedResponse,
 )
+import requests
 
 # OpenflowConnException, OpenflowConnAuthException, OpenflowConnNotFoundException,
 # OpenflowConnConflictException, OpenflowConnNotSupportedException, OpenflowConnNotImplemented

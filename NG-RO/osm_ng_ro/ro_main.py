@@ -18,29 +18,30 @@
 # limitations under the License.
 ##
 
-import cherrypy
-import time
+
+from codecs import getreader
+import getopt
+from http import HTTPStatus
 import json
-import yaml
-import osm_ng_ro.html_out as html
 import logging
 import logging.handlers
-import getopt
+from os import environ, path
 import sys
+import time
 
-from osm_ng_ro.ns import Ns, NsException
-from osm_ng_ro.validation import ValidationError
-from osm_ng_ro.vim_admin import VimAdminThread
+import cherrypy
 from osm_common.dbbase import DbException
 from osm_common.fsbase import FsException
 from osm_common.msgbase import MsgException
-from http import HTTPStatus
-from codecs import getreader
-from os import environ, path
 from osm_ng_ro import version as ro_version, version_date as ro_version_date
+import osm_ng_ro.html_out as html
+from osm_ng_ro.ns import Ns, NsException
+from osm_ng_ro.validation import ValidationError
+from osm_ng_ro.vim_admin import VimAdminThread
+import yaml
+
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
-
 __version__ = "0.1."  # file version, not NBI version
 version_date = "May 2020"
 

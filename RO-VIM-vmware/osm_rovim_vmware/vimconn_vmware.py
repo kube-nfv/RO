@@ -25,26 +25,13 @@
 vimconn_vmware implementation an Abstract class in order to interact with VMware  vCloud Director.
 """
 
-from lxml import etree as lxmlElementTree
-from osm_ro_plugin import vimconn
-from progressbar import Percentage, Bar, ETA, FileTransferSpeed, ProgressBar
-from pyVim.connect import SmartConnect, Disconnect
-from pyVmomi import vim, vmodl  # @UnresolvedImport
-from pyvcloud.vcd.client import BasicLoginCredentials, Client
-from pyvcloud.vcd.org import Org
-from pyvcloud.vcd.vapp import VApp
-from pyvcloud.vcd.vdc import VDC
-from xml.etree import ElementTree as XmlElementTree
-from xml.sax.saxutils import escape
 import atexit
 import hashlib
 import json
 import logging
-import netaddr
 import os
 import random
 import re
-import requests
 import shutil
 import socket
 import ssl
@@ -54,6 +41,20 @@ import tempfile
 import time
 import traceback
 import uuid
+from xml.etree import ElementTree as XmlElementTree
+from xml.sax.saxutils import escape
+
+from lxml import etree as lxmlElementTree
+import netaddr
+from osm_ro_plugin import vimconn
+from progressbar import Bar, ETA, FileTransferSpeed, Percentage, ProgressBar
+from pyvcloud.vcd.client import BasicLoginCredentials, Client
+from pyvcloud.vcd.org import Org
+from pyvcloud.vcd.vapp import VApp
+from pyvcloud.vcd.vdc import VDC
+from pyVim.connect import Disconnect, SmartConnect
+from pyVmomi import vim, vmodl  # @UnresolvedImport
+import requests
 import yaml
 
 # global variable for vcd connector type

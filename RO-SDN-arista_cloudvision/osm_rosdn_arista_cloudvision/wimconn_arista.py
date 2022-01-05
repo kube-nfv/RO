@@ -27,28 +27,21 @@
 # This work has been performed in the context of Arista Telefonica OSM PoC.
 ##
 
-from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
+import difflib
+from enum import Enum
+import logging
 import re
 import socket
-
-# Required by compare function
-import difflib
-
-# Library that uses Levenshtein Distance to calculate the differences
-# between strings.
-# from fuzzywuzzy import fuzz
-
-import logging
 import uuid
-from enum import Enum
-from requests import RequestException, ConnectionError, ConnectTimeout, Timeout
-from cvprac.cvp_client import CvpClient
-from cvprac.cvp_api import CvpApi
-from cvprac.cvp_client_errors import CvpLoginError, CvpSessionLogOutError, CvpApiError
-from cvprac import __version__ as cvprac_version
 
+from cvprac import __version__ as cvprac_version
+from cvprac.cvp_api import CvpApi
+from cvprac.cvp_client import CvpClient
+from cvprac.cvp_client_errors import CvpApiError, CvpLoginError, CvpSessionLogOutError
+from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 from osm_rosdn_arista_cloudvision.aristaConfigLet import AristaSDNConfigLet
 from osm_rosdn_arista_cloudvision.aristaTask import AristaCVPTask
+from requests import ConnectionError, ConnectTimeout, RequestException, Timeout
 
 
 class SdnError(Enum):

@@ -21,12 +21,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import requests
+from enum import Enum
 import json
 import logging
-from enum import Enum
 
 from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
+import requests
 
 
 class SdnError(Enum):

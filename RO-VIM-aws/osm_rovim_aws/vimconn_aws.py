@@ -25,18 +25,18 @@
 AWS-connector implements all the methods to interact with AWS using the BOTO client
 """
 
-__author__ = "Saboor Ahmad"
-__date__ = "10-Apr-2017"
-
-from osm_ro_plugin import vimconn
-import yaml
 import logging
-import netaddr
 import time
 
 import boto
 import boto.ec2
 import boto.vpc
+import netaddr
+from osm_ro_plugin import vimconn
+import yaml
+
+__author__ = "Saboor Ahmad"
+__date__ = "10-Apr-2017"
 
 
 class vimconnector(vimconn.VimConnector):

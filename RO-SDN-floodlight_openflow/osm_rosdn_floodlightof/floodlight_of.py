@@ -28,17 +28,18 @@ It creates the class OF_conn to create dataplane connections
 with static rules based on packet destination MAC address
 """
 
-__author__ = "Pablo Montes, Alfonso Tierno"
-__date__ = "$28-oct-2014 12:07:15$"
-
 import json
-import requests
 import logging
+
 from osm_ro_plugin.openflow_conn import (
     OpenflowConn,
-    OpenflowConnUnexpectedResponse,
     OpenflowConnConnectionException,
+    OpenflowConnUnexpectedResponse,
 )
+import requests
+
+__author__ = "Pablo Montes, Alfonso Tierno"
+__date__ = "$28-oct-2014 12:07:15$"
 
 
 class OfConnFloodLight(OpenflowConn):

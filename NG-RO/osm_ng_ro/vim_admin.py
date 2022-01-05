@@ -19,15 +19,15 @@ It is based on asyncio.
 It is in charge of load tasks assigned to VIMs that nobody is in chage of it
 """
 
-import logging
-import threading
 import asyncio
 from http import HTTPStatus
+import logging
+import threading
+from time import time
 
-from osm_common import dbmongo, dbmemory, msglocal, msgkafka
+from osm_common import dbmemory, dbmongo, msgkafka, msglocal
 from osm_common.dbbase import DbException
 from osm_common.msgbase import MsgException
-from time import time
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 
