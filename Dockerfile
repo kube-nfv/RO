@@ -21,19 +21,26 @@
 #   devops-stages/stage-build.sh
 #
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
+
+ARG APT_PROXY
+RUN if [ ! -z $APT_PROXY ] ; then \
+    echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/proxy.conf ;\
+    echo "Acquire::https::Proxy \"$APT_PROXY\";" >> /etc/apt/apt.conf.d/proxy.conf ;\
+    fi
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install \
         debhelper \
+        dh-python \
         git \
         python3 \
         python3-all \
         python3-dev \
         python3-setuptools
 
-RUN python3 -m easy_install pip==21.0.1
-RUN pip3 install tox==3.22.0
+RUN python3 -m easy_install pip==21.3.1
+RUN pip install tox==3.24.5
 
 ENV LC_ALL C.UTF-8
 ENV LANG C.UTF-8
