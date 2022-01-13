@@ -31,9 +31,5 @@
 -r RO-VIM-openvim/requirements.in
 -r RO-VIM-vmware/requirements.in
 -r RO-VIM-gcp/requirements.in
-# Needed to pin due to failure in finding package version
-pyyaml==5.4.1
-importlib-metadata<4.9.0
-jaraco.functools<3.5.0
-portend<3.1.0
-zipp<3.7.0
+
+pyyaml<6
