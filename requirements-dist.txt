@@ -20,4 +20,7 @@ stdeb==0.10.0
     # via -r requirements-dist.in
 
 # The following packages are considered to be unsafe in a requirements file:
-# setuptools
+setuptools==59.8.0
+    # via
+    #   -r requirements-dist.in
+    #   setuptools-version-command
