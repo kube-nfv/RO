@@ -248,6 +248,9 @@ class vimconnector(vimconn.VimConnector):
         if "vnet_name" in config:
             self.vnet_name = config["vnet_name"]
 
+        # VNET_RESOURCE_GROUP
+        self.vnet_resource_group = config.get("vnet_resource_group")
+
         # TODO - not used, do anything about it?
         # public ssh key
         self.pub_key = config.get("pub_key")
@@ -404,7 +407,7 @@ class vimconnector(vimconn.VimConnector):
         """
         try:
             vnet = self.conn_vnet.virtual_networks.get(
-                self.resource_group, self.vnet_name
+                self.vnet_resource_group or self.resource_group, self.vnet_name
             )
             self.vnet_address_space = vnet.address_space.address_prefixes[0]
             self.vnet_id = vnet.id
@@ -427,10 +430,12 @@ class vimconnector(vimconn.VimConnector):
 
             self.logger.debug("create base vnet: %s", self.vnet_name)
             self.conn_vnet.virtual_networks.begin_create_or_update(
-                self.resource_group, self.vnet_name, vnet_params
+                self.vnet_resource_group or self.resource_group,
+                self.vnet_name,
+                vnet_params,
             )
             vnet = self.conn_vnet.virtual_networks.get(
-                self.resource_group, self.vnet_name
+                self.vnet_resource_group or self.resource_group, self.vnet_name
             )
             self.vnet_id = vnet.id
         except Exception as e:
@@ -510,7 +515,10 @@ class vimconnector(vimconn.VimConnector):
 
             self.logger.debug("creating subnet_name: {}".format(subnet_name))
             async_creation = self.conn_vnet.subnets.begin_create_or_update(
-                self.resource_group, self.vnet_name, subnet_name, subnet_params
+                self.vnet_resource_group or self.resource_group,
+                self.vnet_name,
+                subnet_name,
+                subnet_params,
             )
             async_creation.wait()
             # TODO - do not wait here, check where it is used
@@ -525,7 +533,9 @@ class vimconnector(vimconn.VimConnector):
         Adds a prefix to the subnet_name with a number in case the indicated name is repeated
         Checks subnets with the indicated name (without suffix) and adds a suffix with a number
         """
-        all_subnets = self.conn_vnet.subnets.list(self.resource_group, self.vnet_name)
+        all_subnets = self.conn_vnet.subnets.list(
+            self.vnet_resource_group or self.resource_group, self.vnet_name
+        )
         # Filter to subnets starting with the indicated name
         subnets = list(
             filter(lambda subnet: (subnet.name.startswith(subnet_name)), all_subnets)
@@ -550,6 +560,7 @@ class vimconnector(vimconn.VimConnector):
         location = self.region or self._get_location_from_resource_group(
             self.resource_group
         )
+
         try:
             net_ifz = {"location": location}
             net_ip_config = {
@@ -815,7 +826,7 @@ class vimconnector(vimconn.VimConnector):
             self._reload_connection()
 
             vnet = self.conn_vnet.virtual_networks.get(
-                self.resource_group, self.vnet_name
+                self.vnet_resource_group or self.resource_group, self.vnet_name
             )
             subnet_list = []
 
@@ -1359,7 +1370,9 @@ class vimconnector(vimconn.VimConnector):
 
     def delete_network(self, net_id, created_items=None):
         self.logger.debug(
-            "deleting network {} - {}".format(self.resource_group, net_id)
+            "deleting network {} - {}".format(
+                self.vnet_resource_group or self.resource_group, net_id
+            )
         )
 
         self._reload_connection()
@@ -1368,7 +1381,9 @@ class vimconnector(vimconn.VimConnector):
         try:
             # Obtain subnets ant try to delete nic first
             subnet = self.conn_vnet.subnets.get(
-                self.resource_group, self.vnet_name, res_name
+                self.vnet_resource_group or self.resource_group,
+                self.vnet_name,
+                res_name,
             )
             if not subnet:
                 raise vimconn.VimConnNotFoundException(
@@ -1387,7 +1402,9 @@ class vimconnector(vimconn.VimConnector):
             # Subnet API fails (CloudError: Azure Error: ResourceNotFound)
             # Put the initial virtual_network API
             async_delete = self.conn_vnet.subnets.begin_delete(
-                self.resource_group, self.vnet_name, res_name
+                self.vnet_resource_group or self.resource_group,
+                self.vnet_name,
+                res_name,
             )
             async_delete.wait()
 
@@ -1800,7 +1817,9 @@ class vimconnector(vimconn.VimConnector):
                 netName = self._get_net_name_from_resource_id(net_id)
                 resName = self._get_resource_name_from_resource_id(net_id)
 
-                net = self.conn_vnet.subnets.get(self.resource_group, netName, resName)
+                net = self.conn_vnet.subnets.get(
+                    self.vnet_resource_group or self.resource_group, netName, resName
+                )
 
                 out_nets[net_id] = {
                     "status": self.provision_state2osm[net.provisioning_state],
@@ -2066,7 +2085,7 @@ if __name__ == "__main__":
     logger.debug("List networks")
     network_list = azure.get_network_list({"name": "internal"})
     logger.debug("Network_list: {}".format(network_list))
-    
+
     logger.debug("Show machine isabelvm")
     vmachine = azure.get_vminstance( ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}"
                                       "/providers/Microsoft.Compute/virtualMachines/isabelVM"
@@ -2090,7 +2109,7 @@ if __name__ == "__main__":
                 "/Skus/18.04-LTS/Versions/18.04.201809110")
     """
     """
-    
+
     network_id = ("subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}
                   "/providers/Microsoft.Network/virtualNetworks/osm_vnet/subnets/internal"
                  ).format(test_params["resource_group"])
