@@ -20,7 +20,9 @@
 """
 
 import logging
+
 from osm_ro_plugin.openflow_conn import SdnConnectorOpenFlow
+
 from .onos_of import OfConnOnos
 
 

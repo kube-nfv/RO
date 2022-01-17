@@ -20,12 +20,14 @@
 Implements a Dummy vim plugin.
 """
 
-import yaml
-from osm_ro_plugin import vimconn
-from uuid import uuid4
 from copy import deepcopy
 import logging
 from random import randrange
+from uuid import uuid4
+
+from osm_ro_plugin import vimconn
+import yaml
+
 
 __author__ = "Alfonso Tierno"
 __date__ = "2020-04-20"

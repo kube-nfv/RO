@@ -15,9 +15,10 @@
 Contains html text in variables to make and html response
 """
 
-import yaml
-from http import HTTPStatus
 from html import escape as html_escape
+from http import HTTPStatus
+
+import yaml
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 

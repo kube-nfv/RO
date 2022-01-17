@@ -30,12 +30,12 @@ This SDN/WIM connector implements the standard IETF RFC 8466 "A YANG Data
 It receives the endpoints and the necessary details to request
 the Layer 2 service.
 """
-import requests
-import uuid
-import logging
-from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
 
-"""Check layer where we move it"""
+import logging
+import uuid
+
+from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
+import requests
 
 
 class WimconnectorIETFL2VPN(SdnConnectorBase):

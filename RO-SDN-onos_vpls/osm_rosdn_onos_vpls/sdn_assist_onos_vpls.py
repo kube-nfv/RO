@@ -20,14 +20,14 @@
 # For those usages not covered by the Apache License, Version 2.0 please
 # contact: bdiaz@whitestack.com or glavado@whitestack.com
 ##
+
+import copy
 import logging
 import uuid
-import copy
-
-import requests
-from requests.auth import HTTPBasicAuth
 
 from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
+import requests
+from requests.auth import HTTPBasicAuth
 
 
 class OnosVpls(SdnConnectorBase):

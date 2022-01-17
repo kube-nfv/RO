@@ -24,24 +24,23 @@ A single ro_task refers to a VIM element (flavor, image, network, ...).
 A ro_task can contain several 'tasks', each one with a target, where to store the results
 """
 
-import logging
-import queue
-import threading
-import time
-import yaml
 from copy import deepcopy
 from http import HTTPStatus
+import logging
 from os import mkdir
-from importlib_metadata import entry_points
+import queue
 from shutil import rmtree
+import threading
+import time
 from unittest.mock import Mock
 
-# from osm_common import dbmongo, dbmemory, fslocal, fsmongo, msglocal, msgkafka, version as common_version
+from importlib_metadata import entry_points
 from osm_common.dbbase import DbException
-from osm_ro_plugin.vim_dummy import VimDummyConnector
-from osm_ro_plugin.sdn_dummy import SdnDummyConnector
-from osm_ro_plugin import vimconn, sdnconn
 from osm_ng_ro.vim_admin import LockRenew
+from osm_ro_plugin import sdnconn, vimconn
+from osm_ro_plugin.sdn_dummy import SdnDummyConnector
+from osm_ro_plugin.vim_dummy import VimDummyConnector
+import yaml
 
 
 __author__ = "Alfonso Tierno"

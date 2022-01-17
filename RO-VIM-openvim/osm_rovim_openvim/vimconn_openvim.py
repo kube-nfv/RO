@@ -27,22 +27,23 @@ vimconnector implements all the methods to interact with openvim using the openv
 __author__ = "Alfonso Tierno, Gerardo Garcia"
 __date__ = "$26-aug-2014 11:09:29$"
 
-from osm_ro_plugin import vimconn
-import requests
 import json
-import yaml
 import logging
 import math
+from urllib.parse import quote
+
+from jsonschema import exceptions as js_e, validate as js_v
 from osm_ro.openmano_schemas import (
+    description_schema,
     id_schema,
+    integer0_schema,
     name_schema,
     nameshort_schema,
-    description_schema,
     vlan1000_schema,
-    integer0_schema,
 )
-from jsonschema import validate as js_v, exceptions as js_e
-from urllib.parse import quote
+from osm_ro_plugin import vimconn
+import requests
+import yaml
 
 """contain the openvim virtual machine status to openmano status"""
 vmStatus2manoFormat = {

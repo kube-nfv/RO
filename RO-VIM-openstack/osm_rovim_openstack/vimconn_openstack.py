@@ -30,32 +30,29 @@ to the VIM connector's SFC resources as follows:
 - Service Function Path (OSM) -> Port Chain (Neutron)
 """
 
-from osm_ro_plugin import vimconn
-
-# import json
+import copy
+from http.client import HTTPException
 import logging
-import netaddr
-import time
-import yaml
+from pprint import pformat
 import random
 import re
-import copy
-from pprint import pformat
-from novaclient import client as nClient, exceptions as nvExceptions
-from keystoneauth1.identity import v2, v3
-from keystoneauth1 import session
-import keystoneclient.exceptions as ksExceptions
-import keystoneclient.v3.client as ksClient_v3
-import keystoneclient.v2_0.client as ksClient_v2
+import time
+
+from cinderclient import client as cClient
 from glanceclient import client as glClient
 import glanceclient.exc as gl1Exceptions
-from cinderclient import client as cClient
-
-# TODO py3 check that this base exception matches python2 httplib.HTTPException
-from http.client import HTTPException
-from neutronclient.neutron import client as neClient
+from keystoneauth1 import session
+from keystoneauth1.identity import v2, v3
+import keystoneclient.exceptions as ksExceptions
+import keystoneclient.v2_0.client as ksClient_v2
+import keystoneclient.v3.client as ksClient_v3
+import netaddr
 from neutronclient.common import exceptions as neExceptions
+from neutronclient.neutron import client as neClient
+from novaclient import client as nClient, exceptions as nvExceptions
+from osm_ro_plugin import vimconn
 from requests.exceptions import ConnectionError
+import yaml
 
 __author__ = "Alfonso Tierno, Gerardo Garcia, Pablo Montes, xFlow Research, Igor D.C., Eduardo Sousa"
 __date__ = "$22-sep-2017 23:59:59$"
