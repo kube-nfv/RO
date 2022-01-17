@@ -13,23 +13,18 @@
 # under the License.
 ##
 
-import base64
-from osm_ro_plugin import vimconn
 import logging
-import time
+from os import getenv
 import random
 from random import choice as random_choice
-from os import getenv
+import time
 
-from google.api_core.exceptions import NotFound
-import googleapiclient.discovery
-from google.oauth2 import service_account
-
+from cryptography.hazmat.backends import default_backend as crypto_default_backend
 from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend as crypto_default_backend
-
-import logging
+from google.oauth2 import service_account
+import googleapiclient.discovery
+from osm_ro_plugin import vimconn
 
 __author__ = "Sergio Gallardo Ruiz"
 __date__ = "$11-aug-2021 08:30:00$"
@@ -324,7 +319,8 @@ class vimconnector(vimconn.VimConnector):
                 "description": net_name,
                 "network": network,
                 "ipCidrRange": subnet_address,
-                # "autoCreateSubnetworks": True, # The network is created in AUTO mode (one subnet per region is created)
+                # "autoCreateSubnetworks": True,
+                # The network is created in AUTO mode (one subnet per region is created)
                 "autoCreateSubnetworks": False,
             }
 
@@ -337,10 +333,9 @@ class vimconnector(vimconn.VimConnector):
             self.logger.debug("created network_name: {}".format(net_name))
 
             # Adding firewall rules to allow the traffic in the network:
-            rules_list = self._create_firewall_rules(net_name)
+            self._create_firewall_rules(net_name)
 
             # create subnetwork, even if there is no profile
-
             if not ip_profile:
                 ip_profile = {}
 
@@ -512,11 +507,9 @@ class vimconnector(vimconn.VimConnector):
             net_name = self._get_resource_name_from_resource_id(net_id)
 
             # Check associated VMs
-            vms = (
-                self.conn_compute.instances()
-                .list(project=self.project, zone=self.zone)
-                .execute()
-            )
+            self.conn_compute.instances().list(
+                project=self.project, zone=self.zone
+            ).execute()
 
             net_id = self.delete_subnet(net_name, created_items)
 
@@ -545,7 +538,8 @@ class vimconnector(vimconn.VimConnector):
         try:
             # If the network has no more subnets, it will be deleted too
             net_info = self.get_network(net_id)
-            # If the subnet is in use by another resource, the deletion will be retried N times before abort the operation
+            # If the subnet is in use by another resource,
+            # the deletion will be retried N times before abort the operation
             created_items = created_items or {}
             created_items[net_id] = False
 
@@ -582,7 +576,7 @@ class vimconnector(vimconn.VimConnector):
 
                 try:
                     # Deletion of the associated firewall rules:
-                    rules_list = self._delete_firewall_rules(network_name)
+                    self._delete_firewall_rules(network_name)
 
                     operation = (
                         self.conn_compute.networks()
@@ -845,12 +839,11 @@ class vimconnector(vimconn.VimConnector):
                     + "-"
                     + "".join(random_choice("0123456789abcdef") for _ in range(12))
                 )
-                response = (
-                    self.conn_compute.instances()
-                    .get(project=self.project, zone=self.zone, instance=random_name)
-                    .execute()
-                )
-                # If no exception is arisen, the random name exists for an instance, so a new random name must be generated
+                self.conn_compute.instances().get(
+                    project=self.project, zone=self.zone, instance=random_name
+                ).execute()
+                # If no exception is arisen, the random name exists for an instance,
+                # so a new random name must be generated
 
             except Exception as e:
                 if e.args[0]["status"] == "404":
@@ -1016,7 +1009,6 @@ class vimconnector(vimconn.VimConnector):
         # initial metadata
         metadata = {}
         metadata["items"] = []
-        key_pairs = {}
 
         # if there is a cloud-init load it
         if cloud_config:
@@ -1152,7 +1144,7 @@ class vimconnector(vimconn.VimConnector):
                     self._get_resource_name_from_resource_id(netIface["subnetwork"])
                     in self.nets_to_be_deleted
                 ):
-                    net_id = self._get_resource_name_from_resource_id(
+                    self._get_resource_name_from_resource_id(
                         self.delete_network(netIface["subnetwork"])
                     )
 
@@ -1222,7 +1214,6 @@ class vimconnector(vimconn.VimConnector):
 
         for net_id in net_list:
             try:
-                netName = self._get_net_name_from_resource_id(net_id)
                 resName = self._get_resource_name_from_resource_id(net_id)
 
                 net = (
@@ -1334,7 +1325,6 @@ class vimconnector(vimconn.VimConnector):
             interface_list = []
             for network_interface in interfaces:
                 interface_dict = {}
-                nic_name = network_interface["name"]
                 interface_dict["vim_interface_id"] = network_interface["name"]
 
                 ips = []
@@ -1380,11 +1370,9 @@ class vimconnector(vimconn.VimConnector):
                 "network": "global/networks/" + network,
                 "allowed": [{"IPProtocol": "tcp", "ports": ["80"]}],
             }
-            operation_firewall = (
-                self.conn_compute.firewalls()
-                .insert(project=self.project, body=firewall_rule_body)
-                .execute()
-            )
+            self.conn_compute.firewalls().insert(
+                project=self.project, body=firewall_rule_body
+            ).execute()
 
             # Adding firewall rule to allow ssh:
             self.logger.debug("creating firewall rule to allow ssh")
@@ -1393,11 +1381,9 @@ class vimconnector(vimconn.VimConnector):
                 "network": "global/networks/" + network,
                 "allowed": [{"IPProtocol": "tcp", "ports": ["22"]}],
             }
-            operation_firewall = (
-                self.conn_compute.firewalls()
-                .insert(project=self.project, body=firewall_rule_body)
-                .execute()
-            )
+            self.conn_compute.firewalls().insert(
+                project=self.project, body=firewall_rule_body
+            ).execute()
 
             # Adding firewall rule to allow ping:
             self.logger.debug("creating firewall rule to allow ping")
@@ -1406,11 +1392,10 @@ class vimconnector(vimconn.VimConnector):
                 "network": "global/networks/" + network,
                 "allowed": [{"IPProtocol": "icmp"}],
             }
-            operation_firewall = (
-                self.conn_compute.firewalls()
-                .insert(project=self.project, body=firewall_rule_body)
-                .execute()
-            )
+
+            self.conn_compute.firewalls().insert(
+                project=self.project, body=firewall_rule_body
+            ).execute()
 
             # Adding firewall rule to allow internal:
             self.logger.debug("creating firewall rule to allow internal")
@@ -1423,11 +1408,9 @@ class vimconnector(vimconn.VimConnector):
                     {"IPProtocol": "icmp"},
                 ],
             }
-            operation_firewall = (
-                self.conn_compute.firewalls()
-                .insert(project=self.project, body=firewall_rule_body)
-                .execute()
-            )
+            self.conn_compute.firewalls().insert(
+                project=self.project, body=firewall_rule_body
+            ).execute()
 
             # Adding firewall rule to allow microk8s:
             self.logger.debug("creating firewall rule to allow microk8s")
@@ -1436,11 +1419,9 @@ class vimconnector(vimconn.VimConnector):
                 "network": "global/networks/" + network,
                 "allowed": [{"IPProtocol": "tcp", "ports": ["16443"]}],
             }
-            operation_firewall = (
-                self.conn_compute.firewalls()
-                .insert(project=self.project, body=firewall_rule_body)
-                .execute()
-            )
+            self.conn_compute.firewalls().insert(
+                project=self.project, body=firewall_rule_body
+            ).execute()
 
             # Adding firewall rule to allow rdp:
             self.logger.debug("creating firewall rule to allow rdp")
@@ -1449,11 +1430,9 @@ class vimconnector(vimconn.VimConnector):
                 "network": "global/networks/" + network,
                 "allowed": [{"IPProtocol": "tcp", "ports": ["3389"]}],
             }
-            operation_firewall = (
-                self.conn_compute.firewalls()
-                .insert(project=self.project, body=firewall_rule_body)
-                .execute()
-            )
+            self.conn_compute.firewalls().insert(
+                project=self.project, body=firewall_rule_body
+            ).execute()
 
             # Adding firewall rule to allow osm:
             self.logger.debug("creating firewall rule to allow osm")
@@ -1462,11 +1441,9 @@ class vimconnector(vimconn.VimConnector):
                 "network": "global/networks/" + network,
                 "allowed": [{"IPProtocol": "tcp", "ports": ["9001", "9999"]}],
             }
-            operation_firewall = (
-                self.conn_compute.firewalls()
-                .insert(project=self.project, body=firewall_rule_body)
-                .execute()
-            )
+            self.conn_compute.firewalls().insert(
+                project=self.project, body=firewall_rule_body
+            ).execute()
 
             self.logger.debug(
                 "_create_firewall_rules Return: list_rules %s", rules_list
@@ -1495,11 +1472,9 @@ class vimconnector(vimconn.VimConnector):
             )
             for item in rules_list["items"]:
                 if network == self._get_resource_name_from_resource_id(item["network"]):
-                    operation_firewall = (
-                        self.conn_compute.firewalls()
-                        .delete(project=self.project, firewall=item["name"])
-                        .execute()
-                    )
+                    self.conn_compute.firewalls().delete(
+                        project=self.project, firewall=item["name"]
+                    ).execute()
 
             self.logger.debug("_delete_firewall_rules Return: list_rules %s", 0)
             return rules_list

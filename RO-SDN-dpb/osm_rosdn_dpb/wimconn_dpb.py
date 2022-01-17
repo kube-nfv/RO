@@ -27,12 +27,11 @@
 
 import json
 import logging
-import paramiko
-import requests
 import struct
 
-# import sys
 from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
+import paramiko
+import requests
 
 
 class DpbSshInterface:

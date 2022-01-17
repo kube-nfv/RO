@@ -26,16 +26,17 @@ vimconn implement an Abstract class for the vim connector plugins
  with the definition of the method to be implemented.
 """
 
-import logging
-import paramiko
-import socket
-from io import StringIO
-import yaml
-import sys
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from http import HTTPStatus
+from io import StringIO
+import logging
+import socket
+import sys
 import warnings
+
+import paramiko
+import yaml
 
 __author__ = "Alfonso Tierno, Igor D.C."
 __date__ = "$14-aug-2017 23:59:59$"

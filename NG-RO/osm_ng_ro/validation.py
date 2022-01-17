@@ -13,8 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from jsonschema import validate as js_v, exceptions as js_e
 from http import HTTPStatus
+
+from jsonschema import exceptions as js_e, validate as js_v
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 __version__ = "0.1"

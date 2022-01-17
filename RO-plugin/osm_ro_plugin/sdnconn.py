@@ -37,8 +37,8 @@ and intranet SDN connectivity.
 It receives information from ports to be connected .
 """
 
-import logging
 from http import HTTPStatus
+import logging
 
 
 class SdnConnectorError(Exception):

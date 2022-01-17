@@ -18,16 +18,13 @@
 #
 
 import logging
-import yaml
 import random
 
 from osm_ro_plugin.sdnconn import SdnConnectorBase, SdnConnectorError
-
-# from osm_rosdn_juniper_contrail.rest_lib import ContrailHttp
-# from osm_rosdn_juniper_contrail.rest_lib import NotFound
 from osm_rosdn_juniper_contrail.rest_lib import DuplicateFound
 from osm_rosdn_juniper_contrail.rest_lib import HttpException
 from osm_rosdn_juniper_contrail.sdn_api import UnderlayApi
+import yaml
 
 
 class JuniperContrail(SdnConnectorBase):

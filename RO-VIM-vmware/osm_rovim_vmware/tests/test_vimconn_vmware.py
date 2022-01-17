@@ -22,22 +22,23 @@
 ##
 
 
-from osm_rovim_vmware.vimconn_vmware import vimconnector
-from osm_ro_plugin.vimconn import (
-    VimConnUnexpectedResponse,
-    VimConnNotFoundException,
-    VimConnException,
-)
-from pyvcloud.vcd.client import Client
-from lxml import etree as lxmlElementTree
-from pyvcloud.vcd.org import Org
-from pyvcloud.vcd.vdc import VDC
-from pyvcloud.vcd.vapp import VApp
 import os
+from os import path
 import unittest
 from unittest import mock
+
+from lxml import etree as lxmlElementTree
+from osm_ro_plugin.vimconn import (
+    VimConnException,
+    VimConnNotFoundException,
+    VimConnUnexpectedResponse,
+)
+from osm_rovim_vmware.vimconn_vmware import vimconnector
+from pyvcloud.vcd.client import Client
+from pyvcloud.vcd.org import Org
+from pyvcloud.vcd.vapp import VApp
+from pyvcloud.vcd.vdc import VDC
 import tests.test_vimconn_vmware_xml_response as xml_resp
-from os import path
 
 __author__ = "Prakash Kasar"
 

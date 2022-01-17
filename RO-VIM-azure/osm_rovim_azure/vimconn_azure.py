@@ -14,27 +14,26 @@
 ##
 
 import base64
-from osm_ro_plugin import vimconn
 import logging
-import netaddr
+from os import getenv
 import re
 
-from os import getenv
+from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import ClientSecretCredential
-from azure.mgmt.resource import ResourceManagementClient
-from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import DiskCreateOption
-from azure.core.exceptions import ResourceNotFoundError
+from azure.mgmt.network import NetworkManagementClient
+from azure.mgmt.resource import ResourceManagementClient
 from azure.profiles import ProfileDefinition
-from msrestazure.azure_exceptions import CloudError
-from msrest.exceptions import AuthenticationError
-import msrestazure.tools as azure_tools
-from requests.exceptions import ConnectionError
-
+from cryptography.hazmat.backends import default_backend as crypto_default_backend
 from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend as crypto_default_backend
+from msrest.exceptions import AuthenticationError
+from msrestazure.azure_exceptions import CloudError
+import msrestazure.tools as azure_tools
+import netaddr
+from osm_ro_plugin import vimconn
+from requests.exceptions import ConnectionError
 
 __author__ = "Isabel Lloret, Sergio Gonzalez, Alfonso Tierno, Gerardo Garcia"
 __date__ = "$18-apr-2019 23:59:59$"

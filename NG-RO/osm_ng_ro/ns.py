@@ -16,38 +16,38 @@
 # limitations under the License.
 ##
 
-# import yaml
+from http import HTTPStatus
 import logging
+from random import choice as random_choice
+from threading import Lock
+from time import time
 from traceback import format_exc as traceback_format_exc
-from osm_ng_ro.ns_thread import NsWorker, NsWorkerException, deep_get
-from osm_ng_ro.validation import validate_input, deploy_schema
+from uuid import uuid4
+
+from cryptography.hazmat.backends import default_backend as crypto_default_backend
+from cryptography.hazmat.primitives import serialization as crypto_serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from jinja2 import (
+    Environment,
+    StrictUndefined,
+    TemplateError,
+    TemplateNotFound,
+    UndefinedError,
+)
 from osm_common import (
-    dbmongo,
     dbmemory,
+    dbmongo,
     fslocal,
     fsmongo,
-    msglocal,
     msgkafka,
+    msglocal,
     version as common_version,
 )
 from osm_common.dbbase import DbException
 from osm_common.fsbase import FsException
 from osm_common.msgbase import MsgException
-from http import HTTPStatus
-from uuid import uuid4
-from threading import Lock
-from random import choice as random_choice
-from time import time
-from jinja2 import (
-    Environment,
-    TemplateError,
-    TemplateNotFound,
-    StrictUndefined,
-    UndefinedError,
-)
-from cryptography.hazmat.primitives import serialization as crypto_serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend as crypto_default_backend
+from osm_ng_ro.ns_thread import deep_get, NsWorker, NsWorkerException
+from osm_ng_ro.validation import deploy_schema, validate_input
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 min_common_version = "0.1.16"
