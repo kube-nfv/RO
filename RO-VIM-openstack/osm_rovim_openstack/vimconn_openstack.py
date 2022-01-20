@@ -1200,7 +1200,7 @@ class vimconnector(vimconn.VimConnector):
                     flavor.vcpus,
                     flavor.disk,
                     flavor.ephemeral,
-                    flavor.swap,
+                    flavor.swap if isinstance(flavor.swap, int) else 0,
                 )
                 if flavor_data == flavor_target:
                     return flavor.id
