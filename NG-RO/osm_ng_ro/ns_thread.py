@@ -1874,6 +1874,11 @@ class NsWorker(threading.Thread):
                                         task["item"]
                                     ].refresh(ro_task)
                                     _update_refresh(new_status)
+                                else:
+                                    # The refresh is updated to avoid set the value of "refresh_at" to
+                                    # default value (next_check_at = now + (24 * 60 * 60)) when status is BUILD,
+                                    # because it can happen that in this case the task is never processed
+                                    _update_refresh(task["status"])
 
                     except Exception as e:
                         new_status = "FAILED"
