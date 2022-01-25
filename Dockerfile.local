@@ -14,7 +14,7 @@
 # under the License.
 ############################################################################
 
-FROM ubuntu:18.04 as INSTALL
+FROM ubuntu:20.04 as INSTALL
 
 WORKDIR /build
 
@@ -82,13 +82,13 @@ RUN python3 -m build /build/RO-SDN-juniper_contrail && \
 RUN python3 -m build /build/RO-VIM-gcp && \
     python3 -m pip install /build/RO-VIM-gcp/dist/*.whl
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get --yes update && \
     DEBIAN_FRONTEND=noninteractive apt-get --yes install python3-minimal
 
 COPY --from=INSTALL /usr/lib/python3/dist-packages /usr/lib/python3/dist-packages
-COPY --from=INSTALL /usr/local/lib/python3.6/dist-packages  /usr/local/lib/python3.6/dist-packages
+COPY --from=INSTALL /usr/local/lib/python3.8/dist-packages  /usr/local/lib/python3.8/dist-packages
 COPY --from=INSTALL /usr/bin/genisoimage /usr/bin/genisoimage
 COPY --from=INSTALL /etc/protocols /etc/protocols
 
