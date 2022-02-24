@@ -19,6 +19,8 @@
 from http import HTTPStatus
 import logging
 from random import choice as random_choice
+
+import yaml
 from threading import Lock
 from time import time
 from traceback import format_exc as traceback_format_exc
@@ -1151,8 +1153,8 @@ class Ns(object):
         Returns:
             Dict[str, Any]: [description]
         """
-        extra_dict = {}
 
+        extra_dict = {}
         affinity_group_data = {
             "name": target_affinity_group["name"],
             "type": target_affinity_group["type"],
@@ -1166,6 +1168,170 @@ class Ns(object):
 
         extra_dict["params"] = {
             "affinity_group_data": affinity_group_data,
+        }
+
+        return extra_dict
+
+    @staticmethod
+    def _process_recreate_vdu_params(
+        existing_vdu: Dict[str, Any],
+        db_nsr: Dict[str, Any],
+        vim_info: Dict[str, Any],
+        target_record_id: str,
+        target_id: str,
+        **kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Function to process VDU parameters to recreate.
+
+        Args:
+            existing_vdu (Dict[str, Any]): [description]
+            db_nsr (Dict[str, Any]): [description]
+            vim_info (Dict[str, Any]): [description]
+            target_record_id (str): [description]
+            target_id (str): [description]
+
+        Returns:
+            Dict[str, Any]: [description]
+        """
+        vnfr = kwargs.get("vnfr")
+        vdu2cloud_init = kwargs.get("vdu2cloud_init")
+        #logger = kwargs.get("logger")
+        db = kwargs.get("db")
+        fs = kwargs.get("fs")
+        ro_nsr_public_key = kwargs.get("ro_nsr_public_key")
+
+        extra_dict = {}
+        net_list = []
+
+        vim_details = {}
+        vim_details_text = existing_vdu["vim_info"][target_id].get("vim_details", None)
+        if vim_details_text:
+            vim_details = yaml.safe_load(f"{vim_details_text}")
+
+        for iface_index, interface in enumerate(existing_vdu["interfaces"]):
+
+            if "port-security-enabled" in interface:
+                interface["port_security"] = interface.pop("port-security-enabled")
+
+            if "port-security-disable-strategy" in interface:
+                interface["port_security_disable_strategy"] = interface.pop(
+                    "port-security-disable-strategy"
+                )
+
+            net_item = {
+                x: v
+                for x, v in interface.items()
+                if x
+                in (
+                    "name",
+                    "vpci",
+                    "port_security",
+                    "port_security_disable_strategy",
+                    "floating_ip",
+                )
+            }
+            existing_ifaces = existing_vdu["vim_info"][target_id].get("interfaces", [])
+            net_id = next(
+                (i["vim_net_id"] for i in existing_ifaces if i["ip_address"] == interface["ip-address"]),
+                None,
+            )
+
+            net_item["net_id"] = net_id
+            net_item["type"] = "virtual"
+
+            # TODO mac_address: used for  SR-IOV ifaces #TODO for other types
+            # TODO floating_ip: True/False (or it can be None)
+            if interface.get("type") in ("SR-IOV", "PCI-PASSTHROUGH"):
+                net_item["use"] = "data"
+                net_item["model"] = interface["type"]
+                net_item["type"] = interface["type"]
+            elif (
+                interface.get("type") == "OM-MGMT"
+                or interface.get("mgmt-interface")
+                or interface.get("mgmt-vnf")
+            ):
+                net_item["use"] = "mgmt"
+            else:
+                # if interface.get("type") in ("VIRTIO", "E1000", "PARAVIRT"):
+                net_item["use"] = "bridge"
+                net_item["model"] = interface.get("type")
+
+            if interface.get("ip-address"):
+                net_item["ip_address"] = interface["ip-address"]
+
+            if interface.get("mac-address"):
+                net_item["mac_address"] = interface["mac-address"]
+
+            net_list.append(net_item)
+
+            if interface.get("mgmt-vnf"):
+                extra_dict["mgmt_vnf_interface"] = iface_index
+            elif interface.get("mgmt-interface"):
+                extra_dict["mgmt_vdu_interface"] = iface_index
+
+        # cloud config
+        cloud_config = {}
+
+        if existing_vdu.get("cloud-init"):
+            if existing_vdu["cloud-init"] not in vdu2cloud_init:
+                vdu2cloud_init[existing_vdu["cloud-init"]] = Ns._get_cloud_init(
+                    db=db,
+                    fs=fs,
+                    location=existing_vdu["cloud-init"],
+                )
+
+            cloud_content_ = vdu2cloud_init[existing_vdu["cloud-init"]]
+            cloud_config["user-data"] = Ns._parse_jinja2(
+                cloud_init_content=cloud_content_,
+                params=existing_vdu.get("additionalParams"),
+                context=existing_vdu["cloud-init"],
+            )
+
+        if existing_vdu.get("boot-data-drive"):
+            cloud_config["boot-data-drive"] = existing_vdu.get("boot-data-drive")
+
+        ssh_keys = []
+
+        if existing_vdu.get("ssh-keys"):
+            ssh_keys += existing_vdu.get("ssh-keys")
+
+        if existing_vdu.get("ssh-access-required"):
+            ssh_keys.append(ro_nsr_public_key)
+
+        if ssh_keys:
+            cloud_config["key-pairs"] = ssh_keys
+
+        disk_list = []
+        for vol_id in vim_details.get("os-extended-volumes:volumes_attached", []):
+            disk_list.append({"vim_id": vol_id["id"]})
+
+        affinity_group_list = []
+
+        if existing_vdu.get("affinity-or-anti-affinity-group-id"):
+            affinity_group = {}
+            for affinity_group_id in existing_vdu["affinity-or-anti-affinity-group-id"]:
+                for group in db_nsr.get("affinity-or-anti-affinity-group"):
+                    if group["id"] == affinity_group_id and group["vim_info"][target_id].get("vim_id", None) is not None:
+                        affinity_group["affinity_group_id"] = group["vim_info"][target_id].get("vim_id", None)
+                        affinity_group_list.append(affinity_group)
+
+        extra_dict["params"] = {
+            "name": "{}-{}-{}-{}".format(
+                db_nsr["name"][:16],
+                vnfr["member-vnf-index-ref"][:16],
+                existing_vdu["vdu-name"][:32],
+                existing_vdu.get("count-index") or 0,
+            ),
+            "description": existing_vdu["vdu-name"],
+            "start": True,
+            "image_id": vim_details["image"]["id"],
+            "flavor_id": vim_details["flavor"]["id"],
+            "affinity_group_list": affinity_group_list,
+            "net_list": net_list,
+            "cloud_config": cloud_config or None,
+            "disk_list": disk_list,
+            "availability_zone_index": None,  # TODO
+            "availability_zone_list": None,  # TODO
         }
 
         return extra_dict
@@ -1188,7 +1354,7 @@ class Ns(object):
         related to a specific item `item` to be done. This function should be
         called for NS instantiation, NS termination, NS update to add a new VNF
         or a new VLD, remove a VNF or VLD, etc.
-        Item can be `net, `flavor`, `image` or `vdu`.
+        Item can be `net`, `flavor`, `image` or `vdu`.
         It takes a list of target items from indata (which came from the REST API)
         and compares with the existing items from db_ro_nsr, identifying the
         incremental changes to be done. During the comparison, it calls the method
@@ -1228,10 +1394,12 @@ class Ns(object):
         db_path = self.db_path_map[item]
         process_params = self.process_params_function_map[item]
         if item in ("net", "vdu"):
+            # This case is specific for the NS VLD (not applied to VDU)
             if vnfr is None:
                 db_record = "nsrs:{}:{}".format(nsr_id, db_path)
                 target_list = indata.get("ns", []).get(db_path, [])
                 existing_list = db_nsr.get(db_path, [])
+            # This case is common for VNF VLDs and VNF VDUs
             else:
                 db_record = "vnfrs:{}:{}".format(vnfr_id, db_path)
                 target_vnf = next(
@@ -1332,7 +1500,13 @@ class Ns(object):
                     target_record_id += ".sdn"
 
                 kwargs = {}
+                self.logger.warning(
+                    "ns.calculate_diff_items target_item={}".format(target_item)
+                )
                 if process_params == Ns._process_vdu_params:
+                    self.logger.warning(
+                        "calculate_diff_items self.fs={}".format(self.fs)
+                    )
                     kwargs.update(
                         {
                             "vnfr_id": vnfr_id,
@@ -1346,6 +1520,7 @@ class Ns(object):
                             "ro_nsr_public_key": ro_nsr_public_key,
                         }
                     )
+                    self.logger.warning("calculate_diff_items kwargs={}".format(kwargs))
 
                 extra_dict = process_params(
                     target_item,
@@ -1483,6 +1658,9 @@ class Ns(object):
                 extra_dict=change.get("extra_dict", None),
             )
 
+            self.logger.warning(
+                "ns.define_all_tasks task={}".format(task)
+            )
             tasks_by_target_record_id[change["target_record_id"]] = task
             db_new_tasks.append(task)
 
@@ -1543,6 +1721,322 @@ class Ns(object):
             )
         )
 
+    def upload_recreate_tasks(
+        self,
+        db_new_tasks,
+        now,
+    ):
+        """Function to save recreate tasks in the common DB
+
+        Args:
+            db_new_tasks (List): tasks list to be created
+            now (time): current time
+
+        """
+
+        nb_ro_tasks = 0  # for logging
+
+        for db_task in db_new_tasks:
+            target_id = db_task.pop("target_id")
+            self.logger.warning("target_id={} db_task={}".format(target_id, db_task))
+
+            action = db_task.get("action", None)
+
+            # Create a ro_task
+            self.logger.debug("Updating database, Creating ro_tasks")
+            db_ro_task = Ns._create_ro_task(target_id, db_task)
+
+            # If DELETE task: the associated created items shoud be removed 
+            # (except persistent volumes):
+            if action == "DELETE":
+                db_ro_task["vim_info"]["created"] = True
+                db_ro_task["vim_info"]["created_items"] = db_task.get("created_items", {})
+                db_ro_task["vim_info"]["vim_id"] = db_task.get("vim_id", None)
+
+            nb_ro_tasks += 1
+            self.logger.warning("upload_all_tasks db_ro_task={}".format(db_ro_task))
+            self.db.create("ro_tasks", db_ro_task)
+
+        self.logger.debug(
+            "Created {} ro_tasks; {} tasks - db_new_tasks={}".format(
+                nb_ro_tasks, len(db_new_tasks), db_new_tasks
+            )
+        )
+
+    def _prepare_created_items_for_healing(
+        self,
+        target_id,
+        existing_vdu,
+    ):
+        # Only ports are considered because created volumes are persistent
+        ports_list = {}
+        vim_interfaces = existing_vdu["vim_info"][target_id].get("interfaces", [])
+        for iface in vim_interfaces:
+            ports_list["port:" + iface["vim_interface_id"]] = True
+
+        return ports_list
+
+    def _prepare_persistent_volumes_for_healing(
+        self,
+        target_id,
+        existing_vdu,
+    ):
+        # The associated volumes of the VM shouldn't be removed
+        volumes_list = []
+        vim_details = {}
+        vim_details_text = existing_vdu["vim_info"][target_id].get("vim_details", None)
+        if vim_details_text:
+            vim_details = yaml.safe_load(f"{vim_details_text}")
+
+            for vol_id in vim_details.get("os-extended-volumes:volumes_attached", []):
+                volumes_list.append(vol_id["id"])
+
+        return volumes_list
+
+    def prepare_changes_to_recreate(
+        self,
+        indata,
+        nsr_id,
+        db_nsr,
+        db_vnfrs,
+        db_ro_nsr,
+        action_id,
+        tasks_by_target_record_id,
+    ):
+        """This method will obtain an ordered list of items (`changes_list`)
+        to be created and deleted to meet the recreate request.
+        """
+
+        self.logger.debug(
+            "ns.prepare_changes_to_recreate nsr_id={} indata={}".format(nsr_id, indata)
+        )
+
+        task_index = 0
+        # set list with diffs:
+        changes_list = []
+        db_path = self.db_path_map["vdu"]
+        target_list = indata.get("healVnfData", {})
+        vdu2cloud_init = indata.get("cloud_init_content") or {}
+        ro_nsr_public_key = db_ro_nsr["public_key"]
+
+        # Check each VNF of the target
+        for target_vnf in target_list:
+            # Find this VNF in the list from DB
+            vnfr_id = target_vnf.get("vnfInstanceId", None)
+            if vnfr_id:
+                existing_vnf = db_vnfrs.get(vnfr_id)
+                db_record = "vnfrs:{}:{}".format(vnfr_id, db_path)
+                # vim_account_id = existing_vnf.get("vim-account-id", "")
+
+            # Check each VDU of this VNF
+            for target_vdu in target_vnf["additionalParams"].get("vdu", None):
+                vdu_name = target_vdu.get("vdu-id", None)
+                # For multi instance VDU count-index is mandatory
+                # For single session VDU count-indes is 0
+                count_index = target_vdu.get("count-index", 0)
+                item_index = 0
+                existing_instance = None
+                for instance in existing_vnf.get("vdur", None):
+                    if (instance["vdu-name"] == vdu_name and instance["count-index"] == count_index):
+                        existing_instance = instance
+                        break
+                    else:
+                        item_index += 1
+
+                target_record_id = "{}.{}".format(db_record, existing_instance["id"])
+
+                # The target VIM is the one already existing in DB to recreate
+                for target_vim, target_viminfo in existing_instance.get(
+                    "vim_info", {}
+                ).items():
+                    # step 1 vdu to be deleted
+                    self._assign_vim(target_vim)
+                    deployment_info = {
+                        "action_id": action_id,
+                        "nsr_id": nsr_id,
+                        "task_index": task_index,
+                    }
+
+                    target_record = f"{db_record}.{item_index}.vim_info.{target_vim}"
+                    created_items = self._prepare_created_items_for_healing(
+                        target_vim, existing_instance
+                    )
+
+                    volumes_to_hold = self._prepare_persistent_volumes_for_healing(
+                        target_vim, existing_instance
+                    )
+
+                    # Specific extra params for recreate tasks:
+                    extra_dict = {
+                        "created_items": created_items,
+                        "vim_id": existing_instance["vim-id"],
+                        "volumes_to_hold": volumes_to_hold,
+                    }
+
+                    changes_list.append(
+                        {
+                            "deployment_info": deployment_info,
+                            "target_id": target_vim,
+                            "item": "vdu",
+                            "action": "DELETE",
+                            "target_record": target_record,
+                            "target_record_id": target_record_id,
+                            "extra_dict": extra_dict,
+                        }
+                    )
+                    delete_task_id = f"{action_id}:{task_index}"
+                    task_index += 1
+
+                    # step 2 vdu to be created
+                    kwargs = {}
+                    kwargs.update(
+                        {
+                            "vnfr_id": vnfr_id,
+                            "nsr_id": nsr_id,
+                            "vnfr": existing_vnf,
+                            "vdu2cloud_init": vdu2cloud_init,
+                            "tasks_by_target_record_id": tasks_by_target_record_id,
+                            "logger": self.logger,
+                            "db": self.db,
+                            "fs": self.fs,
+                            "ro_nsr_public_key": ro_nsr_public_key,
+                        }
+                    )
+
+                    extra_dict = self._process_recreate_vdu_params(
+                        existing_instance,
+                        db_nsr,
+                        target_viminfo,
+                        target_record_id,
+                        target_vim,
+                        **kwargs,
+                    )
+
+                    # The CREATE task depens on the DELETE task
+                    extra_dict["depends_on"] = [delete_task_id]
+
+                    deployment_info = {
+                        "action_id": action_id,
+                        "nsr_id": nsr_id,
+                        "task_index": task_index,
+                    }
+                    self._assign_vim(target_vim)
+
+                    new_item = {
+                        "deployment_info": deployment_info,
+                        "target_id": target_vim,
+                        "item": "vdu",
+                        "action": "CREATE",
+                        "target_record": target_record,
+                        "target_record_id": target_record_id,
+                        "extra_dict": extra_dict,
+                    }
+                    changes_list.append(new_item)
+                    tasks_by_target_record_id[target_record_id] = new_item
+                    task_index += 1
+
+        return changes_list
+
+    def recreate(self, session, indata, version, nsr_id, *args, **kwargs):
+        self.logger.debug("ns.recreate nsr_id={} indata={}".format(nsr_id, indata))
+        # TODO: validate_input(indata, recreate_schema)
+        action_id = indata.get("action_id", str(uuid4()))
+        # get current deployment
+        db_vnfrs = {}  # vnf's info indexed by _id
+        step = ""
+        logging_text = "Recreate nsr_id={} action_id={} indata={}".format(
+            nsr_id, action_id, indata
+        )
+        self.logger.debug(logging_text + "Enter")
+
+        try:
+            step = "Getting ns and vnfr record from db"
+            db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
+            db_new_tasks = []
+            tasks_by_target_record_id = {}
+            # read from db: vnf's of this ns
+            step = "Getting vnfrs from db"
+            db_vnfrs_list = self.db.get_list("vnfrs", {"nsr-id-ref": nsr_id})
+            self.logger.debug("ns.recreate: db_vnfrs_list={}".format(db_vnfrs_list))
+
+            if not db_vnfrs_list:
+                raise NsException("Cannot obtain associated VNF for ns")
+
+            for vnfr in db_vnfrs_list:
+                db_vnfrs[vnfr["_id"]] = vnfr
+
+            now = time()
+            db_ro_nsr = self.db.get_one("ro_nsrs", {"_id": nsr_id}, fail_on_empty=False)
+            self.logger.debug("ns.recreate: db_ro_nsr={}".format(db_ro_nsr))
+
+            if not db_ro_nsr:
+                db_ro_nsr = self._create_db_ro_nsrs(nsr_id, now)
+
+            with self.write_lock:
+                # NS
+                step = "process NS elements"
+                changes_list = self.prepare_changes_to_recreate(
+                    indata=indata,
+                    nsr_id=nsr_id,
+                    db_nsr=db_nsr,
+                    db_vnfrs=db_vnfrs,
+                    db_ro_nsr=db_ro_nsr,
+                    action_id=action_id,
+                    tasks_by_target_record_id=tasks_by_target_record_id,
+                )
+
+                self.define_all_tasks(
+                    changes_list=changes_list,
+                    db_new_tasks=db_new_tasks,
+                    tasks_by_target_record_id=tasks_by_target_record_id,
+                )
+
+                # Delete all ro_tasks registered for the targets vdurs (target_record)
+                # If task of type CREATE exist then vim will try to get info form deleted VMs. 
+                # So remove all task related to target record.
+                ro_tasks = self.db.get_list("ro_tasks", {"tasks.nsr_id": nsr_id})
+                for change in changes_list:
+                    for ro_task in ro_tasks:
+                        for task in ro_task["tasks"]:
+                            if task["target_record"] == change["target_record"]:
+                                self.db.del_one(
+                                    "ro_tasks",
+                                    q_filter={
+                                        "_id": ro_task["_id"],
+                                        "modified_at": ro_task["modified_at"],
+                                    },
+                                    fail_on_empty=False,
+                                )
+                
+                step = "Updating database, Appending tasks to ro_tasks"
+                self.upload_recreate_tasks(
+                    db_new_tasks=db_new_tasks,
+                    now=now,
+                )
+
+            self.logger.debug(
+                logging_text + "Exit. Created {} tasks".format(len(db_new_tasks))
+            )
+
+            return (
+                {"status": "ok", "nsr_id": nsr_id, "action_id": action_id},
+                action_id,
+                True,
+            )
+        except Exception as e:
+            if isinstance(e, (DbException, NsException)):
+                self.logger.error(
+                    logging_text + "Exit Exception while '{}': {}".format(step, e)
+                )
+            else:
+                e = traceback_format_exc()
+                self.logger.critical(
+                    logging_text + "Exit Exception while '{}': {}".format(step, e),
+                    exc_info=True,
+                )
+
+            raise NsException(e)
+
     def deploy(self, session, indata, version, nsr_id, *args, **kwargs):
         self.logger.debug("ns.deploy nsr_id={} indata={}".format(nsr_id, indata))
         validate_input(indata, deploy_schema)
@@ -1559,6 +2053,7 @@ class Ns(object):
         try:
             step = "Getting ns and vnfr record from db"
             db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
+            self.logger.debug("ns.deploy: db_nsr={}".format(db_nsr))
             db_new_tasks = []
             tasks_by_target_record_id = {}
             # read from db: vnf's of this ns
@@ -1571,6 +2066,7 @@ class Ns(object):
             for vnfr in db_vnfrs_list:
                 db_vnfrs[vnfr["_id"]] = vnfr
                 db_vnfrs_update[vnfr["_id"]] = {}
+            self.logger.debug("ns.deploy db_vnfrs={}".format(db_vnfrs))
 
             now = time()
             db_ro_nsr = self.db.get_one("ro_nsrs", {"_id": nsr_id}, fail_on_empty=False)
@@ -1750,8 +2246,11 @@ class Ns(object):
         return None, None, True
 
     def status(self, session, indata, version, nsr_id, action_id, *args, **kwargs):
-        # self.logger.debug("ns.status version={} nsr_id={}, action_id={} indata={}"
-        #                   .format(version, nsr_id, action_id, indata))
+        self.logger.debug(
+            "ns.status version={} nsr_id={}, action_id={} indata={}".format(
+                version, nsr_id, action_id, indata
+            )
+        )
         task_list = []
         done = 0
         total = 0
@@ -1790,6 +2289,11 @@ class Ns(object):
         }
 
         return return_data, None, True
+
+    def recreate_status(
+        self, session, indata, version, nsr_id, action_id, *args, **kwargs
+    ):
+        return self.status(session, indata, version, nsr_id, action_id, *args, **kwargs)
 
     def cancel(self, session, indata, version, nsr_id, action_id, *args, **kwargs):
         print(

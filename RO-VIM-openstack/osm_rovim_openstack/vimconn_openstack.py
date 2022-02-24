@@ -1866,6 +1866,7 @@ class vimconnector(vimconn.VimConnector):
             config_drive, userdata = self._create_user_data(cloud_config)
 
             # Create additional volumes in case these are present in disk_list
+            existing_vim_volumes = []
             base_disk_index = ord("b")
             boot_volume_id = None
             if disk_list:
@@ -1875,6 +1876,7 @@ class vimconnector(vimconn.VimConnector):
                         block_device_mapping["_vd" + chr(base_disk_index)] = disk[
                             "vim_id"
                         ]
+                        existing_vim_volumes.append({"id": disk["vim_id"]})
                     else:
                         if "image_id" in disk:
                             base_disk_index = ord("a")
@@ -1903,6 +1905,17 @@ class vimconnector(vimconn.VimConnector):
                         if v == "volume":
                             if self.cinder.volumes.get(volume_id).status != "available":
                                 break
+                    else:  # all ready: break from while
+                        break
+
+                    time.sleep(5)
+                    elapsed_time += 5
+
+                # Wait until existing volumes in vim are with status available
+                while elapsed_time < volume_timeout:
+                    for volume in existing_vim_volumes:
+                        if self.cinder.volumes.get(volume["id"]).status != "available":
+                            break
                     else:  # all ready: break from while
                         break
 
@@ -2241,7 +2254,7 @@ class vimconnector(vimconn.VimConnector):
         ) as e:
             self._format_exception(e)
 
-    def delete_vminstance(self, vm_id, created_items=None):
+    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
         """Removes a VM instance from VIM. Returns the old identifier"""
         # print "osconnector: Getting VM from VIM"
         if created_items is None:
@@ -2291,8 +2304,9 @@ class vimconnector(vimconn.VimConnector):
                             if self.cinder.volumes.get(k_id).status != "available":
                                 keep_waiting = True
                             else:
-                                self.cinder.volumes.delete(k_id)
-                                created_items[k] = None
+                                if k_id not in volumes_to_hold:
+                                    self.cinder.volumes.delete(k_id)
+                                    created_items[k] = None
                         elif k_item == "floating_ip":  # floating ip
                             self.neutron.delete_floatingip(k_id)
                             created_items[k] = None

@@ -99,6 +99,16 @@ valid_url_methods = {
                     },
                 },
             },
+            "recreate": {
+                "<ID>": {
+                    "METHODS": ("POST"),
+                    "ROLE_PERMISSION": "recreate:id:",
+                    "<ID>": {
+                        "METHODS": ("GET",),
+                        "ROLE_PERMISSION": "recreate:id:id:",
+                    },
+                },
+            },
         }
     },
 }
@@ -150,6 +160,8 @@ class Server(object):
             "deploy:id:delete": self.ns.delete,
             "deploy:id:id:get": self.ns.status,
             "deploy:id:id:cancel:post": self.ns.cancel,
+            "recreate:id:post": self.ns.recreate,
+            "recreate:id:id:get": self.ns.recreate_status,
         }
 
     def _format_in(self, kwargs):

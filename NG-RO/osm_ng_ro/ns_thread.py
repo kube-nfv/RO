@@ -429,10 +429,17 @@ class VimInteractionVdu(VimInteractionBase):
         }
 
         try:
+            self.logger.debug(
+                "delete_vminstance: vm_vim_id={} created_items={}".format(
+                    vm_vim_id, ro_task["vim_info"]["created_items"]
+                )
+            )
             if vm_vim_id or ro_task["vim_info"]["created_items"]:
                 target_vim = self.my_vims[ro_task["target_id"]]
                 target_vim.delete_vminstance(
-                    vm_vim_id, ro_task["vim_info"]["created_items"]
+                    vm_vim_id,
+                    ro_task["vim_info"]["created_items"],
+                    ro_task["vim_info"].get("volumes_to_hold", []),
                 )
         except vimconn.VimConnNotFoundException:
             ro_vim_item_update_ok["vim_details"] = "already deleted"
@@ -1818,6 +1825,7 @@ class NsWorker(threading.Thread):
             "created_items", False
         )
 
+        self.logger.warning("Needed delete: {}".format(needed_delete))
         if my_task["status"] == "FAILED":
             return None, None  # TODO need to be retry??
 
@@ -1841,6 +1849,7 @@ class NsWorker(threading.Thread):
                     needed_delete = False
 
             if needed_delete:
+                self.logger.warning("Deleting ro_task={} task_index={}".format(ro_task, task_index))
                 return self.item2class[my_task["item"]].delete(ro_task, task_index)
             else:
                 return "SUPERSEDED", None
@@ -1943,8 +1952,9 @@ class NsWorker(threading.Thread):
                 fail_on_empty=False,
             )
 
+            self.logger.warning("ro_task_dependency={}".format(ro_task_dependency))
             if ro_task_dependency:
-                for task_index, task in ro_task_dependency["tasks"]:
+                for task_index, task in enumerate(ro_task_dependency["tasks"]):
                     if task["task_id"] == task_id:
                         return ro_task_dependency, task_index
         raise NsWorkerException("Cannot get depending task {}".format(task_id))
@@ -2044,6 +2054,7 @@ class NsWorker(threading.Thread):
                                 dependency_task = dependency_ro_task["tasks"][
                                     dependency_task_index
                                 ]
+                                self.logger.warning("dependency_ro_task={} dependency_task_index={}".format(dependency_ro_task, dependency_task_index))
 
                                 if dependency_task["status"] == "SCHEDULED":
                                     dependency_not_completed = True
@@ -2080,6 +2091,7 @@ class NsWorker(threading.Thread):
                                 ] = dependency_ro_task["vim_info"]["vim_id"]
 
                             if dependency_not_completed:
+                                self.logger.warning("DEPENDENCY NOT COMPLETED {}".format(dependency_ro_task["vim_info"]["vim_id"]))
                                 # TODO set at vim_info.vim_details that it is waiting
                                 continue
 
@@ -2482,6 +2494,8 @@ class NsWorker(threading.Thread):
                 """
                 ro_task = self._get_db_task()
                 if ro_task:
+                    self.logger.warning("Task to process: {}".format(ro_task))
+                    time.sleep(1)
                     self._process_pending_tasks(ro_task)
                     busy = True
                 if not busy:
