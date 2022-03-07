@@ -48,12 +48,16 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
         """
         self.logger = logging.getLogger("ro.sdn.ietfl2vpn")
         super().__init__(wim, wim_account, config, logger)
+        if len(self.service_endpoint_mapping) == 0 and self.config.get(
+            "wim_port_mapping"
+        ):
+            self.service_endpoint_mapping = self.config.get("wim_port_mapping", [])
         self.headers = {"Content-Type": "application/json"}
         self.mappings = {
             m["service_endpoint_id"]: m for m in self.service_endpoint_mapping
         }
         self.user = wim_account.get("user")
-        self.passwd = wim_account.get("passwordd")
+        self.passwd = wim_account.get("password")
 
         if self.user and self.passwd is not None:
             self.auth = (self.user, self.passwd)
@@ -176,7 +180,7 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
             uuid_l2vpn = str(uuid.uuid4())
             vpn_service = {}
             vpn_service["vpn-id"] = uuid_l2vpn
-            vpn_service["vpn-scv-type"] = "vpws"
+            vpn_service["vpn-svc-type"] = "vpws"
             vpn_service["svc-topo"] = "any-to-any"
             vpn_service["customer-name"] = "osm"
             vpn_service_list = []
