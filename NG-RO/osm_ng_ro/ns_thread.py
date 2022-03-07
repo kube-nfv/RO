@@ -1055,11 +1055,15 @@ class VimInteractionSdnNet(VimInteractionBase):
         try:
             # CREATE
             params = task["params"]
-            vlds_to_connect = params["vlds"]
-            associated_vim = params["target_vim"]
+            vlds_to_connect = params.get("vlds", [])
+            associated_vim = params.get("target_vim")
             # external additional ports
             additional_ports = params.get("sdn-ports") or ()
-            _, _, vim_account_id = associated_vim.partition(":")
+            _, _, vim_account_id = (
+                (None, None, None)
+                if associated_vim is None
+                else associated_vim.partition(":")
+            )
 
             if associated_vim:
                 # get associated VIM
@@ -1830,7 +1834,7 @@ class NsWorker(threading.Thread):
                     persistent_info={},
                 )
             else:  # sdn
-                plugin_name = "rosdn_" + vim["type"]
+                plugin_name = "rosdn_" + (vim.get("type") or vim.get("wim_type"))
                 step = "Loading plugin '{}'".format(plugin_name)
                 vim_module_conn = self._load_plugin(plugin_name, "sdn")
                 step = "Loading {}'".format(target_id)
