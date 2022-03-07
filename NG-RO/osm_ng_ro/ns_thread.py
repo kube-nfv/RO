@@ -1462,7 +1462,10 @@ class NsWorker(threading.Thread):
                 wim = deepcopy(vim)
                 wim_config = wim.pop("config", {}) or {}
                 wim["uuid"] = wim["_id"]
-                wim["wim_url"] = wim["url"]
+                if "url" in wim and "wim_url" not in wim:
+                    wim["wim_url"] = wim["url"]
+                elif "url" not in wim and "wim_url" in wim:
+                    wim["url"] = wim["wim_url"]
 
                 if wim.get("dpid"):
                     wim_config["dpid"] = wim.pop("dpid")
