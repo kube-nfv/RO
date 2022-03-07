@@ -973,7 +973,9 @@ class Ns(object):
                             )
                             item_ = item
 
-                            if target_vim.startswith("sdn"):
+                            if target_vim.startswith("sdn") or target_vim.startswith(
+                                "wim"
+                            ):
                                 # item must be sdn-net instead of net if target_vim is a sdn
                                 item_ = "sdn_net"
                                 target_record_id += ".sdn"
@@ -1023,7 +1025,7 @@ class Ns(object):
                         target_record_id = "{}.{}".format(db_record, target_item["id"])
                         item_ = item
 
-                        if target_vim.startswith("sdn"):
+                        if target_vim.startswith("sdn") or target_vim.startswith("wim"):
                             # item must be sdn-net instead of net if target_vim is a sdn
                             item_ = "sdn_net"
                             target_record_id += ".sdn"
