@@ -1156,7 +1156,7 @@ class Ns(object):
         if item in ("net", "vdu"):
             if vnfr is None:
                 db_record = "nsrs:{}:{}".format(nsr_id, db_path)
-                target_list = indata.get("ns", []).get(db_path, []) 
+                target_list = indata.get("ns", []).get(db_path, [])
                 existing_list = db_nsr.get(db_path, [])
             else:
                 db_record = "vnfrs:{}:{}".format(vnfr_id, db_path)
