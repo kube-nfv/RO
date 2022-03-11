@@ -6230,7 +6230,7 @@ class vimconnector(vimconn.VimConnector):
                     )
                     return None
 
-                deviceId = hex(host_pci_dev.deviceId % 2 ** 16).lstrip("0x")
+                deviceId = hex(host_pci_dev.deviceId % 2**16).lstrip("0x")
                 backing = vim.VirtualPCIPassthroughDeviceBackingInfo(
                     deviceId=deviceId,
                     id=host_pci_dev.id,
@@ -7493,13 +7493,10 @@ if [ "$1" = "precustomization" ];then
 
                 for device in devices:
                     if type(device) is vim.vm.device.VirtualDisk:
-                        if (
-                            isinstance(
-                                device.backing,
-                                vim.vm.device.VirtualDisk.FlatVer2BackingInfo,
-                            )
-                            and hasattr(device.backing, "fileName")
-                        ):
+                        if isinstance(
+                            device.backing,
+                            vim.vm.device.VirtualDisk.FlatVer2BackingInfo,
+                        ) and hasattr(device.backing, "fileName"):
                             disk_info["full_path"] = device.backing.fileName
                             disk_info["datastore"] = device.backing.datastore
                             disk_info["capacityKB"] = device.capacityInKB
