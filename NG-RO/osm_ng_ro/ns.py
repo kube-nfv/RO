@@ -113,12 +113,14 @@ class Ns(object):
             "image": Ns._process_image_params,
             "flavor": Ns._process_flavor_params,
             "vdu": Ns._process_vdu_params,
+            "affinity-or-anti-affinity-group": Ns._process_affinity_group_params,
         }
         self.db_path_map = {
             "net": "vld",
             "image": "image",
             "flavor": "flavor",
             "vdu": "vdur",
+            "affinity-or-anti-affinity-group": "affinity-or-anti-affinity-group",
         }
 
     def init_db(self, target_version):
@@ -1076,6 +1078,19 @@ class Ns(object):
                 == "persistent-storage:persistent-storage"
             ]
 
+        affinity_group_list = []
+
+        if target_vdu.get("affinity-or-anti-affinity-group-id"):
+            affinity_group = {}
+            for affinity_group_id in target_vdu["affinity-or-anti-affinity-group-id"]:
+                affinity_group_text = (
+                    ns_preffix + ":affinity-or-anti-affinity-group." + affinity_group_id
+                )
+
+                extra_dict["depends_on"].append(affinity_group_text)
+                affinity_group["affinity_group_id"] = "TASK-" + affinity_group_text
+                affinity_group_list.append(affinity_group)
+
         extra_dict["params"] = {
             "name": "{}-{}-{}-{}".format(
                 indata["name"][:16],
@@ -1087,11 +1102,45 @@ class Ns(object):
             "start": True,
             "image_id": "TASK-" + image_text,
             "flavor_id": "TASK-" + flavor_text,
+            "affinity_group_list": affinity_group_list,
             "net_list": net_list,
             "cloud_config": cloud_config or None,
             "disk_list": disk_list,
             "availability_zone_index": None,  # TODO
             "availability_zone_list": None,  # TODO
+        }
+
+        return extra_dict
+
+    @staticmethod
+    def _process_affinity_group_params(
+        target_affinity_group: Dict[str, Any],
+        indata: Dict[str, Any],
+        vim_info: Dict[str, Any],
+        target_record_id: str,
+        **kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Get affinity or anti-affinity group parameters.
+
+        Args:
+            target_affinity_group (Dict[str, Any]): [description]
+            indata (Dict[str, Any]): [description]
+            vim_info (Dict[str, Any]): [description]
+            target_record_id (str): [description]
+
+        Returns:
+            Dict[str, Any]: [description]
+        """
+        extra_dict = {}
+
+        affinity_group_data = {
+            "name": target_affinity_group["name"],
+            "type": target_affinity_group["type"],
+            "scope": target_affinity_group["scope"],
+        }
+
+        extra_dict["params"] = {
+            "affinity_group_data": affinity_group_data,
         }
 
         return extra_dict
@@ -1166,7 +1215,7 @@ class Ns(object):
                 )
                 target_list = target_vnf.get(db_path, []) if target_vnf else []
                 existing_list = vnfr.get(db_path, [])
-        elif item in ("image", "flavor"):
+        elif item in ("image", "flavor", "affinity-or-anti-affinity-group"):
             db_record = "nsrs:{}:{}".format(nsr_id, db_path)
             target_list = indata.get(item, [])
             existing_list = db_nsr.get(item, [])
@@ -1342,7 +1391,7 @@ class Ns(object):
         changes_list = []
 
         # NS vld, image and flavor
-        for item in ["net", "image", "flavor"]:
+        for item in ["net", "image", "flavor", "affinity-or-anti-affinity-group"]:
             self.logger.debug("process NS={} {}".format(nsr_id, item))
             diff_items, task_index = self.calculate_diff_items(
                 indata=indata,
