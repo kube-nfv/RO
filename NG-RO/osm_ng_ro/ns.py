@@ -1000,10 +1000,13 @@ class Ns(object):
                 if deep_get(
                     tasks_by_target_record_id,
                     net_text,
+                    "extra_dict",
                     "params",
                     "net_type",
                 ):
-                    tasks_by_target_record_id[net_text]["params"]["net_type"] = "data"
+                    tasks_by_target_record_id[net_text]["extra_dict"]["params"][
+                        "net_type"
+                    ] = "data"
 
                 net_item["use"] = "data"
                 net_item["model"] = interface["type"]
@@ -1285,18 +1288,18 @@ class Ns(object):
                     "task_index": task_index,
                 }
 
-                diff_items.append(
-                    {
-                        "deployment_info": deployment_info,
-                        "target_id": target_vim,
-                        "item": item_,
-                        "action": "CREATE",
-                        "target_record": f"{db_record}.{item_index}.vim_info.{target_vim}",
-                        "target_record_id": target_record_id,
-                        "extra_dict": extra_dict,
-                        "common_id": target_item.get("common_id", None),
-                    }
-                )
+                new_item = {
+                    "deployment_info": deployment_info,
+                    "target_id": target_vim,
+                    "item": item_,
+                    "action": "CREATE",
+                    "target_record": f"{db_record}.{item_index}.vim_info.{target_vim}",
+                    "target_record_id": target_record_id,
+                    "extra_dict": extra_dict,
+                    "common_id": target_item.get("common_id", None),
+                }
+                diff_items.append(new_item)
+                tasks_by_target_record_id[target_record_id] = new_item
                 task_index += 1
 
                 db_nsr_update[db_path + ".{}".format(item_index)] = target_item
