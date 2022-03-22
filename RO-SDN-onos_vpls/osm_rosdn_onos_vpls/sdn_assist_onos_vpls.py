@@ -241,8 +241,10 @@ class OnosVpls(SdnConnectorBase):
             # try to rollback push original config
             try:
                 self._post_onos_netconfig(onos_config_orig)
-            except Exception as e:
-                self.logger.error("Exception rolling back to original config: %s", e)
+            except Exception as rollback_e:
+                self.logger.error(
+                    "Exception rolling back to original config: %s", rollback_e
+                )
 
             # raise exception
             if isinstance(e, SdnConnectorError):
