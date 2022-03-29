@@ -2457,8 +2457,208 @@ class TestNs(unittest.TestCase):
     def test__process_vdu_params_vdu_ssh_access_required(self):
         pass
 
-    def test__process_vdu_params_vdu_virtual_storages(self):
-        pass
+    @patch("osm_ng_ro.ns.Ns._get_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._parse_jinja2")
+    def test__process_vdu_params_vdu_persistent_root_volume(
+        self, get_cloud_init, parse_jinja2
+    ):
+        db = MagicMock(name="database mock")
+        kwargs = {
+            "db": db,
+            "vdu2cloud_init": {},
+            "vnfr": {
+                "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+                "member-vnf-index-ref": "vnf-several-volumes",
+            },
+        }
+        get_cloud_init.return_value = {}
+        parse_jinja2.return_value = {}
+        db.get_one.return_value = {
+            "_id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+            "df": [
+                {
+                    "id": "default-df",
+                    "vdu-profile": [
+                        {"id": "several_volumes-VM", "min-number-of-instances": 1}
+                    ],
+                }
+            ],
+            "id": "several_volumes-vnf",
+            "product-name": "several_volumes-vnf",
+            "vdu": [
+                {
+                    "id": "several_volumes-VM",
+                    "name": "several_volumes-VM",
+                    "sw-image-desc": "ubuntu20.04",
+                    "alternative-sw-image-desc": [
+                        "ubuntu20.04-aws",
+                        "ubuntu20.04-azure",
+                    ],
+                    "virtual-storage-desc": [
+                        "persistent-root-volume",
+                        "persistent-volume2",
+                        "ephemeral-volume",
+                    ],
+                }
+            ],
+            "version": "1.0",
+            "virtual-storage-desc": [
+                {
+                    "id": "persistent-volume2",
+                    "type-of-storage": "persistent-storage:persistent-storage",
+                    "size-of-storage": "10",
+                },
+                {
+                    "id": "persistent-root-volume",
+                    "type-of-storage": "persistent-storage:persistent-storage",
+                    "size-of-storage": "10",
+                },
+                {
+                    "id": "ephemeral-volume",
+                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+                    "size-of-storage": "1",
+                },
+            ],
+            "_admin": {
+                "storage": {
+                    "fs": "mongo",
+                    "path": "/app/storage/",
+                },
+                "type": "vnfd",
+            },
+        }
+
+        target_vdu = {
+            "_id": "09a0baa7-b7cb-4924-bd63-9f04a1c23960",
+            "ns-flavor-id": "0",
+            "ns-image-id": "0",
+            "vdu-name": "several_volumes-VM",
+            "interfaces": [
+                {
+                    "name": "vdu-eth0",
+                    "ns-vld-id": "mgmtnet",
+                }
+            ],
+            "virtual-storages": [
+                {
+                    "id": "persistent-volume2",
+                    "size-of-storage": "10",
+                    "type-of-storage": "persistent-storage:persistent-storage",
+                },
+                {
+                    "id": "persistent-root-volume",
+                    "size-of-storage": "10",
+                    "type-of-storage": "persistent-storage:persistent-storage",
+                },
+                {
+                    "id": "ephemeral-volume",
+                    "size-of-storage": "1",
+                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+                },
+            ],
+        }
+        indata = {
+            "name": "sample_name",
+        }
+        expected_result = [{"image_id": "ubuntu20.04", "size": "10"}, {"size": "10"}]
+        result = Ns._process_vdu_params(
+            target_vdu, indata, vim_info=None, target_record_id=None, **kwargs
+        )
+        self.assertEqual(
+            expected_result, result["params"]["disk_list"], "Wrong Disk List"
+        )
+
+    @patch("osm_ng_ro.ns.Ns._get_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._parse_jinja2")
+    def test__process_vdu_params_vdu_without_persistent_storage(
+        self, get_cloud_init, parse_jinja2
+    ):
+        db = MagicMock(name="database mock")
+        kwargs = {
+            "db": db,
+            "vdu2cloud_init": {},
+            "vnfr": {
+                "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+                "member-vnf-index-ref": "vnf-several-volumes",
+            },
+        }
+        get_cloud_init.return_value = {}
+        parse_jinja2.return_value = {}
+        db.get_one.return_value = {
+            "_id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+            "df": [
+                {
+                    "id": "default-df",
+                    "vdu-profile": [
+                        {"id": "without_volumes-VM", "min-number-of-instances": 1}
+                    ],
+                }
+            ],
+            "id": "without_volumes-vnf",
+            "product-name": "without_volumes-vnf",
+            "vdu": [
+                {
+                    "id": "without_volumes-VM",
+                    "name": "without_volumes-VM",
+                    "sw-image-desc": "ubuntu20.04",
+                    "alternative-sw-image-desc": [
+                        "ubuntu20.04-aws",
+                        "ubuntu20.04-azure",
+                    ],
+                    "virtual-storage-desc": ["root-volume", "ephemeral-volume"],
+                }
+            ],
+            "version": "1.0",
+            "virtual-storage-desc": [
+                {"id": "root-volume", "size-of-storage": "10"},
+                {
+                    "id": "ephemeral-volume",
+                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+                    "size-of-storage": "1",
+                },
+            ],
+            "_admin": {
+                "storage": {
+                    "fs": "mongo",
+                    "path": "/app/storage/",
+                },
+                "type": "vnfd",
+            },
+        }
+
+        target_vdu = {
+            "_id": "09a0baa7-b7cb-4924-bd63-9f04a1c23960",
+            "ns-flavor-id": "0",
+            "ns-image-id": "0",
+            "vdu-name": "without_volumes-VM",
+            "interfaces": [
+                {
+                    "name": "vdu-eth0",
+                    "ns-vld-id": "mgmtnet",
+                }
+            ],
+            "virtual-storages": [
+                {
+                    "id": "root-volume",
+                    "size-of-storage": "10",
+                },
+                {
+                    "id": "ephemeral-volume",
+                    "size-of-storage": "1",
+                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+                },
+            ],
+        }
+        indata = {
+            "name": "sample_name",
+        }
+        expected_result = []
+        result = Ns._process_vdu_params(
+            target_vdu, indata, vim_info=None, target_record_id=None, **kwargs
+        )
+        self.assertEqual(
+            expected_result, result["params"]["disk_list"], "Wrong Disk List"
+        )
 
     def test__process_vdu_params(self):
         pass
