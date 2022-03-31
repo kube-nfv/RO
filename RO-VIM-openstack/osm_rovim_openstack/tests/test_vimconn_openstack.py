@@ -25,6 +25,7 @@ Run this directly with python2 or python3.
 """
 
 import copy
+import logging
 import unittest
 
 import mock
@@ -37,8 +38,13 @@ __date__ = "$23-aug-2017 23:59:59$"
 
 
 class TestSfcOperations(unittest.TestCase):
-    def setUp(self):
-        # instantiate dummy VIM connector so we can test it
+    @mock.patch("logging.getLogger", autospec=True)
+    def setUp(self, mock_logger):
+        # Instantiate dummy VIM connector so we can test it
+        # It throws exception because of dummy parameters,
+        # We are disabling the logging of exception not to print them to console.
+        mock_logger = logging.getLogger()
+        mock_logger.disabled = True
         self.vimconn = vimconnector(
             "123",
             "openstackvim",
@@ -210,10 +216,15 @@ class TestSfcOperations(unittest.TestCase):
 
         # call the VIM connector
         if sfc_encap is None:
+            dict_to_neutron["port_chain"]["chain_parameters"] = {"correlation": "mpls"}
             if spi is None:
-                result = self.vimconn.new_sfp(name, classifications, sfs)
+                result = self.vimconn.new_sfp(
+                    name, classifications, sfs, sfc_encap=False
+                )
             else:
-                result = self.vimconn.new_sfp(name, classifications, sfs, spi=spi)
+                result = self.vimconn.new_sfp(
+                    name, classifications, sfs, sfc_encap=False, spi=spi
+                )
         else:
             if spi is None:
                 result = self.vimconn.new_sfp(name, classifications, sfs, sfc_encap)
@@ -360,8 +371,8 @@ class TestSfcOperations(unittest.TestCase):
 
     @mock.patch.object(Client, "create_sfc_port_chain")
     def test_new_sfp_without_sfc_encap(self, create_sfc_port_chain):
-        self._test_new_sfp(create_sfc_port_chain, False, None)
-        self._test_new_sfp(create_sfc_port_chain, False, 25)
+        self._test_new_sfp(create_sfc_port_chain, None, None)
+        self._test_new_sfp(create_sfc_port_chain, None, 25)
 
     @mock.patch.object(Client, "create_sfc_port_chain")
     def test_new_sfp_default_sfc_encap(self, create_sfc_port_chain):

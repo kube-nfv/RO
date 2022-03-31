@@ -693,7 +693,9 @@ class Ns(object):
 
                 return extra_dict
 
-            def _process_affinity_group_params(target_affinity_group, vim_info, target_record_id):
+            def _process_affinity_group_params(
+                target_affinity_group, vim_info, target_record_id
+            ):
                 extra_dict = {}
 
                 affinity_group_data = {
@@ -927,13 +929,19 @@ class Ns(object):
 
                 if target_vdu.get("affinity-or-anti-affinity-group-id"):
                     affinity_group = {}
-                    for affinity_group_id in target_vdu["affinity-or-anti-affinity-group-id"]:
+                    for affinity_group_id in target_vdu[
+                        "affinity-or-anti-affinity-group-id"
+                    ]:
                         affinity_group_text = (
-                            ns_preffix + ":affinity-or-anti-affinity-group." + affinity_group_id
+                            ns_preffix
+                            + ":affinity-or-anti-affinity-group."
+                            + affinity_group_id
                         )
 
                         extra_dict["depends_on"].append(affinity_group_text)
-                        affinity_group["affinity_group_id"] = "TASK-" + affinity_group_text
+                        affinity_group["affinity_group_id"] = (
+                            "TASK-" + affinity_group_text
+                        )
                         affinity_group_list.append(affinity_group)
 
                 extra_dict["params"] = {
@@ -1188,8 +1196,11 @@ class Ns(object):
                     step = "process NS Affinity Groups"
                     _process_items(
                         target_list=indata.get("affinity-or-anti-affinity-group") or [],
-                        existing_list=db_nsr.get("affinity-or-anti-affinity-group") or [],
-                        db_record="nsrs:{}:affinity-or-anti-affinity-group".format(nsr_id),
+                        existing_list=db_nsr.get("affinity-or-anti-affinity-group")
+                        or [],
+                        db_record="nsrs:{}:affinity-or-anti-affinity-group".format(
+                            nsr_id
+                        ),
                         db_update=db_nsr_update,
                         db_path="affinity-or-anti-affinity-group",
                         item="affinity-or-anti-affinity-group",
