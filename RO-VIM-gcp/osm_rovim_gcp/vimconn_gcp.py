@@ -864,6 +864,7 @@ class vimconnector(vimconn.VimConnector):
         start,
         image_id=None,  # <image project>:(image|image-family):<image/family id>
         flavor_id=None,
+        affinity_group_list=None,
         net_list=None,
         cloud_config=None,
         disk_list=None,

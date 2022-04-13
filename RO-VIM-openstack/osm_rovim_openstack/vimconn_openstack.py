@@ -1681,6 +1681,7 @@ class vimconnector(vimconn.VimConnector):
         start,
         image_id,
         flavor_id,
+        affinity_group_list,
         net_list,
         cloud_config=None,
         disk_list=None,
@@ -1690,7 +1691,9 @@ class vimconnector(vimconn.VimConnector):
         """Adds a VM instance to VIM
         Params:
             start: indicates if VM must start or boot in pause mode. Ignored
-            image_id,flavor_id: iamge and flavor uuid
+            image_id,flavor_id: image and flavor uuid
+            affinity_group_list: list of affinity groups, each one is a dictionary.
+                Ignore if empty.
             net_list: list of interfaces, each one is a dictionary with:
                 name:
                 net_id: network uuid to connect
@@ -1915,10 +1918,19 @@ class vimconnector(vimconn.VimConnector):
                 availability_zone_index, availability_zone_list
             )
 
+            # Manage affinity groups/server groups
+            server_group_id = None
+            scheduller_hints = {}
+
+            if affinity_group_list:
+                # Only first id on the list will be used. Openstack restriction
+                server_group_id = affinity_group_list[0]["affinity_group_id"]
+                scheduller_hints["group"] = server_group_id
+
             self.logger.debug(
                 "nova.servers.create({}, {}, {}, nics={}, security_groups={}, "
                 "availability_zone={}, key_name={}, userdata={}, config_drive={}, "
-                "block_device_mapping={})".format(
+                "block_device_mapping={}, server_group={})".format(
                     name,
                     image_id,
                     flavor_id,
@@ -1929,6 +1941,7 @@ class vimconnector(vimconn.VimConnector):
                     userdata,
                     config_drive,
                     block_device_mapping,
+                    server_group_id,
                 )
             )
             server = self.nova.servers.create(
@@ -1943,6 +1956,7 @@ class vimconnector(vimconn.VimConnector):
                 userdata=userdata,
                 config_drive=config_drive,
                 block_device_mapping=block_device_mapping,
+                scheduler_hints=scheduller_hints,
             )  # , description=description)
 
             vm_start_time = time.time()
@@ -3444,3 +3458,60 @@ class vimconnector(vimconn.VimConnector):
             classification_dict[classification_id] = classification
 
         return classification_dict
+
+    def new_affinity_group(self, affinity_group_data):
+        """Adds a server group to VIM
+            affinity_group_data contains a dictionary with information, keys:
+                name: name in VIM for the server group
+                type: affinity or anti-affinity
+                scope: Only nfvi-node allowed
+        Returns the server group identifier"""
+        self.logger.debug("Adding Server Group '%s'", str(affinity_group_data))
+
+        try:
+            name = affinity_group_data["name"]
+            policy = affinity_group_data["type"]
+
+            self._reload_connection()
+            new_server_group = self.nova.server_groups.create(name, policy)
+
+            return new_server_group.id
+        except (
+            ksExceptions.ClientException,
+            nvExceptions.ClientException,
+            ConnectionError,
+            KeyError,
+        ) as e:
+            self._format_exception(e)
+
+    def get_affinity_group(self, affinity_group_id):
+        """Obtain server group details from the VIM. Returns the server group detais as a dict"""
+        self.logger.debug("Getting flavor '%s'", affinity_group_id)
+        try:
+            self._reload_connection()
+            server_group = self.nova.server_groups.find(id=affinity_group_id)
+
+            return server_group.to_dict()
+        except (
+            nvExceptions.NotFound,
+            nvExceptions.ClientException,
+            ksExceptions.ClientException,
+            ConnectionError,
+        ) as e:
+            self._format_exception(e)
+
+    def delete_affinity_group(self, affinity_group_id):
+        """Deletes a server group from the VIM. Returns the old affinity_group_id"""
+        self.logger.debug("Getting server group '%s'", affinity_group_id)
+        try:
+            self._reload_connection()
+            self.nova.server_groups.delete(affinity_group_id)
+
+            return affinity_group_id
+        except (
+            nvExceptions.NotFound,
+            ksExceptions.ClientException,
+            nvExceptions.ClientException,
+            ConnectionError,
+        ) as e:
+            self._format_exception(e)

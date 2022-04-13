@@ -370,6 +370,23 @@ class VimInteractionVdu(VimInteractionBase):
             if params_copy["flavor_id"].startswith("TASK-"):
                 params_copy["flavor_id"] = task_depends[params_copy["flavor_id"]]
 
+            affinity_group_list = params_copy["affinity_group_list"]
+            for affinity_group in affinity_group_list:
+                # change task_id into affinity_group_id
+                if "affinity_group_id" in affinity_group and affinity_group[
+                    "affinity_group_id"
+                ].startswith("TASK-"):
+                    affinity_group_id = task_depends[
+                        affinity_group["affinity_group_id"]
+                    ]
+
+                    if not affinity_group_id:
+                        raise NsWorkerException(
+                            "found for {}".format(affinity_group["affinity_group_id"])
+                        )
+
+                    affinity_group["affinity_group_id"] = affinity_group_id
+
             vim_vm_id, created_items = target_vim.new_vminstance(**params_copy)
             interfaces = [iface["vim_id"] for iface in params_copy["net_list"]]
 
@@ -735,6 +752,93 @@ class VimInteractionFlavor(VimInteractionBase):
         except (vimconn.VimConnException, NsWorkerException) as e:
             self.logger.error(
                 "task={} vim={} new-flavor: {}".format(task_id, ro_task["target_id"], e)
+            )
+            ro_vim_item_update = {
+                "vim_status": "VIM_ERROR",
+                "created": created,
+                "vim_details": str(e),
+            }
+
+            return "FAILED", ro_vim_item_update
+
+
+class VimInteractionAffinityGroup(VimInteractionBase):
+    def delete(self, ro_task, task_index):
+        task = ro_task["tasks"][task_index]
+        task_id = task["task_id"]
+        affinity_group_vim_id = ro_task["vim_info"]["vim_id"]
+        ro_vim_item_update_ok = {
+            "vim_status": "DELETED",
+            "created": False,
+            "vim_details": "DELETED",
+            "vim_id": None,
+        }
+
+        try:
+            if affinity_group_vim_id:
+                target_vim = self.my_vims[ro_task["target_id"]]
+                target_vim.delete_affinity_group(affinity_group_vim_id)
+        except vimconn.VimConnNotFoundException:
+            ro_vim_item_update_ok["vim_details"] = "already deleted"
+        except vimconn.VimConnException as e:
+            self.logger.error(
+                "ro_task={} vim={} del-affinity-or-anti-affinity-group={}: {}".format(
+                    ro_task["_id"], ro_task["target_id"], affinity_group_vim_id, e
+                )
+            )
+            ro_vim_item_update = {
+                "vim_status": "VIM_ERROR",
+                "vim_details": "Error while deleting: {}".format(e),
+            }
+
+            return "FAILED", ro_vim_item_update
+
+        self.logger.debug(
+            "task={} {} del-affinity-or-anti-affinity-group={} {}".format(
+                task_id,
+                ro_task["target_id"],
+                affinity_group_vim_id,
+                ro_vim_item_update_ok.get("vim_details", ""),
+            )
+        )
+
+        return "DONE", ro_vim_item_update_ok
+
+    def new(self, ro_task, task_index, task_depends):
+        task = ro_task["tasks"][task_index]
+        task_id = task["task_id"]
+        created = False
+        created_items = {}
+        target_vim = self.my_vims[ro_task["target_id"]]
+
+        try:
+            affinity_group_vim_id = None
+
+            if task.get("params"):
+                affinity_group_data = task["params"]["affinity_group_data"]
+                affinity_group_vim_id = target_vim.new_affinity_group(
+                    affinity_group_data
+                )
+                created = True
+
+            ro_vim_item_update = {
+                "vim_id": affinity_group_vim_id,
+                "vim_status": "DONE",
+                "created": created,
+                "created_items": created_items,
+                "vim_details": None,
+            }
+            self.logger.debug(
+                "task={} {} new-affinity-or-anti-affinity-group={} created={}".format(
+                    task_id, ro_task["target_id"], affinity_group_vim_id, created
+                )
+            )
+
+            return "DONE", ro_vim_item_update
+        except (vimconn.VimConnException, NsWorkerException) as e:
+            self.logger.error(
+                "task={} vim={} new-affinity-or-anti-affinity-group:"
+                " {}".format(task_id, ro_task["target_id"], e)
             )
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
@@ -1178,6 +1282,9 @@ class NsWorker(threading.Thread):
                 self.db, self.my_vims, self.db_vims, self.logger
             ),
             "sdn_net": VimInteractionSdnNet(
+                self.db, self.my_vims, self.db_vims, self.logger
+            ),
+            "affinity-or-anti-affinity-group": VimInteractionAffinityGroup(
                 self.db, self.my_vims, self.db_vims, self.logger
             ),
         }

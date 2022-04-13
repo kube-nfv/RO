@@ -528,6 +528,29 @@ class VimConnector:
         """
         raise VimConnNotImplemented("Should have implemented this")
 
+    def get_affinity_group(self, affinity_group_id):
+        """Obtain affinity or anti affinity group details from the VIM
+        Returns the flavor dict details {'id':<>, 'name':<>, other vim specific }
+        Raises an exception upon error or if not found
+        """
+        raise VimConnNotImplemented("Should have implemented this")
+
+    def new_affinity_group(self, affinity_group_data):
+        """Adds an affinity or anti affinity group to VIM
+            affinity_group_data contains a dictionary with information, keys:
+                name: name in VIM for the affinity or anti-affinity group
+                type: affinity or anti-affinity
+                scope: Only nfvi-node allowed
+        Returns the affinity or anti affinity group identifier
+        """
+        raise VimConnNotImplemented("Should have implemented this")
+
+    def delete_affinity_group(self, affinity_group_id):
+        """Deletes an affinity or anti affinity group from the VIM identified by its id
+        Returns the used id or raise an exception
+        """
+        raise VimConnNotImplemented("Should have implemented this")
+
     def new_image(self, image_dict):
         """Adds a tenant image to VIM
         Returns the image id or raises an exception if failed
@@ -566,6 +589,7 @@ class VimConnector:
         start,
         image_id,
         flavor_id,
+        affinity_group_list,
         net_list,
         cloud_config=None,
         disk_list=None,
@@ -576,6 +600,8 @@ class VimConnector:
         Params:
             'start': (boolean) indicates if VM must start or created in pause mode.
             'image_id','flavor_id': image and flavor VIM id to use for the VM
+            'affinity_group_list': list of affinity groups, each one is a dictionary.
+                Ignore if empty.
             'net_list': list of interfaces, each one is a dictionary with:
                 'name': (optional) name for the interface.
                 'net_id': VIM network id where this interface must be connect to. Mandatory for type==virtual

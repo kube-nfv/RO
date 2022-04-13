@@ -107,6 +107,7 @@ deploy_schema = {
                 "vld": deploy_item_list,
             },
         },
+        "affinity-or-anti-affinity-group": deploy_item_list,
     },
     "additionalProperties": False,
 }

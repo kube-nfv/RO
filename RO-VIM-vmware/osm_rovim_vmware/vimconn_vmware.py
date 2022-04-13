@@ -1907,6 +1907,7 @@ class vimconnector(vimconn.VimConnector):
         start=False,
         image_id=None,
         flavor_id=None,
+        affinity_group_list=[],
         net_list=[],
         cloud_config=None,
         disk_list=None,
