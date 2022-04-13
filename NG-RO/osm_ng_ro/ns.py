@@ -693,6 +693,21 @@ class Ns(object):
 
                 return extra_dict
 
+            def _process_affinity_group_params(target_affinity_group, vim_info, target_record_id):
+                extra_dict = {}
+
+                affinity_group_data = {
+                    "name": target_affinity_group["name"],
+                    "type": target_affinity_group["type"],
+                    "scope": target_affinity_group["scope"],
+                }
+
+                extra_dict["params"] = {
+                    "affinity_group_data": affinity_group_data,
+                }
+
+                return extra_dict
+
             def _ip_profile_2_ro(ip_profile):
                 if not ip_profile:
                     return None
@@ -908,6 +923,19 @@ class Ns(object):
                         == "persistent-storage:persistent-storage"
                     ]
 
+                affinity_group_list = []
+
+                if target_vdu.get("affinity-or-anti-affinity-group-id"):
+                    affinity_group = {}
+                    for affinity_group_id in target_vdu["affinity-or-anti-affinity-group-id"]:
+                        affinity_group_text = (
+                            ns_preffix + ":affinity-or-anti-affinity-group." + affinity_group_id
+                        )
+
+                        extra_dict["depends_on"].append(affinity_group_text)
+                        affinity_group["affinity_group_id"] = "TASK-" + affinity_group_text
+                        affinity_group_list.append(affinity_group)
+
                 extra_dict["params"] = {
                     "name": "{}-{}-{}-{}".format(
                         indata["name"][:16],
@@ -919,6 +947,7 @@ class Ns(object):
                     "start": True,
                     "image_id": "TASK-" + image_text,
                     "flavor_id": "TASK-" + flavor_text,
+                    "affinity_group_list": affinity_group_list,
                     "net_list": net_list,
                     "cloud_config": cloud_config or None,
                     "disk_list": disk_list,
@@ -1156,6 +1185,17 @@ class Ns(object):
                         db_path="flavor",
                         item="flavor",
                         process_params=_process_flavor_params,
+                    )
+
+                    step = "process NS Affinity Groups"
+                    _process_items(
+                        target_list=indata.get("affinity-or-anti-affinity-group") or [],
+                        existing_list=db_nsr.get("affinity-or-anti-affinity-group") or [],
+                        db_record="nsrs:{}:affinity-or-anti-affinity-group".format(nsr_id),
+                        db_update=db_nsr_update,
+                        db_path="affinity-or-anti-affinity-group",
+                        item="affinity-or-anti-affinity-group",
+                        process_params=_process_affinity_group_params,
                     )
 
                     # VNF.vld

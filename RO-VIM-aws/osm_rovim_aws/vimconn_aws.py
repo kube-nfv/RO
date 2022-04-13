@@ -767,6 +767,7 @@ class vimconnector(vimconn.VimConnector):
         start,
         image_id,
         flavor_id,
+        affinity_group_list,
         net_list,
         cloud_config=None,
         disk_list=None,
