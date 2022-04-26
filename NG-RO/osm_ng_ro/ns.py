@@ -1159,6 +1159,11 @@ class Ns(object):
             "scope": target_affinity_group["scope"],
         }
 
+        if target_affinity_group.get("vim-affinity-group-id"):
+            affinity_group_data["vim-affinity-group-id"] = target_affinity_group[
+                "vim-affinity-group-id"
+            ]
+
         extra_dict["params"] = {
             "affinity_group_data": affinity_group_data,
         }

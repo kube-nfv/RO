@@ -812,9 +812,28 @@ class VimInteractionAffinityGroup(VimInteractionBase):
 
         try:
             affinity_group_vim_id = None
+            affinity_group_data = None
 
             if task.get("params"):
-                affinity_group_data = task["params"]["affinity_group_data"]
+                affinity_group_data = task["params"].get("affinity_group_data")
+
+            if affinity_group_data and affinity_group_data.get("vim-affinity-group-id"):
+                try:
+                    param_affinity_group_id = task["params"]["affinity_group_data"].get(
+                        "vim-affinity-group-id"
+                    )
+                    affinity_group_vim_id = target_vim.get_affinity_group(
+                        param_affinity_group_id
+                    ).get("id")
+                except vimconn.VimConnNotFoundException:
+                    self.logger.error(
+                        "task={} {} new-affinity-or-anti-affinity-group. Provided VIM Affinity Group ID {}"
+                        "could not be found at VIM. Creating a new one.".format(
+                            task_id, ro_task["target_id"], param_affinity_group_id
+                        )
+                    )
+
+            if not affinity_group_vim_id and affinity_group_data:
                 affinity_group_vim_id = target_vim.new_affinity_group(
                     affinity_group_data
                 )
