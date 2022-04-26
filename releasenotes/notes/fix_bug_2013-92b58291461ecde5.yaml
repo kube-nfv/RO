@@ -1,0 +1,24 @@
+#######################################################################################
+# Copyright ETSI Contributors and Others.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#######################################################################################
+---
+fixes:
+  - |
+    This fixes the bug 2013 Anti-affinity group cannot be passed as instantiation
+    parameter. NBI and RO are affected. For RO, if the attribute vim-affinity-group-id
+    is present if the affinity group info, it is checked that it exists at the VIM
+    and then is used. If it does not exist, an error message is shown in the RO logs,
+    the atribute is ignored and a new new server group is created.
