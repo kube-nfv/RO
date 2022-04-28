@@ -1078,6 +1078,15 @@ class VimConnector:
         """
         raise VimConnNotImplemented("SFC support not implemented")
 
+    def migrate_instance(self, vm_id, compute_host=None):
+        """Migrate a vdu
+        Params:
+            vm_id: ID of an instance
+            compute_host: Host to migrate the vdu to
+        Returns the vm state or raises an exception upon error
+        """
+        raise VimConnNotImplemented("Should have implemented this")
+
     # NOT USED METHODS in current version. Deprecated
     @deprecated
     def host_vim2gui(self, host, server_dict):

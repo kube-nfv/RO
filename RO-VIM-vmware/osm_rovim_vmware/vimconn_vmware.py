@@ -8659,3 +8659,13 @@ if [ "$1" = "precustomization" ];then
             poweron_task = self.get_task_from_response(response.text)
 
             return poweron_task
+
+    def migrate_instance(self, vm_id, compute_host=None):
+        """
+        Migrate a vdu
+        param:
+            vm_id: ID of an instance
+            compute_host: Host to migrate the vdu to
+        """
+        # TODO: Add support for migration
+        raise vimconn.VimConnNotImplemented("Should have implemented this")

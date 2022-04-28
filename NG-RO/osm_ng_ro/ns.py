@@ -2335,3 +2335,118 @@ class Ns(object):
                     return_data.append(task["action_id"])
 
         return return_data, None, True
+
+    def migrate_task(
+        self, vdu, vnf, vdu_index, action_id, nsr_id, task_index, extra_dict
+    ):
+        target_vim, vim_info = next(k_v for k_v in vdu["vim_info"].items())
+        self._assign_vim(target_vim)
+        target_record = "vnfrs:{}:vdur.{}".format(vnf["_id"], vdu_index)
+        target_record_id = "vnfrs:{}:vdur.{}".format(vnf["_id"], vdu["id"])
+        deployment_info = {
+            "action_id": action_id,
+            "nsr_id": nsr_id,
+            "task_index": task_index,
+        }
+
+        task = Ns._create_task(
+            deployment_info=deployment_info,
+            target_id=target_vim,
+            item="migrate",
+            action="EXEC",
+            target_record=target_record,
+            target_record_id=target_record_id,
+            extra_dict=extra_dict,
+        )
+
+        return task
+
+    def migrate(self, session, indata, version, nsr_id, *args, **kwargs):
+        task_index = 0
+        extra_dict = {}
+        now = time()
+        action_id = indata.get("action_id", str(uuid4()))
+        step = ""
+        logging_text = "Task deploy nsr_id={} action_id={} ".format(nsr_id, action_id)
+        self.logger.debug(logging_text + "Enter")
+        try:
+            vnf_instance_id = indata["vnfInstanceId"]
+            step = "Getting vnfrs from db"
+            db_vnfr = self.db.get_one("vnfrs", {"_id": vnf_instance_id})
+            vdu = indata.get("vdu")
+            migrateToHost = indata.get("migrateToHost")
+            db_new_tasks = []
+
+            with self.write_lock:
+                if vdu is not None:
+                    vdu_id = indata["vdu"]["vduId"]
+                    vdu_count_index = indata["vdu"].get("vduCountIndex", 0)
+                    for vdu_index, vdu in enumerate(db_vnfr["vdur"]):
+                        if (
+                            vdu["vdu-id-ref"] == vdu_id
+                            and vdu["count-index"] == vdu_count_index
+                        ):
+                            extra_dict["params"] = {
+                                "vim_vm_id": vdu["vim-id"],
+                                "migrate_host": migrateToHost,
+                                "vdu_vim_info": vdu["vim_info"],
+                            }
+                            step = "Creating migration task for vdu:{}".format(vdu)
+                            task = self.migrate_task(
+                                vdu,
+                                db_vnfr,
+                                vdu_index,
+                                action_id,
+                                nsr_id,
+                                task_index,
+                                extra_dict,
+                            )
+                            db_new_tasks.append(task)
+                            task_index += 1
+                            break
+                else:
+
+                    for vdu_index, vdu in enumerate(db_vnfr["vdur"]):
+                        extra_dict["params"] = {
+                            "vim_vm_id": vdu["vim-id"],
+                            "migrate_host": migrateToHost,
+                            "vdu_vim_info": vdu["vim_info"],
+                        }
+                        step = "Creating migration task for vdu:{}".format(vdu)
+                        task = self.migrate_task(
+                            vdu,
+                            db_vnfr,
+                            vdu_index,
+                            action_id,
+                            nsr_id,
+                            task_index,
+                            extra_dict,
+                        )
+                        db_new_tasks.append(task)
+                        task_index += 1
+
+                self.upload_all_tasks(
+                    db_new_tasks=db_new_tasks,
+                    now=now,
+                )
+
+            self.logger.debug(
+                logging_text + "Exit. Created {} tasks".format(len(db_new_tasks))
+            )
+            return (
+                {"status": "ok", "nsr_id": nsr_id, "action_id": action_id},
+                action_id,
+                True,
+            )
+        except Exception as e:
+            if isinstance(e, (DbException, NsException)):
+                self.logger.error(
+                    logging_text + "Exit Exception while '{}': {}".format(step, e)
+                )
+            else:
+                e = traceback_format_exc()
+                self.logger.critical(
+                    logging_text + "Exit Exception while '{}': {}".format(step, e),
+                    exc_info=True,
+                )
+            raise NsException(e)

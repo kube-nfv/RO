@@ -1273,6 +1273,87 @@ class VimInteractionSdnNet(VimInteractionBase):
         return "DONE", ro_vim_item_update_ok
 
 
+class VimInteractionMigration(VimInteractionBase):
+    def exec(self, ro_task, task_index, task_depends):
+        task = ro_task["tasks"][task_index]
+        task_id = task["task_id"]
+        db_task_update = {"retries": 0}
+        target_vim = self.my_vims[ro_task["target_id"]]
+        vim_interfaces = []
+        created = False
+        created_items = {}
+        refreshed_vim_info = {}
+
+        try:
+            if task.get("params"):
+                vim_vm_id = task["params"].get("vim_vm_id")
+                migrate_host = task["params"].get("migrate_host")
+                _, migrated_compute_node = target_vim.migrate_instance(
+                    vim_vm_id, migrate_host
+                )
+
+                if migrated_compute_node:
+                    # When VM is migrated, vdu["vim_info"] needs to be updated
+                    vdu_old_vim_info = task["params"]["vdu_vim_info"].get(
+                        ro_task["target_id"]
+                    )
+
+                    # Refresh VM to get new vim_info
+                    vm_to_refresh_list = [vim_vm_id]
+                    vim_dict = target_vim.refresh_vms_status(vm_to_refresh_list)
+                    refreshed_vim_info = vim_dict[vim_vm_id]
+
+                    if refreshed_vim_info.get("interfaces"):
+                        for old_iface in vdu_old_vim_info.get("interfaces"):
+                            iface = next(
+                                (
+                                    iface
+                                    for iface in refreshed_vim_info["interfaces"]
+                                    if old_iface["vim_interface_id"]
+                                    == iface["vim_interface_id"]
+                                ),
+                                None,
+                            )
+                            vim_interfaces.append(iface)
+
+            ro_vim_item_update = {
+                "vim_id": vim_vm_id,
+                "vim_status": "ACTIVE",
+                "created": created,
+                "created_items": created_items,
+                "vim_details": None,
+                "vim_message": None,
+            }
+
+            if refreshed_vim_info and refreshed_vim_info.get("status") not in (
+                "ERROR",
+                "VIM_ERROR",
+            ):
+                ro_vim_item_update["vim_details"] = refreshed_vim_info["vim_info"]
+
+            if vim_interfaces:
+                ro_vim_item_update["interfaces"] = vim_interfaces
+
+            self.logger.debug(
+                "task={} {} vm-migration done".format(task_id, ro_task["target_id"])
+            )
+
+            return "DONE", ro_vim_item_update, db_task_update
+
+        except (vimconn.VimConnException, NsWorkerException) as e:
+            self.logger.error(
+                "task={} vim={} VM Migration:"
+                " {}".format(task_id, ro_task["target_id"], e)
+            )
+            ro_vim_item_update = {
+                "vim_status": "VIM_ERROR",
+                "created": created,
+                "vim_message": str(e),
+            }
+
+            return "FAILED", ro_vim_item_update, db_task_update
+
+
 class NsWorker(threading.Thread):
     REFRESH_BUILD = 5  # 5 seconds
     REFRESH_ACTIVE = 60  # 1 minute
@@ -1318,6 +1399,9 @@ class NsWorker(threading.Thread):
                 self.db, self.my_vims, self.db_vims, self.logger
             ),
             "affinity-or-anti-affinity-group": VimInteractionAffinityGroup(
+                self.db, self.my_vims, self.db_vims, self.logger
+            ),
+            "migrate": VimInteractionMigration(
                 self.db, self.my_vims, self.db_vims, self.logger
             ),
         }

@@ -2000,6 +2000,16 @@ class vimconnector(vimconn.VimConnector):
         else:
             return self._default_admin_user
 
+    def migrate_instance(self, vm_id, compute_host=None):
+        """
+        Migrate a vdu
+        param:
+            vm_id: ID of an instance
+            compute_host: Host to migrate the vdu to
+        """
+        # TODO: Add support for migration
+        raise vimconn.VimConnNotImplemented("Not implemented")
+
 
 if __name__ == "__main__":
     # Init logger

@@ -1634,3 +1634,13 @@ class vimconnector(vimconn.VimConnector):
             )
             print(text)
             return -vim_response.status_code, text
+
+    def migrate_instance(self, vm_id, compute_host=None):
+        """
+        Migrate a vdu
+        param:
+            vm_id: ID of an instance
+            compute_host: Host to migrate the vdu to
+        """
+        # TODO: Add support for migration
+        raise vimconn.VimConnNotImplemented("Not implemented")

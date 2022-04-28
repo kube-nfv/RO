@@ -32,6 +32,7 @@ to the VIM connector's SFC resources as follows:
 
 import copy
 from http.client import HTTPException
+import json
 import logging
 from pprint import pformat
 import random
@@ -3556,5 +3557,164 @@ class vimconnector(vimconn.VimConnector):
             ksExceptions.ClientException,
             nvExceptions.ClientException,
             ConnectionError,
+        ) as e:
+            self._format_exception(e)
+
+    def get_vdu_state(self, vm_id):
+        """
+        Getting the state of a vdu
+        param:
+            vm_id: ID of an instance
+        """
+        self.logger.debug("Getting the status of VM")
+        self.logger.debug("VIM VM ID %s", vm_id)
+        self._reload_connection()
+        server = self.nova.servers.find(id=vm_id)
+        server_dict = server.to_dict()
+        vdu_data = [
+            server_dict["status"],
+            server_dict["flavor"]["id"],
+            server_dict["OS-EXT-SRV-ATTR:host"],
+            server_dict["OS-EXT-AZ:availability_zone"],
+        ]
+        self.logger.debug("vdu_data %s", vdu_data)
+        return vdu_data
+
+    def check_compute_availability(self, host, server_flavor_details):
+        self._reload_connection()
+        hypervisor_search = self.nova.hypervisors.search(
+            hypervisor_match=host, servers=True
+        )
+        for hypervisor in hypervisor_search:
+            hypervisor_id = hypervisor.to_dict()["id"]
+            hypervisor_details = self.nova.hypervisors.get(hypervisor=hypervisor_id)
+            hypervisor_dict = hypervisor_details.to_dict()
+            hypervisor_temp = json.dumps(hypervisor_dict)
+            hypervisor_json = json.loads(hypervisor_temp)
+            resources_available = [
+                hypervisor_json["free_ram_mb"],
+                hypervisor_json["disk_available_least"],
+                hypervisor_json["vcpus"] - hypervisor_json["vcpus_used"],
+            ]
+            compute_available = all(
+                x > y for x, y in zip(resources_available, server_flavor_details)
+            )
+            if compute_available:
+                return host
+
+    def check_availability_zone(
+        self, old_az, server_flavor_details, old_host, host=None
+    ):
+        self._reload_connection()
+        az_check = {"zone_check": False, "compute_availability": None}
+        aggregates_list = self.nova.aggregates.list()
+        for aggregate in aggregates_list:
+            aggregate_details = aggregate.to_dict()
+            aggregate_temp = json.dumps(aggregate_details)
+            aggregate_json = json.loads(aggregate_temp)
+            if aggregate_json["availability_zone"] == old_az:
+                hosts_list = aggregate_json["hosts"]
+                if host is not None:
+                    if host in hosts_list:
+                        az_check["zone_check"] = True
+                        available_compute_id = self.check_compute_availability(
+                            host, server_flavor_details
+                        )
+                        if available_compute_id is not None:
+                            az_check["compute_availability"] = available_compute_id
+                else:
+                    for check_host in hosts_list:
+                        if check_host != old_host:
+                            available_compute_id = self.check_compute_availability(
+                                check_host, server_flavor_details
+                            )
+                            if available_compute_id is not None:
+                                az_check["zone_check"] = True
+                                az_check["compute_availability"] = available_compute_id
+                                break
+                    else:
+                        az_check["zone_check"] = True
+        return az_check
+
+    def migrate_instance(self, vm_id, compute_host=None):
+        """
+        Migrate a vdu
+        param:
+            vm_id: ID of an instance
+            compute_host: Host to migrate the vdu to
+        """
+        self._reload_connection()
+        vm_state = False
+        instance_state = self.get_vdu_state(vm_id)
+        server_flavor_id = instance_state[1]
+        server_hypervisor_name = instance_state[2]
+        server_availability_zone = instance_state[3]
+        try:
+            server_flavor = self.nova.flavors.find(id=server_flavor_id).to_dict()
+            server_flavor_details = [
+                server_flavor["ram"],
+                server_flavor["disk"],
+                server_flavor["vcpus"],
+            ]
+            if compute_host == server_hypervisor_name:
+                raise vimconn.VimConnException(
+                    "Unable to migrate instance '{}' to the same host '{}'".format(
+                        vm_id, compute_host
+                    ),
+                    http_code=vimconn.HTTP_Bad_Request,
+                )
+            az_status = self.check_availability_zone(
+                server_availability_zone,
+                server_flavor_details,
+                server_hypervisor_name,
+                compute_host,
+            )
+            availability_zone_check = az_status["zone_check"]
+            available_compute_id = az_status.get("compute_availability")
+
+            if availability_zone_check is False:
+                raise vimconn.VimConnException(
+                    "Unable to migrate instance '{}' to a different availability zone".format(
+                        vm_id
+                    ),
+                    http_code=vimconn.HTTP_Bad_Request,
+                )
+            if available_compute_id is not None:
+                self.nova.servers.live_migrate(
+                    server=vm_id,
+                    host=available_compute_id,
+                    block_migration=True,
+                    disk_over_commit=False,
+                )
+                state = "MIGRATING"
+                changed_compute_host = ""
+                if state == "MIGRATING":
+                    vm_state = self.__wait_for_vm(vm_id, "ACTIVE")
+                    changed_compute_host = self.get_vdu_state(vm_id)[2]
+                if vm_state and changed_compute_host == available_compute_id:
+                    self.logger.debug(
+                        "Instance '{}' migrated to the new compute host '{}'".format(
+                            vm_id, changed_compute_host
+                        )
+                    )
+                    return state, available_compute_id
+                else:
+                    raise vimconn.VimConnException(
+                        "Migration Failed. Instance '{}' not moved to the new host {}".format(
+                            vm_id, available_compute_id
+                        ),
+                        http_code=vimconn.HTTP_Bad_Request,
+                    )
+            else:
+                raise vimconn.VimConnException(
+                    "Compute '{}' not available or does not have enough resources to migrate the instance".format(
+                        available_compute_id
+                    ),
+                    http_code=vimconn.HTTP_Bad_Request,
+                )
+        except (
+            nvExceptions.BadRequest,
+            nvExceptions.ClientException,
+            nvExceptions.NotFound,
         ) as e:
             self._format_exception(e)

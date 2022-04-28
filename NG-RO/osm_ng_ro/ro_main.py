@@ -109,6 +109,16 @@ valid_url_methods = {
                     },
                 },
             },
+            "migrate": {
+                "<ID>": {
+                    "METHODS": ("POST"),
+                    "ROLE_PERMISSION": "migrate:id:",
+                    "<ID>": {
+                        "METHODS": ("GET",),
+                        "ROLE_PERMISSION": "migrate:id:id:",
+                    },
+                },
+            },
         }
     },
 }
@@ -162,6 +172,7 @@ class Server(object):
             "deploy:id:id:cancel:post": self.ns.cancel,
             "recreate:id:post": self.ns.recreate,
             "recreate:id:id:get": self.ns.recreate_status,
+            "migrate:id:post": self.ns.migrate,
         }
 
     def _format_in(self, kwargs):
