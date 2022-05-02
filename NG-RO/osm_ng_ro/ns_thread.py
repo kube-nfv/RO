@@ -887,6 +887,48 @@ class VimInteractionAffinityGroup(VimInteractionBase):
             return "FAILED", ro_vim_item_update
 
 
+class VimInteractionUpdateVdu(VimInteractionBase):
+    def exec(self, ro_task, task_index, task_depends):
+        task = ro_task["tasks"][task_index]
+        task_id = task["task_id"]
+        db_task_update = {"retries": 0}
+        created = False
+        created_items = {}
+        target_vim = self.my_vims[ro_task["target_id"]]
+
+        try:
+            if task.get("params"):
+                vim_vm_id = task["params"].get("vim_vm_id")
+                action = task["params"].get("action")
+                context = {action: action}
+                target_vim.action_vminstance(vim_vm_id, context)
+                # created = True
+            ro_vim_item_update = {
+                "vim_id": vim_vm_id,
+                "vim_status": "DONE",
+                "created": created,
+                "created_items": created_items,
+                "vim_details": None,
+                "vim_message": None,
+            }
+            self.logger.debug(
+                "task={} {} vm-migration done".format(task_id, ro_task["target_id"])
+            )
+            return "DONE", ro_vim_item_update, db_task_update
+        except (vimconn.VimConnException, NsWorkerException) as e:
+            self.logger.error(
+                "task={} vim={} VM Migration:"
+                " {}".format(task_id, ro_task["target_id"], e)
+            )
+            ro_vim_item_update = {
+                "vim_status": "VIM_ERROR",
+                "created": created,
+                "vim_message": str(e),
+            }
+
+            return "FAILED", ro_vim_item_update, db_task_update
+
+
 class VimInteractionSdnNet(VimInteractionBase):
     @staticmethod
     def _match_pci(port_pci, mapping):
@@ -1402,6 +1444,9 @@ class NsWorker(threading.Thread):
                 self.db, self.my_vims, self.db_vims, self.logger
             ),
             "sdn_net": VimInteractionSdnNet(
+                self.db, self.my_vims, self.db_vims, self.logger
+            ),
+            "update": VimInteractionUpdateVdu(
                 self.db, self.my_vims, self.db_vims, self.logger
             ),
             "affinity-or-anti-affinity-group": VimInteractionAffinityGroup(

@@ -83,6 +83,30 @@ valid_url_methods = {
     },
     "ns": {
         "v1": {
+            "rebuild": {
+                "METHODS": ("POST",),
+                "ROLE_PERMISSION": "rebuild:",
+                "<ID>": {
+                    "METHODS": ("POST",),
+                    "ROLE_PERMISSION": "rebuild:id:",
+                },
+            },
+            "start": {
+                "METHODS": ("POST",),
+                "ROLE_PERMISSION": "start:",
+                "<ID>": {
+                    "METHODS": ("POST",),
+                    "ROLE_PERMISSION": "start:id:",
+                },
+            },
+            "stop": {
+                "METHODS": ("POST",),
+                "ROLE_PERMISSION": "stop:",
+                "<ID>": {
+                    "METHODS": ("POST",),
+                    "ROLE_PERMISSION": "stop:id:",
+                },
+            },
             "deploy": {
                 "METHODS": ("GET",),
                 "ROLE_PERMISSION": "deploy:",
@@ -170,6 +194,9 @@ class Server(object):
             "deploy:id:delete": self.ns.delete,
             "deploy:id:id:get": self.ns.status,
             "deploy:id:id:cancel:post": self.ns.cancel,
+            "rebuild:id:post": self.ns.rebuild_start_stop,
+            "start:id:post": self.ns.rebuild_start_stop,
+            "stop:id:post": self.ns.rebuild_start_stop,
             "recreate:id:post": self.ns.recreate,
             "recreate:id:id:get": self.ns.recreate_status,
             "migrate:id:post": self.ns.migrate,

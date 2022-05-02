@@ -2663,3 +2663,51 @@ class TestNs(unittest.TestCase):
 
     def test__process_vdu_params(self):
         pass
+
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test__rebuild_start_stop_task(self, assign_vim):
+        self.ns = Ns()
+        extra_dict = {}
+        actions = ["start", "stop", "rebuild"]
+        vdu_id = "bb9c43f9-10a2-4569-a8a8-957c3528b6d1"
+        vnf_id = "665b4165-ce24-4320-bf19-b9a45bade49f"
+        vdu_index = "0"
+        action_id = "bb937f49-3870-4169-b758-9732e1ff40f3"
+        nsr_id = "993166fe-723e-4680-ac4b-b1af2541ae31"
+        task_index = 0
+        target_vim = "vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+        t = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.bb9c43f9-10a2-4569-a8a8-957c3528b6d1"
+        for action in actions:
+            expected_result = {
+                "target_id": "vim:f9f370ac-0d44-41a7-9000-457f2332bc35",
+                "action_id": "bb937f49-3870-4169-b758-9732e1ff40f3",
+                "nsr_id": "993166fe-723e-4680-ac4b-b1af2541ae31",
+                "task_id": "bb937f49-3870-4169-b758-9732e1ff40f3:0",
+                "status": "SCHEDULED",
+                "action": "EXEC",
+                "item": "update",
+                "target_record": "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0",
+                "target_record_id": t,
+                "params": {
+                    "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+                    "action": action,
+                },
+            }
+            extra_dict["params"] = {
+                "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+                "action": action,
+            }
+            task = self.ns.rebuild_start_stop_task(
+                vdu_id,
+                vnf_id,
+                vdu_index,
+                action_id,
+                nsr_id,
+                task_index,
+                target_vim,
+                extra_dict,
+            )
+            self.assertEqual(task.get("action_id"), action_id)
+            self.assertEqual(task.get("nsr_id"), nsr_id)
+            self.assertEqual(task.get("target_id"), target_vim)
+            self.assertDictEqual(task, expected_result)

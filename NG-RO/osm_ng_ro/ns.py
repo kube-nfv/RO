@@ -2379,6 +2379,99 @@ class Ns(object):
 
         return None, None, True
 
+    def rebuild_start_stop_task(
+        self,
+        vdu_id,
+        vnf_id,
+        vdu_index,
+        action_id,
+        nsr_id,
+        task_index,
+        target_vim,
+        extra_dict,
+    ):
+        self._assign_vim(target_vim)
+        target_record = "vnfrs:{}:vdur.{}".format(vnf_id, vdu_index)
+        target_record_id = "vnfrs:{}:vdur.{}".format(vnf_id, vdu_id)
+        deployment_info = {
+            "action_id": action_id,
+            "nsr_id": nsr_id,
+            "task_index": task_index,
+        }
+
+        task = Ns._create_task(
+            deployment_info=deployment_info,
+            target_id=target_vim,
+            item="update",
+            action="EXEC",
+            target_record=target_record,
+            target_record_id=target_record_id,
+            extra_dict=extra_dict,
+        )
+        return task
+
+    def rebuild_start_stop(
+        self, session, action_dict, version, nsr_id, *args, **kwargs
+    ):
+        task_index = 0
+        extra_dict = {}
+        now = time()
+        action_id = action_dict.get("action_id", str(uuid4()))
+        step = ""
+        logging_text = "Task deploy nsr_id={} action_id={} ".format(nsr_id, action_id)
+        self.logger.debug(logging_text + "Enter")
+
+        action = list(action_dict.keys())[0]
+        task_dict = action_dict.get(action)
+        vim_vm_id = action_dict.get(action).get("vim_vm_id")
+
+        if action_dict.get("stop"):
+            action = "shutoff"
+        db_new_tasks = []
+        try:
+            step = "lock the operation & do task creation"
+            with self.write_lock:
+                extra_dict["params"] = {
+                    "vim_vm_id": vim_vm_id,
+                    "action": action,
+                }
+                task = self.rebuild_start_stop_task(
+                    task_dict["vdu_id"],
+                    task_dict["vnf_id"],
+                    task_dict["vdu_index"],
+                    action_id,
+                    nsr_id,
+                    task_index,
+                    task_dict["target_vim"],
+                    extra_dict,
+                )
+                db_new_tasks.append(task)
+                step = "upload Task to db"
+                self.upload_all_tasks(
+                    db_new_tasks=db_new_tasks,
+                    now=now,
+                )
+                self.logger.debug(
+                    logging_text + "Exit. Created {} tasks".format(len(db_new_tasks))
+                )
+                return (
+                    {"status": "ok", "nsr_id": nsr_id, "action_id": action_id},
+                    action_id,
+                    True,
+                )
+        except Exception as e:
+            if isinstance(e, (DbException, NsException)):
+                self.logger.error(
+                    logging_text + "Exit Exception while '{}': {}".format(step, e)
+                )
+            else:
+                e = traceback_format_exc()
+                self.logger.critical(
+                    logging_text + "Exit Exception while '{}': {}".format(step, e),
+                    exc_info=True,
+                )
+            raise NsException(e)
+
     def get_deploy(self, session, indata, version, nsr_id, action_id, *args, **kwargs):
         nsrs = self.db.get_list("nsrs", {})
         return_data = []

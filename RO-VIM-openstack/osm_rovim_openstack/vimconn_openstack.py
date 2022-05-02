@@ -2519,12 +2519,29 @@ class vimconnector(vimconn.VimConnector):
                         server.resume()
                     elif server.status == "SHUTOFF":
                         server.start()
+                    else:
+                        self.logger.debug(
+                            "ERROR : Instance is not in SHUTOFF/PAUSE/SUSPEND state"
+                        )
+                        raise vimconn.VimConnException(
+                            "Cannot 'start' instance while it is in active state",
+                            http_code=vimconn.HTTP_Bad_Request,
+                        )
+
             elif "pause" in action_dict:
                 server.pause()
             elif "resume" in action_dict:
                 server.resume()
             elif "shutoff" in action_dict or "shutdown" in action_dict:
-                server.stop()
+                self.logger.debug("server status %s", server.status)
+                if server.status == "ACTIVE":
+                    server.stop()
+                else:
+                    self.logger.debug("ERROR: VM is not in Active state")
+                    raise vimconn.VimConnException(
+                        "VM is not in active state, stop operation is not allowed",
+                        http_code=vimconn.HTTP_Bad_Request,
+                    )
             elif "forceOff" in action_dict:
                 server.stop()  # TODO
             elif "terminate" in action_dict:

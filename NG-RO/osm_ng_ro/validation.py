@@ -112,6 +112,22 @@ deploy_schema = {
     "additionalProperties": False,
 }
 
+rebuild_schema = {
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "vm_rebuild": {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "vdu-id": id_schema,
+                "vim_name": name_schema,
+                "member-vnf-index": name_schema,
+            },
+        },
+        "additionalProperties": True,
+    },
+}
+
 
 class ValidationError(Exception):
     def __init__(self, message, http_code=HTTPStatus.UNPROCESSABLE_ENTITY):
