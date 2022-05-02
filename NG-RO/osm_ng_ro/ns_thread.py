@@ -1849,7 +1849,9 @@ class NsWorker(threading.Thread):
                     needed_delete = False
 
             if needed_delete:
-                self.logger.warning("Deleting ro_task={} task_index={}".format(ro_task, task_index))
+                self.logger.warning(
+                    "Deleting ro_task={} task_index={}".format(ro_task, task_index)
+                )
                 return self.item2class[my_task["item"]].delete(ro_task, task_index)
             else:
                 return "SUPERSEDED", None
@@ -2054,7 +2056,11 @@ class NsWorker(threading.Thread):
                                 dependency_task = dependency_ro_task["tasks"][
                                     dependency_task_index
                                 ]
-                                self.logger.warning("dependency_ro_task={} dependency_task_index={}".format(dependency_ro_task, dependency_task_index))
+                                self.logger.warning(
+                                    "dependency_ro_task={} dependency_task_index={}".format(
+                                        dependency_ro_task, dependency_task_index
+                                    )
+                                )
 
                                 if dependency_task["status"] == "SCHEDULED":
                                     dependency_not_completed = True
@@ -2091,7 +2097,11 @@ class NsWorker(threading.Thread):
                                 ] = dependency_ro_task["vim_info"]["vim_id"]
 
                             if dependency_not_completed:
-                                self.logger.warning("DEPENDENCY NOT COMPLETED {}".format(dependency_ro_task["vim_info"]["vim_id"]))
+                                self.logger.warning(
+                                    "DEPENDENCY NOT COMPLETED {}".format(
+                                        dependency_ro_task["vim_info"]["vim_id"]
+                                    )
+                                )
                                 # TODO set at vim_info.vim_details that it is waiting
                                 continue
 

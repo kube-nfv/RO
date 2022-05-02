@@ -19,8 +19,6 @@
 from http import HTTPStatus
 import logging
 from random import choice as random_choice
-
-import yaml
 from threading import Lock
 from time import time
 from traceback import format_exc as traceback_format_exc
@@ -51,6 +49,7 @@ from osm_common.fsbase import FsBase, FsException
 from osm_common.msgbase import MsgException
 from osm_ng_ro.ns_thread import deep_get, NsWorker, NsWorkerException
 from osm_ng_ro.validation import deploy_schema, validate_input
+import yaml
 
 __author__ = "Alfonso Tierno <alfonso.tiernosepulveda@telefonica.com>"
 min_common_version = "0.1.16"
@@ -1195,7 +1194,7 @@ class Ns(object):
         """
         vnfr = kwargs.get("vnfr")
         vdu2cloud_init = kwargs.get("vdu2cloud_init")
-        #logger = kwargs.get("logger")
+        # logger = kwargs.get("logger")
         db = kwargs.get("db")
         fs = kwargs.get("fs")
         ro_nsr_public_key = kwargs.get("ro_nsr_public_key")
@@ -1232,7 +1231,11 @@ class Ns(object):
             }
             existing_ifaces = existing_vdu["vim_info"][target_id].get("interfaces", [])
             net_id = next(
-                (i["vim_net_id"] for i in existing_ifaces if i["ip_address"] == interface["ip-address"]),
+                (
+                    i["vim_net_id"]
+                    for i in existing_ifaces
+                    if i["ip_address"] == interface["ip-address"]
+                ),
                 None,
             )
 
@@ -1311,8 +1314,13 @@ class Ns(object):
             affinity_group = {}
             for affinity_group_id in existing_vdu["affinity-or-anti-affinity-group-id"]:
                 for group in db_nsr.get("affinity-or-anti-affinity-group"):
-                    if group["id"] == affinity_group_id and group["vim_info"][target_id].get("vim_id", None) is not None:
-                        affinity_group["affinity_group_id"] = group["vim_info"][target_id].get("vim_id", None)
+                    if (
+                        group["id"] == affinity_group_id
+                        and group["vim_info"][target_id].get("vim_id", None) is not None
+                    ):
+                        affinity_group["affinity_group_id"] = group["vim_info"][
+                            target_id
+                        ].get("vim_id", None)
                         affinity_group_list.append(affinity_group)
 
         extra_dict["params"] = {
@@ -1658,9 +1666,7 @@ class Ns(object):
                 extra_dict=change.get("extra_dict", None),
             )
 
-            self.logger.warning(
-                "ns.define_all_tasks task={}".format(task)
-            )
+            self.logger.warning("ns.define_all_tasks task={}".format(task))
             tasks_by_target_record_id[change["target_record_id"]] = task
             db_new_tasks.append(task)
 
@@ -1746,11 +1752,13 @@ class Ns(object):
             self.logger.debug("Updating database, Creating ro_tasks")
             db_ro_task = Ns._create_ro_task(target_id, db_task)
 
-            # If DELETE task: the associated created items shoud be removed 
+            # If DELETE task: the associated created items should be removed
             # (except persistent volumes):
             if action == "DELETE":
                 db_ro_task["vim_info"]["created"] = True
-                db_ro_task["vim_info"]["created_items"] = db_task.get("created_items", {})
+                db_ro_task["vim_info"]["created_items"] = db_task.get(
+                    "created_items", {}
+                )
                 db_ro_task["vim_info"]["vim_id"] = db_task.get("vim_id", None)
 
             nb_ro_tasks += 1
@@ -1837,7 +1845,10 @@ class Ns(object):
                 item_index = 0
                 existing_instance = None
                 for instance in existing_vnf.get("vdur", None):
-                    if (instance["vdu-name"] == vdu_name and instance["count-index"] == count_index):
+                    if (
+                        instance["vdu-name"] == vdu_name
+                        and instance["count-index"] == count_index
+                    ):
                         existing_instance = instance
                         break
                     else:
@@ -1992,7 +2003,7 @@ class Ns(object):
                 )
 
                 # Delete all ro_tasks registered for the targets vdurs (target_record)
-                # If task of type CREATE exist then vim will try to get info form deleted VMs. 
+                # If task of type CREATE exist then vim will try to get info form deleted VMs.
                 # So remove all task related to target record.
                 ro_tasks = self.db.get_list("ro_tasks", {"tasks.nsr_id": nsr_id})
                 for change in changes_list:
@@ -2007,7 +2018,7 @@ class Ns(object):
                                     },
                                     fail_on_empty=False,
                                 )
-                
+
                 step = "Updating database, Appending tasks to ro_tasks"
                 self.upload_recreate_tasks(
                     db_new_tasks=db_new_tasks,
