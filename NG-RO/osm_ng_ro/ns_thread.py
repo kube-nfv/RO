@@ -1402,6 +1402,75 @@ class VimInteractionMigration(VimInteractionBase):
             return "FAILED", ro_vim_item_update, db_task_update
 
 
+class VimInteractionResize(VimInteractionBase):
+    def exec(self, ro_task, task_index, task_depends):
+        task = ro_task["tasks"][task_index]
+        task_id = task["task_id"]
+        db_task_update = {"retries": 0}
+        created = False
+        target_flavor_uuid = None
+        created_items = {}
+        refreshed_vim_info = {}
+        target_vim = self.my_vims[ro_task["target_id"]]
+
+        try:
+            if task.get("params"):
+                vim_vm_id = task["params"].get("vim_vm_id")
+                flavor_dict = task["params"].get("flavor_dict")
+                self.logger.info("flavor_dict %s", flavor_dict)
+
+                try:
+                    target_flavor_uuid = target_vim.get_flavor_id_from_data(flavor_dict)
+                except Exception as e:
+                    self.logger.info("Cannot find any flavor matching  %s.", str(e))
+                    try:
+                        target_flavor_uuid = target_vim.new_flavor(flavor_dict)
+                    except Exception as e:
+                        self.logger.error("Error creating flavor at VIM  %s.", str(e))
+
+                if target_flavor_uuid is not None:
+                    resized_status = target_vim.resize_instance(
+                        vim_vm_id, target_flavor_uuid
+                    )
+
+                    if resized_status:
+                        # Refresh VM to get new vim_info
+                        vm_to_refresh_list = [vim_vm_id]
+                        vim_dict = target_vim.refresh_vms_status(vm_to_refresh_list)
+                        refreshed_vim_info = vim_dict[vim_vm_id]
+
+            ro_vim_item_update = {
+                "vim_id": vim_vm_id,
+                "vim_status": "DONE",
+                "created": created,
+                "created_items": created_items,
+                "vim_details": None,
+                "vim_message": None,
+            }
+
+            if refreshed_vim_info and refreshed_vim_info.get("status") not in (
+                "ERROR",
+                "VIM_ERROR",
+            ):
+                ro_vim_item_update["vim_details"] = refreshed_vim_info["vim_info"]
+
+            self.logger.debug(
+                "task={} {} resize done".format(task_id, ro_task["target_id"])
+            )
+            return "DONE", ro_vim_item_update, db_task_update
+        except (vimconn.VimConnException, NsWorkerException) as e:
+            self.logger.error(
+                "task={} vim={} Resize:" " {}".format(task_id, ro_task["target_id"], e)
+            )
+            ro_vim_item_update = {
+                "vim_status": "VIM_ERROR",
+                "created": created,
+                "vim_message": str(e),
+            }
+
+            return "FAILED", ro_vim_item_update, db_task_update
+
+
 class NsWorker(threading.Thread):
     REFRESH_BUILD = 5  # 5 seconds
     REFRESH_ACTIVE = 60  # 1 minute
@@ -1453,6 +1522,9 @@ class NsWorker(threading.Thread):
                 self.db, self.my_vims, self.db_vims, self.logger
             ),
             "migrate": VimInteractionMigration(
+                self.db, self.my_vims, self.db_vims, self.logger
+            ),
+            "verticalscale": VimInteractionResize(
                 self.db, self.my_vims, self.db_vims, self.logger
             ),
         }

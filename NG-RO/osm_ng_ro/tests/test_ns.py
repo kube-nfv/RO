@@ -2711,3 +2711,48 @@ class TestNs(unittest.TestCase):
             self.assertEqual(task.get("nsr_id"), nsr_id)
             self.assertEqual(task.get("target_id"), target_vim)
             self.assertDictEqual(task, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test_verticalscale_task(self, assign_vim):
+        self.ns = Ns()
+        extra_dict = {}
+        vdu_index = "1"
+        action_id = "bb937f49-3870-4169-b758-9732e1ff40f3"
+        nsr_id = "993166fe-723e-4680-ac4b-b1af2541ae31"
+        task_index = 1
+        target_record_id = (
+            "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:"
+            "vdur.bb9c43f9-10a2-4569-a8a8-957c3528b6d1"
+        )
+
+        expected_result = {
+            "target_id": "vim:f9f370ac-0d44-41a7-9000-457f2332bc35",
+            "action_id": "bb937f49-3870-4169-b758-9732e1ff40f3",
+            "nsr_id": "993166fe-723e-4680-ac4b-b1af2541ae31",
+            "task_id": "bb937f49-3870-4169-b758-9732e1ff40f3:1",
+            "status": "SCHEDULED",
+            "action": "EXEC",
+            "item": "verticalscale",
+            "target_record": "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.1",
+            "target_record_id": target_record_id,
+            "params": {
+                "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+                "flavor_dict": "flavor_dict",
+            },
+        }
+        vdu = {
+            "id": "bb9c43f9-10a2-4569-a8a8-957c3528b6d1",
+            "vim_info": {
+                "vim:f9f370ac-0d44-41a7-9000-457f2332bc35": {"interfaces": []}
+            },
+        }
+        vnf = {"_id": "665b4165-ce24-4320-bf19-b9a45bade49f"}
+        extra_dict["params"] = {
+            "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+            "flavor_dict": "flavor_dict",
+        }
+        task = self.ns.verticalscale_task(
+            vdu, vnf, vdu_index, action_id, nsr_id, task_index, extra_dict
+        )
+
+        self.assertDictEqual(task, expected_result)

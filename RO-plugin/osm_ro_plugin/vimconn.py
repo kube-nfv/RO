@@ -1098,6 +1098,15 @@ class VimConnector:
         """
         raise VimConnNotImplemented("Should have implemented this")
 
+    def resize_instance(self, vm_id, flavor_id=None):
+        """
+        resize a vdu
+        param:
+            vm_id: ID of an instance
+            flavor_id: flavor_id to resize the vdu to
+        """
+        raise VimConnNotImplemented("Should have implemented this")
+
     # NOT USED METHODS in current version. Deprecated
     @deprecated
     def host_vim2gui(self, host, server_dict):

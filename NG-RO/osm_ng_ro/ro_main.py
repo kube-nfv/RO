@@ -143,6 +143,16 @@ valid_url_methods = {
                     },
                 },
             },
+            "verticalscale": {
+                "<ID>": {
+                    "METHODS": ("POST"),
+                    "ROLE_PERMISSION": "verticalscale:id:",
+                    "<ID>": {
+                        "METHODS": ("GET",),
+                        "ROLE_PERMISSION": "verticalscale:id:id:",
+                    },
+                },
+            },
         }
     },
 }
@@ -200,6 +210,7 @@ class Server(object):
             "recreate:id:post": self.ns.recreate,
             "recreate:id:id:get": self.ns.recreate_status,
             "migrate:id:post": self.ns.migrate,
+            "verticalscale:id:post": self.ns.verticalscale,
         }
 
     def _format_in(self, kwargs):

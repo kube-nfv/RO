@@ -2606,3 +2606,100 @@ class Ns(object):
                     exc_info=True,
                 )
             raise NsException(e)
+
+    def verticalscale_task(
+        self, vdu, vnf, vdu_index, action_id, nsr_id, task_index, extra_dict
+    ):
+        target_vim, vim_info = next(k_v for k_v in vdu["vim_info"].items())
+        self._assign_vim(target_vim)
+        target_record = "vnfrs:{}:vdur.{}".format(vnf["_id"], vdu_index)
+        target_record_id = "vnfrs:{}:vdur.{}".format(vnf["_id"], vdu["id"])
+        deployment_info = {
+            "action_id": action_id,
+            "nsr_id": nsr_id,
+            "task_index": task_index,
+        }
+
+        task = Ns._create_task(
+            deployment_info=deployment_info,
+            target_id=target_vim,
+            item="verticalscale",
+            action="EXEC",
+            target_record=target_record,
+            target_record_id=target_record_id,
+            extra_dict=extra_dict,
+        )
+        return task
+
+    def verticalscale(self, session, indata, version, nsr_id, *args, **kwargs):
+        task_index = 0
+        extra_dict = {}
+        now = time()
+        action_id = indata.get("action_id", str(uuid4()))
+        step = ""
+        logging_text = "Task deploy nsr_id={} action_id={} ".format(nsr_id, action_id)
+        self.logger.debug(logging_text + "Enter")
+        try:
+            VnfFlavorData = indata.get("changeVnfFlavorData")
+            vnf_instance_id = VnfFlavorData["vnfInstanceId"]
+            step = "Getting vnfrs from db"
+            db_vnfr = self.db.get_one("vnfrs", {"_id": vnf_instance_id})
+            vduid = VnfFlavorData["additionalParams"]["vduid"]
+            vduCountIndex = VnfFlavorData["additionalParams"]["vduCountIndex"]
+            virtualMemory = VnfFlavorData["additionalParams"]["virtualMemory"]
+            numVirtualCpu = VnfFlavorData["additionalParams"]["numVirtualCpu"]
+            sizeOfStorage = VnfFlavorData["additionalParams"]["sizeOfStorage"]
+            flavor_dict = {
+                "name": vduid + "-flv",
+                "ram": virtualMemory,
+                "vcpus": numVirtualCpu,
+                "disk": sizeOfStorage,
+            }
+            db_new_tasks = []
+            step = "Creating Tasks for vertical scaling"
+            with self.write_lock:
+                for vdu_index, vdu in enumerate(db_vnfr["vdur"]):
+                    if (
+                        vdu["vdu-id-ref"] == vduid
+                        and vdu["count-index"] == vduCountIndex
+                    ):
+                        extra_dict["params"] = {
+                            "vim_vm_id": vdu["vim-id"],
+                            "flavor_dict": flavor_dict,
+                        }
+                        task = self.verticalscale_task(
+                            vdu,
+                            db_vnfr,
+                            vdu_index,
+                            action_id,
+                            nsr_id,
+                            task_index,
+                            extra_dict,
+                        )
+                        db_new_tasks.append(task)
+                        task_index += 1
+                        break
+                self.upload_all_tasks(
+                    db_new_tasks=db_new_tasks,
+                    now=now,
+                )
+            self.logger.debug(
+                logging_text + "Exit. Created {} tasks".format(len(db_new_tasks))
+            )
+            return (
+                {"status": "ok", "nsr_id": nsr_id, "action_id": action_id},
+                action_id,
+                True,
+            )
+        except Exception as e:
+            if isinstance(e, (DbException, NsException)):
+                self.logger.error(
+                    logging_text + "Exit Exception while '{}': {}".format(step, e)
+                )
+            else:
+                e = traceback_format_exc()
+                self.logger.critical(
+                    logging_text + "Exit Exception while '{}': {}".format(step, e),
+                    exc_info=True,
+                )
+            raise NsException(e)

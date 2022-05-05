@@ -3740,3 +3740,62 @@ class vimconnector(vimconn.VimConnector):
             nvExceptions.NotFound,
         ) as e:
             self._format_exception(e)
+
+    def resize_instance(self, vm_id, new_flavor_id):
+        """
+        For resizing the vm based on the given
+        flavor details
+        param:
+            vm_id : ID of an instance
+            new_flavor_id : Flavor id to be resized
+        Return the status of a resized instance
+        """
+        self._reload_connection()
+        self.logger.debug("resize the flavor of an instance")
+        instance_status, old_flavor_id, compute_host, az = self.get_vdu_state(vm_id)
+        old_flavor_disk = self.nova.flavors.find(id=old_flavor_id).to_dict()["disk"]
+        new_flavor_disk = self.nova.flavors.find(id=new_flavor_id).to_dict()["disk"]
+        try:
+            if instance_status == "ACTIVE" or instance_status == "SHUTOFF":
+                if old_flavor_disk > new_flavor_disk:
+                    raise nvExceptions.BadRequest(
+                        400,
+                        message="Server disk resize failed. Resize to lower disk flavor is not allowed",
+                    )
+                else:
+                    self.nova.servers.resize(server=vm_id, flavor=new_flavor_id)
+                    vm_state = self.__wait_for_vm(vm_id, "VERIFY_RESIZE")
+                    if vm_state:
+                        instance_resized_status = self.confirm_resize(vm_id)
+                        return instance_resized_status
+                    else:
+                        raise nvExceptions.BadRequest(
+                            409,
+                            message="Cannot 'resize' vm_state is in ERROR",
+                        )
+
+            else:
+                self.logger.debug("ERROR : Instance is not in ACTIVE or SHUTOFF state")
+                raise nvExceptions.BadRequest(
+                    409,
+                    message="Cannot 'resize' instance while it is in vm_state resized",
+                )
+        except (
+            nvExceptions.BadRequest,
+            nvExceptions.ClientException,
+            nvExceptions.NotFound,
+        ) as e:
+            self._format_exception(e)
+
+    def confirm_resize(self, vm_id):
+        """
+        Confirm the resize of an instance
+        param:
+            vm_id: ID of an instance
+        """
+        self._reload_connection()
+        self.nova.servers.confirm_resize(server=vm_id)
+        if self.get_vdu_state(vm_id)[0] == "VERIFY_RESIZE":
+            self.__wait_for_vm(vm_id, "ACTIVE")
+        instance_status = self.get_vdu_state(vm_id)[0]
+        return instance_status

@@ -1644,3 +1644,13 @@ class vimconnector(vimconn.VimConnector):
         """
         # TODO: Add support for migration
         raise vimconn.VimConnNotImplemented("Not implemented")
+
+    def resize_instance(self, vm_id, flavor_id=None):
+        """
+        resize a vdu
+        param:
+            vm_id: ID of an instance
+            flavor_id: flavor_id to resize the vdu to
+        """
+        # TODO: Add support for resize
+        raise vimconn.VimConnNotImplemented("Not implemented")
