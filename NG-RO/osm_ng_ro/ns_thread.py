@@ -391,6 +391,11 @@ class VimInteractionVdu(VimInteractionBase):
             vim_vm_id, created_items = target_vim.new_vminstance(**params_copy)
             interfaces = [iface["vim_id"] for iface in params_copy["net_list"]]
 
+            # add to created items previous_created_volumes (healing)
+            if task.get("previous_created_volumes"):
+                for k, v in task["previous_created_volumes"].items():
+                    created_items[k] = v
+
             ro_vim_item_update = {
                 "vim_id": vim_vm_id,
                 "vim_status": "BUILD",

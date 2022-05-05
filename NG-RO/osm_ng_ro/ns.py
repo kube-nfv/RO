@@ -1693,12 +1693,17 @@ class Ns(object):
             target_id = db_task.pop("target_id")
             common_id = db_task.get("common_id")
 
+            # Do not chek tasks with vim_status DELETED
+            # because in manual heealing there are two tasks for the same vdur:
+            #   one with vim_status deleted and the other one with the actual VM status.
+
             if common_id:
                 if self.db.set_one(
                     "ro_tasks",
                     q_filter={
                         "target_id": target_id,
                         "tasks.common_id": common_id,
+                        "vim_info.vim_status.ne": "DELETED",
                     },
                     update_dict={"to_check_at": now, "modified_at": now},
                     push={"tasks": db_task},
@@ -1711,6 +1716,7 @@ class Ns(object):
                 q_filter={
                     "target_id": target_id,
                     "tasks.target_record": db_task["target_record"],
+                    "vim_info.vim_status.ne": "DELETED",
                 },
                 update_dict={"to_check_at": now, "modified_at": now},
                 push={"tasks": db_task},
@@ -1760,6 +1766,9 @@ class Ns(object):
                 db_ro_task["vim_info"]["created_items"] = db_task.get(
                     "created_items", {}
                 )
+                db_ro_task["vim_info"]["volumes_to_hold"] = db_task.get(
+                    "volumes_to_hold", []
+                )
                 db_ro_task["vim_info"]["vim_id"] = db_task.get("vim_id", None)
 
             nb_ro_tasks += 1
@@ -1774,16 +1783,23 @@ class Ns(object):
 
     def _prepare_created_items_for_healing(
         self,
-        target_id,
-        existing_vdu,
+        nsr_id,
+        target_record,
     ):
-        # Only ports are considered because created volumes are persistent
-        ports_list = {}
-        vim_interfaces = existing_vdu["vim_info"][target_id].get("interfaces", [])
-        for iface in vim_interfaces:
-            ports_list["port:" + iface["vim_interface_id"]] = True
+        created_items = {}
+        # Get created_items from ro_task
+        ro_tasks = self.db.get_list("ro_tasks", {"tasks.nsr_id": nsr_id})
+        for ro_task in ro_tasks:
+            for task in ro_task["tasks"]:
+                if (
+                    task["target_record"] == target_record
+                    and task["action"] == "CREATE"
+                    and ro_task["vim_info"]["created_items"]
+                ):
+                    created_items = ro_task["vim_info"]["created_items"]
+                    break
 
-        return ports_list
+        return created_items
 
     def _prepare_persistent_volumes_for_healing(
         self,
@@ -1871,7 +1887,7 @@ class Ns(object):
 
                     target_record = f"{db_record}.{item_index}.vim_info.{target_vim}"
                     created_items = self._prepare_created_items_for_healing(
-                        target_vim, existing_instance
+                        nsr_id, target_record
                     )
 
                     volumes_to_hold = self._prepare_persistent_volumes_for_healing(
@@ -1926,6 +1942,20 @@ class Ns(object):
 
                     # The CREATE task depens on the DELETE task
                     extra_dict["depends_on"] = [delete_task_id]
+
+                    # Add volumes created from created_items if any
+                    # Ports should be deleted with delete task and automatically created with create task
+                    volumes = {}
+                    for k, v in created_items.items():
+                        try:
+                            k_item, _, k_id = k.partition(":")
+                            if k_item == "volume":
+                                volumes[k] = v
+                        except Exception as e:
+                            self.logger.error(
+                                "Error evaluating created item {}: {}".format(k, e)
+                            )
+                    extra_dict["previous_created_volumes"] = volumes
 
                     deployment_info = {
                         "action_id": action_id,
