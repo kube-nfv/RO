@@ -817,6 +817,7 @@ class TestVimInteractionNet(unittest.TestCase):
                     "vim_name": "test-vim",
                     "vim_status": None,
                     "vim_details": "some-details",
+                    "vim_message": None,
                     "refresh_at": None,
                 },
                 "modified_at": 1637324200.994312,
@@ -871,6 +872,7 @@ class TestVimInteractionNet(unittest.TestCase):
                     "vim_name": "test-vim",
                     "vim_status": "BUILD",
                     "vim_details": "",
+                    "vim_message": None,
                     "refresh_at": None,
                 },
                 "modified_at": 1637324200.994312,
@@ -926,6 +928,7 @@ class TestVimInteractionNet(unittest.TestCase):
                     "vim_name": "test-vim",
                     "vim_status": "BUILD",
                     "vim_details": "",
+                    "vim_message": None,
                     "refresh_at": None,
                 },
                 "modified_at": 1637324200.994312,
@@ -945,7 +948,7 @@ class TestVimInteractionNet(unittest.TestCase):
             task_status = "FAILED"
             ro_vim_item_update = {
                 "vim_status": "ERROR",
-                "vim_details": "some error message",
+                "vim_message": "some error message",
             }
             result = instance.refresh(ro_task)
             self.assertEqual(result[0], task_status)
@@ -981,6 +984,7 @@ class TestVimInteractionNet(unittest.TestCase):
                     "vim_name": "test-vim",
                     "vim_status": "BUILD",
                     "vim_details": "",
+                    "vim_message": None,
                     "refresh_at": None,
                 },
                 "modified_at": 1637324200.994312,
@@ -1025,6 +1029,7 @@ class TestVimInteractionNet(unittest.TestCase):
                     "vim_name": "test-vim",
                     "vim_status": "BUILD",
                     "vim_details": "",
+                    "vim_message": None,
                     "refresh_at": None,
                 },
                 "modified_at": 163724200.994312,
@@ -1043,7 +1048,7 @@ class TestVimInteractionNet(unittest.TestCase):
             task_status = "FAILED"
             ro_vim_item_update = {
                 "vim_status": "DELETED",
-                "vim_details": "Deleted externally",
+                "vim_message": "Deleted externally",
                 "vim_id": None,
             }
             result = instance.refresh(ro_task)
@@ -1081,6 +1086,7 @@ class TestVimInteractionNet(unittest.TestCase):
                     "vim_name": "test-vim",
                     "vim_status": "BUILD",
                     "vim_details": "",
+                    "vim_message": None,
                     "refresh_at": None,
                 },
                 "modified_at": 163724211.994312,
@@ -1240,6 +1246,7 @@ class TestVimInteractionAffinityGroup(unittest.TestCase):
                     "vim_name": "sample_affinity_group_id_3",
                     "vim_status": None,
                     "vim_details": "some-details",
+                    "vim_message": None,
                     "refresh_at": None,
                 },
             }
@@ -1250,7 +1257,7 @@ class TestVimInteractionAffinityGroup(unittest.TestCase):
             )
             result = instance.delete(ro_task, task_index)
             self.assertEqual(result[0], "DONE")
-            self.assertEqual(result[1].get("vim_details"), "DELETED")
+            self.assertEqual(result[1].get("vim_message"), "DELETED")
             self.assertEqual(result[1].get("created"), False)
             self.assertEqual(result[1].get("vim_status"), "DELETED")
 
@@ -1286,6 +1293,7 @@ class TestVimInteractionAffinityGroup(unittest.TestCase):
                     "vim_name": None,
                     "vim_status": None,
                     "vim_details": "some-details",
+                    "vim_message": None,
                     "refresh_at": None,
                 },
             }
@@ -1294,6 +1302,6 @@ class TestVimInteractionAffinityGroup(unittest.TestCase):
             self.target_vim.delete_affinity_group.return_value = ""
             result = instance.delete(ro_task, task_index)
             self.assertEqual(result[0], "DONE")
-            self.assertEqual(result[1].get("vim_details"), "DELETED")
+            self.assertEqual(result[1].get("vim_message"), "DELETED")
             self.assertEqual(result[1].get("created"), False)
             self.assertEqual(result[1].get("vim_status"), "DELETED")

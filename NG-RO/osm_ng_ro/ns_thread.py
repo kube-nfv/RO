@@ -210,6 +210,7 @@ class VimInteractionNet(VimInteractionBase):
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,
+                "vim_message": None,
             }
             self.logger.debug(
                 "task={} {} new-net={} created={}".format(
@@ -225,7 +226,7 @@ class VimInteractionNet(VimInteractionBase):
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
                 "created": created,
-                "vim_details": str(e),
+                "vim_message": str(e),
             }
 
             return "FAILED", ro_vim_item_update
@@ -265,11 +266,11 @@ class VimInteractionNet(VimInteractionBase):
             ro_vim_item_update["vim_name"] = vim_info.get("name")
 
         if vim_info["status"] in ("ERROR", "VIM_ERROR"):
-            if ro_task["vim_info"]["vim_details"] != vim_info.get("error_msg"):
-                ro_vim_item_update["vim_details"] = vim_info.get("error_msg")
+            if ro_task["vim_info"]["vim_message"] != vim_info.get("error_msg"):
+                ro_vim_item_update["vim_message"] = vim_info.get("error_msg")
         elif vim_info["status"] == "DELETED":
             ro_vim_item_update["vim_id"] = None
-            ro_vim_item_update["vim_details"] = "Deleted externally"
+            ro_vim_item_update["vim_message"] = "Deleted externally"
         else:
             if ro_task["vim_info"]["vim_details"] != vim_info["vim_info"]:
                 ro_vim_item_update["vim_details"] = vim_info["vim_info"]
@@ -281,7 +282,7 @@ class VimInteractionNet(VimInteractionBase):
                     ro_task["target_id"],
                     vim_id,
                     ro_vim_item_update.get("vim_status"),
-                    ro_vim_item_update.get("vim_details")
+                    ro_vim_item_update.get("vim_message")
                     if ro_vim_item_update.get("vim_status") != "ACTIVE"
                     else "",
                 )
@@ -296,7 +297,7 @@ class VimInteractionNet(VimInteractionBase):
         ro_vim_item_update_ok = {
             "vim_status": "DELETED",
             "created": False,
-            "vim_details": "DELETED",
+            "vim_message": "DELETED",
             "vim_id": None,
         }
 
@@ -307,7 +308,7 @@ class VimInteractionNet(VimInteractionBase):
                     net_vim_id, ro_task["vim_info"]["created_items"]
                 )
         except vimconn.VimConnNotFoundException:
-            ro_vim_item_update_ok["vim_details"] = "already deleted"
+            ro_vim_item_update_ok["vim_message"] = "already deleted"
         except vimconn.VimConnException as e:
             self.logger.error(
                 "ro_task={} vim={} del-net={}: {}".format(
@@ -316,7 +317,7 @@ class VimInteractionNet(VimInteractionBase):
             )
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
-                "vim_details": "Error while deleting: {}".format(e),
+                "vim_message": "Error while deleting: {}".format(e),
             }
 
             return "FAILED", ro_vim_item_update
@@ -326,7 +327,7 @@ class VimInteractionNet(VimInteractionBase):
                 task_id,
                 ro_task["target_id"],
                 net_vim_id,
-                ro_vim_item_update_ok.get("vim_details", ""),
+                ro_vim_item_update_ok.get("vim_message", ""),
             )
         )
 
@@ -395,6 +396,7 @@ class VimInteractionVdu(VimInteractionBase):
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,
+                "vim_message": None,
                 "interfaces_vim_ids": interfaces,
                 "interfaces": [],
             }
@@ -412,7 +414,7 @@ class VimInteractionVdu(VimInteractionBase):
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
                 "created": created,
-                "vim_details": str(e),
+                "vim_message": str(e),
             }
 
             return "FAILED", ro_vim_item_update
@@ -424,7 +426,7 @@ class VimInteractionVdu(VimInteractionBase):
         ro_vim_item_update_ok = {
             "vim_status": "DELETED",
             "created": False,
-            "vim_details": "DELETED",
+            "vim_message": "DELETED",
             "vim_id": None,
         }
 
@@ -442,7 +444,7 @@ class VimInteractionVdu(VimInteractionBase):
                     ro_task["vim_info"].get("volumes_to_hold", []),
                 )
         except vimconn.VimConnNotFoundException:
-            ro_vim_item_update_ok["vim_details"] = "already deleted"
+            ro_vim_item_update_ok["vim_message"] = "already deleted"
         except vimconn.VimConnException as e:
             self.logger.error(
                 "ro_task={} vim={} del-vm={}: {}".format(
@@ -451,7 +453,7 @@ class VimInteractionVdu(VimInteractionBase):
             )
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
-                "vim_details": "Error while deleting: {}".format(e),
+                "vim_message": "Error while deleting: {}".format(e),
             }
 
             return "FAILED", ro_vim_item_update
@@ -461,7 +463,7 @@ class VimInteractionVdu(VimInteractionBase):
                 task_id,
                 ro_task["target_id"],
                 vm_vim_id,
-                ro_vim_item_update_ok.get("vim_details", ""),
+                ro_vim_item_update_ok.get("vim_message", ""),
             )
         )
 
@@ -549,11 +551,11 @@ class VimInteractionVdu(VimInteractionBase):
             ro_vim_item_update["vim_name"] = vim_info.get("name")
 
         if vim_info["status"] in ("ERROR", "VIM_ERROR"):
-            if ro_task["vim_info"]["vim_details"] != vim_info.get("error_msg"):
-                ro_vim_item_update["vim_details"] = vim_info.get("error_msg")
+            if ro_task["vim_info"]["vim_message"] != vim_info.get("error_msg"):
+                ro_vim_item_update["vim_message"] = vim_info.get("error_msg")
         elif vim_info["status"] == "DELETED":
             ro_vim_item_update["vim_id"] = None
-            ro_vim_item_update["vim_details"] = "Deleted externally"
+            ro_vim_item_update["vim_message"] = "Deleted externally"
         else:
             if ro_task["vim_info"]["vim_details"] != vim_info["vim_info"]:
                 ro_vim_item_update["vim_details"] = vim_info["vim_info"]
@@ -565,7 +567,7 @@ class VimInteractionVdu(VimInteractionBase):
                     ro_task["target_id"],
                     vim_id,
                     ro_vim_item_update.get("vim_status"),
-                    ro_vim_item_update.get("vim_details")
+                    ro_vim_item_update.get("vim_message")
                     if ro_vim_item_update.get("vim_status") != "ACTIVE"
                     else "",
                 )
@@ -615,7 +617,7 @@ class VimInteractionVdu(VimInteractionBase):
             self.logger.error(
                 "task={} {} inject-ssh-key: {}".format(task_id, ro_task["target_id"], e)
             )
-            ro_vim_item_update = {"vim_details": str(e)}
+            ro_vim_item_update = {"vim_message": str(e)}
 
             return "FAILED", ro_vim_item_update, db_task_update
 
@@ -654,6 +656,7 @@ class VimInteractionImage(VimInteractionBase):
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,
+                "vim_message": None,
             }
             self.logger.debug(
                 "task={} {} new-image={} created={}".format(
@@ -669,7 +672,7 @@ class VimInteractionImage(VimInteractionBase):
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
                 "created": created,
-                "vim_details": str(e),
+                "vim_message": str(e),
             }
 
             return "FAILED", ro_vim_item_update
@@ -683,7 +686,7 @@ class VimInteractionFlavor(VimInteractionBase):
         ro_vim_item_update_ok = {
             "vim_status": "DELETED",
             "created": False,
-            "vim_details": "DELETED",
+            "vim_message": "DELETED",
             "vim_id": None,
         }
 
@@ -692,7 +695,7 @@ class VimInteractionFlavor(VimInteractionBase):
                 target_vim = self.my_vims[ro_task["target_id"]]
                 target_vim.delete_flavor(flavor_vim_id)
         except vimconn.VimConnNotFoundException:
-            ro_vim_item_update_ok["vim_details"] = "already deleted"
+            ro_vim_item_update_ok["vim_message"] = "already deleted"
         except vimconn.VimConnException as e:
             self.logger.error(
                 "ro_task={} vim={} del-flavor={}: {}".format(
@@ -701,7 +704,7 @@ class VimInteractionFlavor(VimInteractionBase):
             )
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
-                "vim_details": "Error while deleting: {}".format(e),
+                "vim_message": "Error while deleting: {}".format(e),
             }
 
             return "FAILED", ro_vim_item_update
@@ -711,7 +714,7 @@ class VimInteractionFlavor(VimInteractionBase):
                 task_id,
                 ro_task["target_id"],
                 flavor_vim_id,
-                ro_vim_item_update_ok.get("vim_details", ""),
+                ro_vim_item_update_ok.get("vim_message", ""),
             )
         )
 
@@ -747,6 +750,7 @@ class VimInteractionFlavor(VimInteractionBase):
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,
+                "vim_message": None,
             }
             self.logger.debug(
                 "task={} {} new-flavor={} created={}".format(
@@ -762,7 +766,7 @@ class VimInteractionFlavor(VimInteractionBase):
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
                 "created": created,
-                "vim_details": str(e),
+                "vim_message": str(e),
             }
 
             return "FAILED", ro_vim_item_update
@@ -776,7 +780,7 @@ class VimInteractionAffinityGroup(VimInteractionBase):
         ro_vim_item_update_ok = {
             "vim_status": "DELETED",
             "created": False,
-            "vim_details": "DELETED",
+            "vim_message": "DELETED",
             "vim_id": None,
         }
 
@@ -785,7 +789,7 @@ class VimInteractionAffinityGroup(VimInteractionBase):
                 target_vim = self.my_vims[ro_task["target_id"]]
                 target_vim.delete_affinity_group(affinity_group_vim_id)
         except vimconn.VimConnNotFoundException:
-            ro_vim_item_update_ok["vim_details"] = "already deleted"
+            ro_vim_item_update_ok["vim_message"] = "already deleted"
         except vimconn.VimConnException as e:
             self.logger.error(
                 "ro_task={} vim={} del-affinity-or-anti-affinity-group={}: {}".format(
@@ -794,7 +798,7 @@ class VimInteractionAffinityGroup(VimInteractionBase):
             )
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
-                "vim_details": "Error while deleting: {}".format(e),
+                "vim_message": "Error while deleting: {}".format(e),
             }
 
             return "FAILED", ro_vim_item_update
@@ -804,7 +808,7 @@ class VimInteractionAffinityGroup(VimInteractionBase):
                 task_id,
                 ro_task["target_id"],
                 affinity_group_vim_id,
-                ro_vim_item_update_ok.get("vim_details", ""),
+                ro_vim_item_update_ok.get("vim_message", ""),
             )
         )
 
@@ -852,6 +856,7 @@ class VimInteractionAffinityGroup(VimInteractionBase):
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,
+                "vim_message": None,
             }
             self.logger.debug(
                 "task={} {} new-affinity-or-anti-affinity-group={} created={}".format(
@@ -868,7 +873,7 @@ class VimInteractionAffinityGroup(VimInteractionBase):
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
                 "created": created,
-                "vim_details": str(e),
+                "vim_message": str(e),
             }
 
             return "FAILED", ro_vim_item_update
@@ -1194,6 +1199,7 @@ class VimInteractionSdnNet(VimInteractionBase):
                 "created_items": created_items,
                 "connected_ports": connected_ports,
                 "vim_details": sdn_info,
+                "vim_message": None,
                 "last_update": last_update,
             }
 
@@ -1208,7 +1214,7 @@ class VimInteractionSdnNet(VimInteractionBase):
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
                 "created": created,
-                "vim_details": str(e),
+                "vim_message": str(e),
             }
 
             return "FAILED", ro_vim_item_update
@@ -1220,7 +1226,7 @@ class VimInteractionSdnNet(VimInteractionBase):
         ro_vim_item_update_ok = {
             "vim_status": "DELETED",
             "created": False,
-            "vim_details": "DELETED",
+            "vim_message": "DELETED",
             "vim_id": None,
         }
 
@@ -1236,7 +1242,7 @@ class VimInteractionSdnNet(VimInteractionBase):
                 isinstance(e, sdnconn.SdnConnectorError)
                 and e.http_code == HTTPStatus.NOT_FOUND.value
             ):
-                ro_vim_item_update_ok["vim_details"] = "already deleted"
+                ro_vim_item_update_ok["vim_message"] = "already deleted"
             else:
                 self.logger.error(
                     "ro_task={} vim={} del-sdn-net={}: {}".format(
@@ -1248,7 +1254,7 @@ class VimInteractionSdnNet(VimInteractionBase):
                 )
                 ro_vim_item_update = {
                     "vim_status": "VIM_ERROR",
-                    "vim_details": "Error while deleting: {}".format(e),
+                    "vim_message": "Error while deleting: {}".format(e),
                 }
 
                 return "FAILED", ro_vim_item_update
@@ -1258,7 +1264,7 @@ class VimInteractionSdnNet(VimInteractionBase):
                 task_id,
                 ro_task["target_id"],
                 sdn_vim_id,
-                ro_vim_item_update_ok.get("vim_details", ""),
+                ro_vim_item_update_ok.get("vim_message", ""),
             )
         )
 
@@ -1729,7 +1735,7 @@ class NsWorker(threading.Thread):
         1642158640.7986135;1642158640.7986135;1642158640.7986135;b134c9494e75:0a
         ;vim:b7ff9e24-8868-4d68-8a57-a59dc11d0327;None;{'created': False,
         'created_items': None, 'vim_id': None, 'vim_name': None, 'vim_status': None,
-        'vim_details': None, 'refresh_at': None};1;SCHEDULED;
+        'vim_details': None, 'vim_message': None, 'refresh_at': None};1;SCHEDULED;
         888f1864-749a-4fc2-bc1a-97c0fffd6a6f;0;888f1864-749a-4fc2-bc1a-97c0fffd6a6f:2;
         CREATE;image;{'filter_dict': {'name': 'ubuntu-os-cloud:image-family:ubuntu-1804-lts'}}
         """
@@ -1864,7 +1870,7 @@ class NsWorker(threading.Thread):
                     exc_info=True,
                 )
 
-            return "FAILED", {"vim_status": "VIM_ERROR", "vim_details": str(e)}
+            return "FAILED", {"vim_status": "VIM_ERROR", "vim_message": str(e)}
 
     def _create_task(self, ro_task, task_index, task_depends, db_update):
         """
@@ -1902,7 +1908,7 @@ class NsWorker(threading.Thread):
                     )
 
                 task_status = "FAILED"
-                ro_vim_item_update = {"vim_status": "VIM_ERROR", "vim_details": str(e)}
+                ro_vim_item_update = {"vim_status": "VIM_ERROR", "vim_message": str(e)}
                 # TODO update    ro_vim_item_update
 
             return task_status, ro_vim_item_update
@@ -2081,7 +2087,7 @@ class NsWorker(threading.Thread):
                                         dependency_task["item"],
                                         dependency_task_id,
                                         dependency_ro_task["vim_info"].get(
-                                            "vim_details"
+                                            "vim_message"
                                         ),
                                     )
                                     self.logger.error(
@@ -2177,7 +2183,7 @@ class NsWorker(threading.Thread):
                         new_status = "FAILED"
                         db_vim_info_update = {
                             "vim_status": "VIM_ERROR",
-                            "vim_details": str(e),
+                            "vim_message": str(e),
                         }
 
                         if not isinstance(
@@ -2311,7 +2317,14 @@ class NsWorker(threading.Thread):
                 path_vim_status + "." + k: v
                 for k, v in ro_vim_item_update.items()
                 if k
-                in ("vim_id", "vim_details", "vim_name", "vim_status", "interfaces")
+                in (
+                    "vim_id",
+                    "vim_details",
+                    "vim_message",
+                    "vim_name",
+                    "vim_status",
+                    "interfaces",
+                )
             }
 
             if path_vim_status.startswith("vdur."):

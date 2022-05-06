@@ -130,6 +130,7 @@ class TestNs(unittest.TestCase):
                 "vim_name": None,
                 "vim_status": None,
                 "vim_details": None,
+                "vim_message": None,
                 "refresh_at": None,
             },
             "modified_at": now,
