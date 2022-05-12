@@ -921,14 +921,37 @@ class Ns(object):
                 if ssh_keys:
                     cloud_config["key-pairs"] = ssh_keys
 
-                disk_list = None
+                persistent_root_disk = {}
+                disk_list = []
+                vnfd_id = vnfr["vnfd-id"]
+                vnfd = self.db.get_one("vnfds", {"_id": vnfd_id})
+                for vdu in vnfd.get("vdu", ()):
+                    if vdu["name"] == target_vdu["vdu-name"]:
+                        for vsd in vnfd.get("virtual-storage-desc", ()):
+                            if (
+                                vsd.get("id")
+                                == vdu.get("virtual-storage-desc", [[]])[0]
+                            ):
+                                root_disk = vsd
+                                if root_disk.get(
+                                    "type-of-storage"
+                                ) == "persistent-storage:persistent-storage" and root_disk.get(
+                                    "size-of-storage"
+                                ):
+                                    persistent_root_disk[vsd["id"]] = {
+                                        "image_id": vdu.get("sw-image-desc"),
+                                        "size": root_disk["size-of-storage"],
+                                    }
+                                    disk_list.append(persistent_root_disk[vsd["id"]])
+
                 if target_vdu.get("virtual-storages"):
-                    disk_list = [
-                        {"size": disk["size-of-storage"]}
-                        for disk in target_vdu["virtual-storages"]
-                        if disk.get("type-of-storage")
-                        == "persistent-storage:persistent-storage"
-                    ]
+                    for disk in target_vdu["virtual-storages"]:
+                        if (
+                            disk.get("type-of-storage")
+                            == "persistent-storage:persistent-storage"
+                            and disk["id"] not in persistent_root_disk.keys()
+                        ):
+                            disk_list.append({"size": disk["size-of-storage"]})
 
                 affinity_group_list = []
 

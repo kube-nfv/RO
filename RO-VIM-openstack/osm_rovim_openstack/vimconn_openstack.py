@@ -1867,6 +1867,7 @@ class vimconnector(vimconn.VimConnector):
 
             # Create additional volumes in case these are present in disk_list
             base_disk_index = ord("b")
+            boot_volume_id = None
             if disk_list:
                 block_device_mapping = {}
                 for disk in disk_list:
@@ -1876,11 +1877,13 @@ class vimconnector(vimconn.VimConnector):
                         ]
                     else:
                         if "image_id" in disk:
+                            base_disk_index = ord("a")
                             volume = self.cinder.volumes.create(
                                 size=disk["size"],
                                 name=name + "_vd" + chr(base_disk_index),
                                 imageRef=disk["image_id"],
                             )
+                            boot_volume_id = volume.id
                         else:
                             volume = self.cinder.volumes.create(
                                 size=disk["size"],
@@ -1912,7 +1915,8 @@ class vimconnector(vimconn.VimConnector):
                         "Timeout creating volumes for instance " + name,
                         http_code=vimconn.HTTP_Request_Timeout,
                     )
-
+                if boot_volume_id:
+                    self.cinder.volumes.set_bootable(boot_volume_id, True)
             # get availability Zone
             vm_av_zone = self._get_vm_availability_zone(
                 availability_zone_index, availability_zone_list
