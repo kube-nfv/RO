@@ -1865,6 +1865,11 @@ class vimconnector(vimconn.VimConnector):
             # cloud config
             config_drive, userdata = self._create_user_data(cloud_config)
 
+            # get availability Zone
+            vm_av_zone = self._get_vm_availability_zone(
+                availability_zone_index, availability_zone_list
+            )
+
             # Create additional volumes in case these are present in disk_list
             base_disk_index = ord("b")
             boot_volume_id = None
@@ -1882,12 +1887,16 @@ class vimconnector(vimconn.VimConnector):
                                 size=disk["size"],
                                 name=name + "_vd" + chr(base_disk_index),
                                 imageRef=disk["image_id"],
+                                # Make sure volume is in the same AZ as the VM to be attached to
+                                availability_zone=vm_av_zone,
                             )
                             boot_volume_id = volume.id
                         else:
                             volume = self.cinder.volumes.create(
                                 size=disk["size"],
                                 name=name + "_vd" + chr(base_disk_index),
+                                # Make sure volume is in the same AZ as the VM to be attached to
+                                availability_zone=vm_av_zone,
                             )
 
                         created_items["volume:" + str(volume.id)] = True
@@ -1917,10 +1926,6 @@ class vimconnector(vimconn.VimConnector):
                     )
                 if boot_volume_id:
                     self.cinder.volumes.set_bootable(boot_volume_id, True)
-            # get availability Zone
-            vm_av_zone = self._get_vm_availability_zone(
-                availability_zone_index, availability_zone_list
-            )
 
             # Manage affinity groups/server groups
             server_group_id = None
