@@ -1349,6 +1349,26 @@ class vimconnector(vimconn.VimConnector):
                                 extended.get("disk-io-quota"), "disk_io", extra_specs
                             )
 
+                        # Set the mempage size as specified in the descriptor
+                        if extended.get("mempage-size"):
+                            if extended.get("mempage-size") == "LARGE":
+                                extra_specs["hw:mem_page_size"] = "large"
+                            elif extended.get("mempage-size") == "SMALL":
+                                extra_specs["hw:mem_page_size"] = "small"
+                            elif extended.get("mempage-size") == "SIZE_2MB":
+                                extra_specs["hw:mem_page_size"] = "2MB"
+                            elif extended.get("mempage-size") == "SIZE_1GB":
+                                extra_specs["hw:mem_page_size"] = "1GB"
+                            elif extended.get("mempage-size") == "PREFER_LARGE":
+                                extra_specs["hw:mem_page_size"] = "any"
+                            else:
+                                # The validations in NBI should make reaching here not possible.
+                                # If this message is shown, check validations
+                                self.logger.debug(
+                                    "Invalid mempage-size %s. Will be ignored",
+                                    extended.get("mempage-size"),
+                                )
+
                     # create flavor
                     new_flavor = self.nova.flavors.create(
                         name=name,
