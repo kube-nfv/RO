@@ -32,6 +32,7 @@ import queue
 from shutil import rmtree
 import threading
 import time
+import traceback
 from unittest.mock import Mock
 
 from importlib_metadata import entry_points
@@ -604,6 +605,7 @@ class VimInteractionVdu(VimInteractionBase):
         except (vimconn.VimConnException, NsWorkerException) as e:
             retries += 1
 
+            self.logger.debug(traceback.format_exc())
             if retries < self.max_retries_inject_ssh_key:
                 return (
                     "BUILD",

@@ -33,6 +33,7 @@ from io import StringIO
 import logging
 import socket
 import sys
+import traceback
 import warnings
 
 import paramiko
@@ -766,32 +767,32 @@ class VimConnector:
 
                 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 client.connect(
-                    ip_addr, username=user, password=password, pkey=pkey, timeout=10
+                    ip_addr, username=user, password=password, pkey=pkey, timeout=30
                 )
 
                 for command in commands:
-                    (i, o, e) = client.exec_command(command, timeout=10)
+                    (i, o, e) = client.exec_command(command, timeout=30)
                     returncode = o.channel.recv_exit_status()
                     outerror = e.read()
 
                     if returncode != 0:
                         text = "run_command='{}' Error='{}'".format(command, outerror)
+                        self.logger.debug(traceback.format_tb(e.__traceback__))
                         raise VimConnUnexpectedResponse(
                             "Cannot inject ssh key in VM: '{}'".format(text)
                         )
-
                         return
             except (
                 socket.error,
                 paramiko.AuthenticationException,
                 paramiko.SSHException,
             ) as message:
+                self.logger.debug(traceback.format_exc())
                 raise VimConnUnexpectedResponse(
                     "Cannot inject ssh key in VM: '{}' - {}".format(
                         ip_addr, str(message)
                     )
                 )
-
                 return
 
     # Optional methods
