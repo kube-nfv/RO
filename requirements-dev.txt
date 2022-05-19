@@ -22,7 +22,7 @@ kafka-python==2.0.2
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=v10.0
     #   aiokafka
-osm-common @ git+https://osm.etsi.org/gerrit/osm/common.git@master
+osm-common @ git+https://osm.etsi.org/gerrit/osm/common.git@v10.0
     # via -r requirements-dev.in
 pycrypto==2.6.1
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=v10.0
