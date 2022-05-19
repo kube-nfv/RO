@@ -415,6 +415,7 @@ class VimInteractionVdu(VimInteractionBase):
 
             return "BUILD", ro_vim_item_update
         except (vimconn.VimConnException, NsWorkerException) as e:
+            self.logger.debug(traceback.format_exc())
             self.logger.error(
                 "task={} {} new-vm: {}".format(task_id, ro_task["target_id"], e)
             )

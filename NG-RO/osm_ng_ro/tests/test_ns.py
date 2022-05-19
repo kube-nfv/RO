@@ -1408,8 +1408,15 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
+
         target_flavor = {}
-        indata = {}
+        indata = {
+            "vnf": [
+                {
+                    "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+                },
+            ],
+        }
         vim_info = {}
         target_record_id = ""
 
@@ -1428,6 +1435,7 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
+
         target_flavor = {
             "no-target-flavor": "here",
         }
@@ -1450,6 +1458,7 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
+
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -1494,6 +1503,7 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
+
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -1540,6 +1550,52 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
+        db = MagicMock(name="database mock")
+        kwargs = {
+            "db": db,
+        }
+
+        db.get_one.return_value = {
+            "_id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+            "df": [
+                {
+                    "id": "default-df",
+                    "vdu-profile": [
+                        {"id": "without_volumes-VM", "min-number-of-instances": 1}
+                    ],
+                }
+            ],
+            "id": "without_volumes-vnf",
+            "product-name": "without_volumes-vnf",
+            "vdu": [
+                {
+                    "id": "without_volumes-VM",
+                    "name": "without_volumes-VM",
+                    "sw-image-desc": "ubuntu20.04",
+                    "alternative-sw-image-desc": [
+                        "ubuntu20.04-aws",
+                        "ubuntu20.04-azure",
+                    ],
+                    "virtual-storage-desc": ["root-volume", "ephemeral-volume"],
+                }
+            ],
+            "version": "1.0",
+            "virtual-storage-desc": [
+                {"id": "root-volume", "size-of-storage": "10"},
+                {
+                    "id": "ephemeral-volume",
+                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+                    "size-of-storage": "1",
+                },
+            ],
+            "_admin": {
+                "storage": {
+                    "fs": "mongo",
+                    "path": "/app/storage/",
+                },
+                "type": "vnfd",
+            },
+        }
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -1580,6 +1636,7 @@ class TestNs(unittest.TestCase):
                             ],
                         },
                     ],
+                    "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
                 },
             ],
         }
@@ -1593,6 +1650,7 @@ class TestNs(unittest.TestCase):
             indata=indata,
             vim_info=vim_info,
             target_record_id=target_record_id,
+            **kwargs,
         )
 
         self.assertTrue(epa_params.called)
@@ -1603,6 +1661,7 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
+
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -1643,6 +1702,7 @@ class TestNs(unittest.TestCase):
                             ],
                         },
                     ],
+                    "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
                 },
             ],
         }
@@ -1662,10 +1722,123 @@ class TestNs(unittest.TestCase):
         self.assertDictEqual(result, expected_result)
 
     @patch("osm_ng_ro.ns.Ns._process_epa_params")
+    def test__process_flavor_params_with_persistent_root_disk(
+        self,
+        epa_params,
+    ):
+        db = MagicMock(name="database mock")
+
+        kwargs = {
+            "db": db,
+        }
+
+        db.get_one.return_value = {
+            "_id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+            "df": [
+                {
+                    "id": "default-df",
+                    "vdu-profile": [
+                        {"id": "several_volumes-VM", "min-number-of-instances": 1}
+                    ],
+                }
+            ],
+            "id": "several_volumes-vnf",
+            "product-name": "several_volumes-vnf",
+            "vdu": [
+                {
+                    "id": "several_volumes-VM",
+                    "name": "several_volumes-VM",
+                    "sw-image-desc": "ubuntu20.04",
+                    "alternative-sw-image-desc": [
+                        "ubuntu20.04-aws",
+                        "ubuntu20.04-azure",
+                    ],
+                    "virtual-storage-desc": [
+                        "persistent-root-volume",
+                    ],
+                }
+            ],
+            "version": "1.0",
+            "virtual-storage-desc": [
+                {
+                    "id": "persistent-root-volume",
+                    "type-of-storage": "persistent-storage:persistent-storage",
+                    "size-of-storage": "10",
+                },
+            ],
+            "_admin": {
+                "storage": {
+                    "fs": "mongo",
+                    "path": "/app/storage/",
+                },
+                "type": "vnfd",
+            },
+        }
+        expected_result = {
+            "find_params": {
+                "flavor_data": {
+                    "disk": 0,
+                    "ram": 1024,
+                    "vcpus": 2,
+                },
+            },
+            "params": {
+                "flavor_data": {
+                    "disk": 0,
+                    "name": "test",
+                    "ram": 1024,
+                    "vcpus": 2,
+                },
+            },
+        }
+        target_flavor = {
+            "id": "test_id",
+            "name": "test",
+            "storage-gb": "10",
+            "memory-mb": "1024",
+            "vcpu-count": "2",
+        }
+        indata = {
+            "vnf": [
+                {
+                    "vdur": [
+                        {
+                            "vdu-name": "several_volumes-VM",
+                            "ns-flavor-id": "test_id",
+                            "virtual-storages": [
+                                {
+                                    "type-of-storage": "persistent-storage:persistent-storage",
+                                    "size-of-storage": "10",
+                                },
+                            ],
+                        },
+                    ],
+                    "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+                },
+            ],
+        }
+        vim_info = {}
+        target_record_id = ""
+
+        epa_params.return_value = {}
+
+        result = Ns._process_flavor_params(
+            target_flavor=target_flavor,
+            indata=indata,
+            vim_info=vim_info,
+            target_record_id=target_record_id,
+            **kwargs,
+        )
+
+        self.assertTrue(epa_params.called)
+        self.assertDictEqual(result, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._process_epa_params")
     def test__process_flavor_params_with_epa_params(
         self,
         epa_params,
     ):
+
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -1696,7 +1869,18 @@ class TestNs(unittest.TestCase):
             "memory-mb": "1024",
             "vcpu-count": "2",
         }
-        indata = {}
+        indata = {
+            "vnf": [
+                {
+                    "vdur": [
+                        {
+                            "ns-flavor-id": "test_id",
+                        },
+                    ],
+                    "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+                },
+            ],
+        }
         vim_info = {}
         target_record_id = ""
 
@@ -1719,6 +1903,54 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
+        db = MagicMock(name="database mock")
+
+        kwargs = {
+            "db": db,
+        }
+
+        db.get_one.return_value = {
+            "_id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+            "df": [
+                {
+                    "id": "default-df",
+                    "vdu-profile": [
+                        {"id": "without_volumes-VM", "min-number-of-instances": 1}
+                    ],
+                }
+            ],
+            "id": "without_volumes-vnf",
+            "product-name": "without_volumes-vnf",
+            "vdu": [
+                {
+                    "id": "without_volumes-VM",
+                    "name": "without_volumes-VM",
+                    "sw-image-desc": "ubuntu20.04",
+                    "alternative-sw-image-desc": [
+                        "ubuntu20.04-aws",
+                        "ubuntu20.04-azure",
+                    ],
+                    "virtual-storage-desc": ["root-volume", "ephemeral-volume"],
+                }
+            ],
+            "version": "1.0",
+            "virtual-storage-desc": [
+                {"id": "root-volume", "size-of-storage": "10"},
+                {
+                    "id": "ephemeral-volume",
+                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+                    "size-of-storage": "1",
+                },
+            ],
+            "_admin": {
+                "storage": {
+                    "fs": "mongo",
+                    "path": "/app/storage/",
+                },
+                "type": "vnfd",
+            },
+        }
+
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -1771,6 +2003,7 @@ class TestNs(unittest.TestCase):
                             ],
                         },
                     ],
+                    "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
                 },
             ],
         }
@@ -1786,6 +2019,7 @@ class TestNs(unittest.TestCase):
             indata=indata,
             vim_info=vim_info,
             target_record_id=target_record_id,
+            **kwargs,
         )
 
         self.assertTrue(epa_params.called)

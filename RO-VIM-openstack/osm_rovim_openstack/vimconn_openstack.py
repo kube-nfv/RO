@@ -1369,7 +1369,6 @@ class vimconnector(vimconn.VimConnector):
                                     "Invalid mempage-size %s. Will be ignored",
                                     extended.get("mempage-size"),
                                 )
-
                     # create flavor
                     new_flavor = self.nova.flavors.create(
                         name=name,
@@ -1898,32 +1897,55 @@ class vimconnector(vimconn.VimConnector):
             if disk_list:
                 block_device_mapping = {}
                 for disk in disk_list:
-                    if disk.get("vim_id"):
-                        block_device_mapping["_vd" + chr(base_disk_index)] = disk[
-                            "vim_id"
-                        ]
-                        existing_vim_volumes.append({"id": disk["vim_id"]})
-                    else:
-                        if "image_id" in disk:
-                            base_disk_index = ord("a")
+                    if "image_id" in disk:
+                        # persistent root volume
+                        base_disk_index = ord("a")
+                        image_id = ""
+                        if disk.get("vim_volume_id"):
+
+                            # use existing persistent root volume
+                            block_device_mapping["vd" + chr(base_disk_index)] = disk[
+                                "vim_volume_id"
+                            ]
+                            existing_vim_volumes.append({"id": disk["vim_volume_id"]})
+
+                        else:
+                            # create persistent root volume
                             volume = self.cinder.volumes.create(
                                 size=disk["size"],
-                                name=name + "_vd" + chr(base_disk_index),
+                                name=name + "vd" + chr(base_disk_index),
                                 imageRef=disk["image_id"],
                                 # Make sure volume is in the same AZ as the VM to be attached to
                                 availability_zone=vm_av_zone,
                             )
                             boot_volume_id = volume.id
+                            created_items["volume:" + str(volume.id)] = True
+                            block_device_mapping[
+                                "vd" + chr(base_disk_index)
+                            ] = volume.id
+                    else:
+                        # non-root persistent volume
+                        if disk.get("vim_volume_id"):
+
+                            # use existing persistent volume
+                            block_device_mapping["vd" + chr(base_disk_index)] = disk[
+                                "vim_volume_id"
+                            ]
+                            existing_vim_volumes.append({"id": disk["vim_volume_id"]})
+
                         else:
+
+                            # create persistent volume
                             volume = self.cinder.volumes.create(
                                 size=disk["size"],
-                                name=name + "_vd" + chr(base_disk_index),
+                                name=name + "vd" + chr(base_disk_index),
                                 # Make sure volume is in the same AZ as the VM to be attached to
                                 availability_zone=vm_av_zone,
                             )
-
-                        created_items["volume:" + str(volume.id)] = True
-                        block_device_mapping["_vd" + chr(base_disk_index)] = volume.id
+                            created_items["volume:" + str(volume.id)] = True
+                            block_device_mapping[
+                                "vd" + chr(base_disk_index)
+                            ] = volume.id
 
                     base_disk_index += 1
 
@@ -1988,9 +2010,9 @@ class vimconnector(vimconn.VimConnector):
                 )
             )
             server = self.nova.servers.create(
-                name,
-                image_id,
-                flavor_id,
+                name=name,
+                image=image_id,
+                flavor=flavor_id,
                 nics=net_list_vim,
                 security_groups=self.config.get("security_groups"),
                 # TODO remove security_groups in future versions. Already at neutron port

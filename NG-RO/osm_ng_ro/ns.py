@@ -17,6 +17,7 @@
 ##
 
 from http import HTTPStatus
+from itertools import product
 import logging
 from random import choice as random_choice
 from threading import Lock
@@ -776,17 +777,34 @@ class Ns(object):
         Returns:
             Dict[str, Any]: [description]
         """
+        db = kwargs.get("db")
+        target_vdur = {}
+
         flavor_data = {
             "disk": int(target_flavor["storage-gb"]),
             "ram": int(target_flavor["memory-mb"]),
             "vcpus": int(target_flavor["vcpu-count"]),
         }
 
-        target_vdur = {}
         for vnf in indata.get("vnf", []):
             for vdur in vnf.get("vdur", []):
-                if vdur.get("ns-flavor-id") == target_flavor["id"]:
+                if vdur.get("ns-flavor-id") == target_flavor.get("id"):
                     target_vdur = vdur
+
+        if db and isinstance(indata.get("vnf"), list):
+            vnfd_id = indata.get("vnf")[0].get("vnfd-id")
+            vnfd = db.get_one("vnfds", {"_id": vnfd_id})
+            # check if there is persistent root disk
+            for vdu in vnfd.get("vdu", ()):
+                if vdu["name"] == target_vdur.get("vdu-name"):
+                    for vsd in vnfd.get("virtual-storage-desc", ()):
+                        if vsd.get("id") == vdu.get("virtual-storage-desc", [[]])[0]:
+                            root_disk = vsd
+                            if (
+                                root_disk.get("type-of-storage")
+                                == "persistent-storage:persistent-storage"
+                            ):
+                                flavor_data["disk"] = 0
 
         for storage in target_vdur.get("virtual-storages", []):
             if (
@@ -921,6 +939,115 @@ class Ns(object):
                 )
 
         return extra_dict
+
+    @staticmethod
+    def find_persistent_root_volumes(
+        vnfd: dict,
+        target_vdu: str,
+        vdu_instantiation_volumes_list: list,
+        disk_list: list,
+    ) -> (list, dict):
+        """Find the persistent root volumes and add them to the disk_list
+        by parsing the instantiation parameters
+
+        Args:
+            vnfd:   VNFD
+            target_vdu: processed VDU
+            vdu_instantiation_volumes_list: instantiation parameters for the each VDU as a list
+            disk_list:  to be filled up
+
+        Returns:
+            disk_list:  filled VDU list which is used for VDU creation
+
+        """
+        persistent_root_disk = {}
+
+        for vdu, vsd in product(
+            vnfd.get("vdu", ()), vnfd.get("virtual-storage-desc", ())
+        ):
+            if (
+                vdu["name"] == target_vdu["vdu-name"]
+                and vsd.get("id") == vdu.get("virtual-storage-desc", [[]])[0]
+            ):
+                root_disk = vsd
+                if (
+                    root_disk.get("type-of-storage")
+                    == "persistent-storage:persistent-storage"
+                ):
+                    for vdu_volume in vdu_instantiation_volumes_list:
+
+                        if (
+                            vdu_volume["vim-volume-id"]
+                            and root_disk["id"] == vdu_volume["name"]
+                        ):
+
+                            persistent_root_disk[vsd["id"]] = {
+                                "vim_volume_id": vdu_volume["vim-volume-id"],
+                                "image_id": vdu.get("sw-image-desc"),
+                            }
+
+                            disk_list.append(persistent_root_disk[vsd["id"]])
+
+                            # There can be only one root disk, when we find it, it will return the result
+                            return disk_list, persistent_root_disk
+
+                    else:
+
+                        if root_disk.get("size-of-storage"):
+                            persistent_root_disk[vsd["id"]] = {
+                                "image_id": vdu.get("sw-image-desc"),
+                                "size": root_disk.get("size-of-storage"),
+                            }
+
+                            disk_list.append(persistent_root_disk[vsd["id"]])
+                            return disk_list, persistent_root_disk
+
+        return disk_list, persistent_root_disk
+
+    @staticmethod
+    def find_persistent_volumes(
+        persistent_root_disk: dict,
+        target_vdu: str,
+        vdu_instantiation_volumes_list: list,
+        disk_list: list,
+    ) -> list:
+        """Find the ordinary persistent volumes and add them to the disk_list
+        by parsing the instantiation parameters
+
+        Args:
+            persistent_root_disk:   persistent root disk dictionary
+            target_vdu: processed VDU
+            vdu_instantiation_volumes_list: instantiation parameters for the each VDU as a list
+            disk_list:  to be filled up
+
+        Returns:
+            disk_list:  filled VDU list which is used for VDU creation
+
+        """
+        # Find the ordinary volumes which are not added to the persistent_root_disk
+        persistent_disk = {}
+        for disk in target_vdu.get("virtual-storages", {}):
+            if (
+                disk.get("type-of-storage") == "persistent-storage:persistent-storage"
+                and disk["id"] not in persistent_root_disk.keys()
+            ):
+                for vdu_volume in vdu_instantiation_volumes_list:
+
+                    if vdu_volume["vim-volume-id"] and disk["id"] == vdu_volume["name"]:
+
+                        persistent_disk[disk["id"]] = {
+                            "vim_volume_id": vdu_volume["vim-volume-id"],
+                        }
+                        disk_list.append(persistent_disk[disk["id"]])
+
+                else:
+                    if disk["id"] not in persistent_disk.keys():
+                        persistent_disk[disk["id"]] = {
+                            "size": disk.get("size-of-storage"),
+                        }
+                        disk_list.append(persistent_disk[disk["id"]])
+
+        return disk_list
 
     @staticmethod
     def _process_vdu_params(
@@ -1103,33 +1230,59 @@ class Ns(object):
             cloud_config["key-pairs"] = ssh_keys
 
         persistent_root_disk = {}
+        vdu_instantiation_volumes_list = []
         disk_list = []
         vnfd_id = vnfr["vnfd-id"]
         vnfd = db.get_one("vnfds", {"_id": vnfd_id})
-        for vdu in vnfd.get("vdu", ()):
-            if vdu["name"] == target_vdu["vdu-name"]:
-                for vsd in vnfd.get("virtual-storage-desc", ()):
-                    if vsd.get("id") == vdu.get("virtual-storage-desc", [[]])[0]:
-                        root_disk = vsd
-                        if root_disk.get(
-                            "type-of-storage"
-                        ) == "persistent-storage:persistent-storage" and root_disk.get(
-                            "size-of-storage"
-                        ):
-                            persistent_root_disk[vsd["id"]] = {
-                                "image_id": vdu.get("sw-image-desc"),
-                                "size": root_disk["size-of-storage"],
-                            }
-                            disk_list.append(persistent_root_disk[vsd["id"]])
 
-        if target_vdu.get("virtual-storages"):
-            for disk in target_vdu["virtual-storages"]:
-                if (
-                    disk.get("type-of-storage")
-                    == "persistent-storage:persistent-storage"
-                    and disk["id"] not in persistent_root_disk.keys()
-                ):
-                    disk_list.append({"size": disk["size-of-storage"]})
+        if target_vdu.get("additionalParams"):
+            vdu_instantiation_volumes_list = (
+                target_vdu.get("additionalParams").get("OSM").get("vdu_volumes")
+            )
+
+        if vdu_instantiation_volumes_list:
+
+            # Find the root volumes and add to the disk_list
+            (disk_list, persistent_root_disk,) = Ns.find_persistent_root_volumes(
+                vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
+            )
+
+            # Find the ordinary volumes which are not added to the persistent_root_disk
+            # and put them to the disk list
+            disk_list = Ns.find_persistent_volumes(
+                persistent_root_disk,
+                target_vdu,
+                vdu_instantiation_volumes_list,
+                disk_list,
+            )
+
+        else:
+
+            # vdu_instantiation_volumes_list is empty
+            for vdu in vnfd.get("vdu", ()):
+                if vdu["name"] == target_vdu["vdu-name"]:
+                    for vsd in vnfd.get("virtual-storage-desc", ()):
+                        if vsd.get("id") == vdu.get("virtual-storage-desc", [[]])[0]:
+                            root_disk = vsd
+                            if root_disk.get(
+                                "type-of-storage"
+                            ) == "persistent-storage:persistent-storage" and root_disk.get(
+                                "size-of-storage"
+                            ):
+                                persistent_root_disk[vsd["id"]] = {
+                                    "image_id": vdu.get("sw-image-desc"),
+                                    "size": root_disk["size-of-storage"],
+                                }
+                                disk_list.append(persistent_root_disk[vsd["id"]])
+
+            if target_vdu.get("virtual-storages"):
+                for disk in target_vdu["virtual-storages"]:
+                    if (
+                        disk.get("type-of-storage")
+                        == "persistent-storage:persistent-storage"
+                        and disk["id"] not in persistent_root_disk.keys()
+                    ):
+                        disk_list.append({"size": disk["size-of-storage"]})
 
         affinity_group_list = []
 
@@ -1545,6 +1698,16 @@ class Ns(object):
                 self.logger.warning(
                     "ns.calculate_diff_items target_item={}".format(target_item)
                 )
+                if process_params == Ns._process_flavor_params:
+                    kwargs.update(
+                        {
+                            "db": self.db,
+                        }
+                    )
+                    self.logger.warning(
+                        "calculate_diff_items for flavor kwargs={}".format(kwargs)
+                    )
+
                 if process_params == Ns._process_vdu_params:
                     self.logger.warning(
                         "calculate_diff_items self.fs={}".format(self.fs)
