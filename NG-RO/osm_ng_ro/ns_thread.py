@@ -400,6 +400,7 @@ class VimInteractionVdu(VimInteractionBase):
                 "vim_message": None,
                 "interfaces_vim_ids": interfaces,
                 "interfaces": [],
+                "interfaces_backup": [],
             }
             self.logger.debug(
                 "task={} {} new-vm={} created={}".format(
@@ -2410,6 +2411,7 @@ class NsWorker(threading.Thread):
                     "vim_name",
                     "vim_status",
                     "interfaces",
+                    "interfaces_backup",
                 )
             }
 
@@ -2463,6 +2465,21 @@ class NsWorker(threading.Thread):
                             ).split(";")[0]
 
             self.db.set_one(table, q_filter={"_id": _id}, update_dict=update_dict)
+
+            # If interfaces exists, it backups VDU interfaces in the DB for healing operations
+            if ro_vim_item_update.get("interfaces"):
+                search_key = path_vim_status + ".interfaces"
+                if update_dict.get(search_key):
+                    interfaces_backup_update = {
+                        path_vim_status + ".interfaces_backup": update_dict[search_key]
+                    }
+
+                    self.db.set_one(
+                        table,
+                        q_filter={"_id": _id},
+                        update_dict=interfaces_backup_update,
+                    )
+
         else:
             update_dict = {path_item + ".status": "DELETED"}
             self.db.set_one(
