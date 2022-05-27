@@ -265,7 +265,7 @@ oslo.utils==4.12.0
     #   python-openstackclient
 packaging==21.3
     # via oslo.utils
-paramiko==2.9.2
+paramiko==2.11.0
     # via
     #   -r RO-SDN-dpb/requirements.in
     #   -r RO-VIM-gcp/requirements.in

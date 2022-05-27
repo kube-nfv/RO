@@ -757,6 +757,12 @@ class VimConnector:
                 "chmod 644 ~/.ssh/authorized_keys",
                 "chmod 700 ~/.ssh/",
             }
+
+            logging.basicConfig(
+                format="%(asctime)s %(levelname)s %(name)s %(filename)s:%(lineno)s %(message)s"
+            )
+            logging.getLogger("paramiko").setLevel(logging.DEBUG)
+
             client = paramiko.SSHClient()
 
             try:
@@ -766,8 +772,14 @@ class VimConnector:
                     pkey = None
 
                 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
                 client.connect(
-                    ip_addr, username=user, password=password, pkey=pkey, timeout=30
+                    ip_addr,
+                    username=user,
+                    password=password,
+                    pkey=pkey,
+                    timeout=30,
+                    auth_timeout=60,
                 )
 
                 for command in commands:
