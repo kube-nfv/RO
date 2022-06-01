@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, patch
 
 from osm_ng_ro.ns_thread import (
     VimInteractionAffinityGroup,
+    VimInteractionMigration,
     VimInteractionNet,
     VimInteractionResize,
 )
@@ -1369,3 +1370,66 @@ class TestVimInteractionResize(unittest.TestCase):
             result = instance.exec(ro_task, task_index, self.task_depends)
             self.assertEqual(result[0], "DONE")
             self.assertEqual(result[1].get("vim_status"), "DONE")
+
+
+class TestVimInteractionMigration(unittest.TestCase):
+    def setUp(self):
+        module_name = "osm_ro_plugin"
+        self.target_vim = MagicMock(name=f"{module_name}.vimconn.VimConnector")
+        self.task_depends = None
+
+        patches = [patch(f"{module_name}.vimconn.VimConnector", self.target_vim)]
+
+        # Enabling mocks and add cleanups
+        for mock in patches:
+            mock.start()
+            self.addCleanup(mock.stop)
+
+    def test__exec_migration_done(self):
+        """
+        create migrate task
+        """
+        db = "test_db"
+        logger = "test_logger"
+        my_vims = "test-vim"
+        db_vims = {
+            0: {
+                "config": {},
+            },
+        }
+        target_record_id = (
+            "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:"
+            "vdur.bb9c43f9-10a2-4569-a8a8-957c3528b6d1"
+        )
+
+        instance = VimInteractionMigration(db, logger, my_vims, db_vims)
+        with patch.object(instance, "my_vims", [self.target_vim]), patch.object(
+            instance, "logger", logging
+        ), patch.object(instance, "db_vims", db_vims):
+            ro_task = {
+                "target_id": 0,
+                "tasks": {
+                    "task_index_1": {
+                        "target_id": 0,
+                        "action_id": "bb937f49-3870-4169-b758-9732e1ff40f3",
+                        "nsr_id": "993166fe-723e-4680-ac4b-b1af2541ae31",
+                        "task_id": "bb937f49-3870-4169-b758-9732e1ff40f3:0",
+                        "status": "SCHEDULED",
+                        "action": "EXEC",
+                        "item": "migrate",
+                        "target_record": "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0",
+                        "target_record_id": target_record_id,
+                        "params": {
+                            "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+                            "migrate_host": "osm-test2",
+                            "vdu_vim_info": {0: {"interfaces": []}},
+                        },
+                    }
+                },
+            }
+            self.target_vim.migrate_instance.return_value = "ACTIVE", "test"
+
+            task_index = "task_index_1"
+            result = instance.exec(ro_task, task_index, self.task_depends)
+            self.assertEqual(result[0], "DONE")
+            self.assertEqual(result[1].get("vim_status"), "ACTIVE")
