@@ -1,3 +1,4 @@
+#######################################################################################
 # Copyright ETSI Contributors and Others.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,10 +13,9 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-##
-
-PyYAML
-requests
-netaddr
-boto
-ipconflict
+#######################################################################################
+---
+fixes:
+  - |
+    This patch fixes the Bugs 1851, 1852, 1855 which reports the problems while creating an basic
+    network service using AWS VIM Plugin.
