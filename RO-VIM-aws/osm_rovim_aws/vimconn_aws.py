@@ -24,13 +24,16 @@
 """
 AWS-connector implements all the methods to interact with AWS using the BOTO client
 """
-
 import logging
+import random
 import time
+import traceback
 
 import boto
 import boto.ec2
+from boto.exception import BotoServerError, EC2ResponseError
 import boto.vpc
+from ipconflict import check_conflicts
 import netaddr
 from osm_ro_plugin import vimconn
 import yaml
@@ -109,14 +112,16 @@ class vimconnector(vimconn.VimConnector):
         self.conn = None
         self.conn_vpc = None
         self.account_id = None
+        self.network_delete_on_termination = []
+        self.server_timeout = 180
 
         self.vpc_id = self.get_tenant_list()[0]["id"]
         # we take VPC CIDR block if specified, otherwise we use the default CIDR
         # block suggested by AWS while creating instance
         self.vpc_cidr_block = "10.0.0.0/24"
 
-        if tenant_id:
-            self.vpc_id = tenant_id
+        if tenant_name:
+            self.vpc_id = tenant_name
 
         if "vpc_cidr_block" in config:
             self.vpc_cidr_block = config["vpc_cidr_block"]
@@ -224,14 +229,12 @@ class vimconnector(vimconn.VimConnector):
         try:
             self._reload_connection()
             vpc_ids = []
-            tfilters = {}
 
             if filter_dict != {}:
                 if "id" in filter_dict:
                     vpc_ids.append(filter_dict["id"])
-                    tfilters["name"] = filter_dict["id"]
 
-            tenants = self.conn_vpc.get_all_vpcs(vpc_ids, tfilters)
+            tenants = self.conn_vpc.get_all_vpcs(vpc_ids, None)
             tenant_list = []
 
             for tenant in tenants:
@@ -270,9 +273,7 @@ class vimconnector(vimconn.VimConnector):
             self.vpc_data[vpc.id] = {
                 "gateway": gateway.id,
                 "route_table": route_table.id,
-                "subnets": self.subnet_sizes(
-                    len(self.get_availability_zones_list()), self.vpc_cidr_block
-                ),
+                "subnets": self.subnet_sizes(self.vpc_cidr_block),
             }
 
             return vpc.id
@@ -300,47 +301,27 @@ class vimconnector(vimconn.VimConnector):
         except Exception as e:
             self.format_vimconn_exception(e)
 
-    def subnet_sizes(self, availability_zones, cidr):
+    def subnet_sizes(self, cidr):
         """Calculates possible subnets given CIDR value of VPC"""
-        if availability_zones != 2 and availability_zones != 3:
-            self.logger.debug("Number of AZs should be 2 or 3")
-
-            raise vimconn.VimConnNotSupportedException("Number of AZs should be 2 or 3")
-
         netmasks = (
-            "255.255.252.0",
-            "255.255.254.0",
-            "255.255.255.0",
-            "255.255.255.128",
+            "255.255.0.0",
+            "255.255.128.0",
+            "255.255.192.0",
+            "255.255.224.0",
+            "255.255.240.0",
+            "255.255.248.0",
         )
+
         ip = netaddr.IPNetwork(cidr)
         mask = ip.netmask
+        pub_split = ()
 
-        if str(mask) not in netmasks:
-            self.logger.debug("Netmask " + str(mask) + " not found")
+        for netmask in netmasks:
+            if str(mask) == netmask:
+                pub_split = list(ip.subnet(24))
+                break
 
-            raise vimconn.VimConnNotFoundException(
-                "Netmask " + str(mask) + " not found"
-            )
-
-        if availability_zones == 2:
-            for n, netmask in enumerate(netmasks):
-                if str(mask) == netmask:
-                    subnets = list(ip.subnet(n + 24))
-        else:
-            for n, netmask in enumerate(netmasks):
-                if str(mask) == netmask:
-                    pub_net = list(ip.subnet(n + 24))
-                    pri_subs = pub_net[1:]
-                    pub_mask = pub_net[0].netmask
-
-            pub_split = (
-                list(ip.subnet(26))
-                if (str(pub_mask) == "255.255.255.0")
-                else list(ip.subnet(27))
-            )
-            pub_subs = pub_split[:3]
-            subnets = pub_subs + pri_subs
+        subnets = pub_split if pub_split else (list(ip.subnet(28)))
 
         return map(str, subnets)
 
@@ -382,6 +363,10 @@ class vimconnector(vimconn.VimConnector):
             self._reload_connection()
             subnet = None
             vpc_id = self.vpc_id
+            if self.conn_vpc.get_all_subnets():
+                existing_subnet = self.conn_vpc.get_all_subnets()[0]
+                if not self.availability_zone:
+                    self.availability_zone = str(existing_subnet.availability_zone)
 
             if self.vpc_data.get(vpc_id, None):
                 cidr_block = list(
@@ -391,12 +376,10 @@ class vimconnector(vimconn.VimConnector):
                             {"tenant_id": vpc_id}, detail="cidr_block"
                         )
                     )
-                )[0]
+                )
             else:
                 vpc = self.get_tenant_list({"id": vpc_id})[0]
-                subnet_list = self.subnet_sizes(
-                    len(self.get_availability_zones_list()), vpc["cidr_block"]
-                )
+                subnet_list = self.subnet_sizes(vpc["cidr_block"])
                 cidr_block = list(
                     set(subnet_list)
                     - set(
@@ -404,9 +387,35 @@ class vimconnector(vimconn.VimConnector):
                             {"tenant_id": vpc["id"]}, detail="cidr_block"
                         )
                     )
-                )[0]
+                )
 
-            subnet = self.conn_vpc.create_subnet(vpc_id, cidr_block)
+            try:
+                selected_cidr_block = random.choice(cidr_block)
+                retry = 15
+                while retry > 0:
+                    all_subnets = [
+                        subnet.cidr_block for subnet in self.conn_vpc.get_all_subnets()
+                    ]
+                    all_subnets.append(selected_cidr_block)
+                    conflict = check_conflicts(all_subnets)
+                    if not conflict:
+                        subnet = self.conn_vpc.create_subnet(
+                            vpc_id, selected_cidr_block, self.availability_zone
+                        )
+                        break
+                    retry -= 1
+                    selected_cidr_block = random.choice(cidr_block)
+                else:
+                    raise vimconn.VimConnException(
+                        "Failed to find a proper CIDR which does not overlap"
+                        "with existing subnets",
+                        http_code=vimconn.HTTP_Request_Timeout,
+                    )
+
+            except (EC2ResponseError, BotoServerError) as error:
+                self.format_vimconn_exception(error)
+
+            created_items["net:" + str(subnet.id)] = True
 
             return subnet.id, created_items
         except Exception as e:
@@ -450,24 +459,27 @@ class vimconnector(vimconn.VimConnector):
 
             if filter_dict != {}:
                 if "tenant_id" in filter_dict:
-                    tfilters["vpcId"] = filter_dict["tenant_id"]
+                    tfilters["vpcId"] = filter_dict.get("tenant_id")
 
             subnets = self.conn_vpc.get_all_subnets(
-                subnet_ids=filter_dict.get("name", None), filters=tfilters
+                subnet_ids=filter_dict.get("SubnetId", None), filters=tfilters
             )
+
             net_list = []
 
             for net in subnets:
-                net_list.append(
-                    {
-                        "id": str(net.id),
-                        "name": str(net.id),
-                        "status": str(net.state),
-                        "vpc_id": str(net.vpc_id),
-                        "cidr_block": str(net.cidr_block),
-                        "type": "bridge",
-                    }
-                )
+                if net.id == filter_dict.get("name"):
+                    self.availability_zone = str(net.availability_zone)
+                    net_list.append(
+                        {
+                            "id": str(net.id),
+                            "name": str(net.id),
+                            "status": str(net.state),
+                            "vpc_id": str(net.vpc_id),
+                            "cidr_block": str(net.cidr_block),
+                            "type": "bridge",
+                        }
+                    )
 
             return net_list
         except Exception as e:
@@ -488,13 +500,13 @@ class vimconnector(vimconn.VimConnector):
         try:
             self._reload_connection()
             subnet = self.conn_vpc.get_all_subnets(net_id)[0]
-
             return {
                 "id": str(subnet.id),
                 "name": str(subnet.id),
                 "status": str(subnet.state),
                 "vpc_id": str(subnet.vpc_id),
                 "cidr_block": str(subnet.cidr_block),
+                "availability_zone": str(subnet.availability_zone),
             }
         except Exception as e:
             self.format_vimconn_exception(e)
@@ -514,8 +526,15 @@ class vimconnector(vimconn.VimConnector):
             self.conn_vpc.delete_subnet(net_id)
 
             return net_id
+
         except Exception as e:
-            self.format_vimconn_exception(e)
+            if isinstance(e, EC2ResponseError):
+                self.network_delete_on_termination.append(net_id)
+                self.logger.warning(
+                    f"{net_id} could not be deleted, deletion will retry after dependencies resolved"
+                )
+            else:
+                self.format_vimconn_exception(e)
 
     def refresh_nets_status(self, net_list):
         """Get the status of the networks
@@ -557,13 +576,13 @@ class vimconnector(vimconn.VimConnector):
                     subnet_dict["status"] = "DELETED"
                     subnet_dict["error_msg"] = "Network not found"
                 finally:
-                    try:
-                        subnet_dict["vim_info"] = yaml.safe_dump(
-                            subnet, default_flow_style=True, width=256
-                        )
-                    except yaml.YAMLError:
-                        subnet_dict["vim_info"] = str(subnet)
-
+                    subnet_dictionary = vars(subnet)
+                    cleared_subnet_dict = {
+                        key: subnet_dictionary[key]
+                        for key in subnet_dictionary
+                        if not isinstance(subnet_dictionary[key], object)
+                    }
+                    subnet_dict["vim_info"] = cleared_subnet_dict
                 dict_entry[net_id] = subnet_dict
 
             return dict_entry
@@ -830,8 +849,9 @@ class vimconnector(vimconn.VimConnector):
         self.logger.debug("Creating a new VM instance")
 
         try:
+            created_items = {}
             self._reload_connection()
-            instance = None
+            reservation = None
             _, userdata = self._create_user_data(cloud_config)
 
             if not net_list:
@@ -842,12 +862,22 @@ class vimconnector(vimconn.VimConnector):
                     security_groups=self.security_groups,
                     user_data=userdata,
                 )
+
             else:
                 for index, subnet in enumerate(net_list):
-                    net_intr = boto.ec2.networkinterface.NetworkInterfaceSpecification(
+
+                    net_intr = self.conn_vpc.create_network_interface(
                         subnet_id=subnet.get("net_id"),
                         groups=None,
-                        associate_public_ip_address=True,
+                    )
+
+                    interface = boto.ec2.networkinterface.NetworkInterfaceSpecification(
+                        network_interface_id=net_intr.id,
+                        device_index=index,
+                    )
+
+                    interfaces = boto.ec2.networkinterface.NetworkInterfaceCollection(
+                        interface
                     )
 
                     if subnet.get("elastic_ip"):
@@ -858,38 +888,54 @@ class vimconnector(vimconn.VimConnector):
                         )
 
                     if index == 0:
-                        reservation = self.conn.run_instances(
-                            image_id,
-                            key_name=self.key_pair,
-                            instance_type=flavor_id,
-                            security_groups=self.security_groups,
-                            network_interfaces=boto.ec2.networkinterface.NetworkInterfaceCollection(
-                                net_intr
-                            ),
-                            user_data=userdata,
+                        try:
+                            reservation = self.conn.run_instances(
+                                image_id,
+                                key_name=self.key_pair,
+                                instance_type=flavor_id,
+                                security_groups=self.security_groups,
+                                network_interfaces=interfaces,
+                                user_data=userdata,
+                            )
+                        except Exception as instance_create_error:
+                            self.logger.debug(traceback.format_exc())
+                            self.format_vimconn_exception(instance_create_error)
+
+                    if index > 0:
+                        try:
+                            if reservation:
+                                instance_id = self.wait_for_instance_id(reservation)
+                                if instance_id and self.wait_for_vm(
+                                    instance_id, "running"
+                                ):
+                                    self.conn.attach_network_interface(
+                                        network_interface_id=net_intr.id,
+                                        instance_id=instance_id,
+                                        device_index=index,
+                                    )
+                        except Exception as attach_network_error:
+                            self.logger.debug(traceback.format_exc())
+                            self.format_vimconn_exception(attach_network_error)
+
+                    if instance_id := self.wait_for_instance_id(reservation):
+                        time.sleep(30)
+                        instance_status = self.refresh_vms_status(instance_id)
+                        refreshed_instance_status = instance_status.get(instance_id)
+                        instance_interfaces = refreshed_instance_status.get(
+                            "interfaces"
                         )
-                    else:
-                        while True:
-                            try:
-                                self.conn.attach_network_interface(
-                                    network_interface_id=boto.ec2.networkinterface.NetworkInterfaceCollection(
-                                        net_intr
-                                    ),
-                                    instance_id=instance.id,
-                                    device_index=0,
-                                )
-                                break
-                            except Exception:
-                                time.sleep(10)
+                        for idx, interface in enumerate(instance_interfaces):
+                            if idx == index:
+                                net_list[index]["vim_id"] = instance_interfaces[
+                                    idx
+                                ].get("vim_interface_id")
 
-                    net_list[index]["vim_id"] = (
-                        reservation.instances[0].interfaces[index].id
-                    )
+            instance_id = self.wait_for_instance_id(reservation)
+            created_items["vm_id:" + str(instance_id)] = True
 
-            instance = reservation.instances[0]
-
-            return instance.id, None
+            return instance_id, created_items
         except Exception as e:
+            self.logger.debug(traceback.format_exc())
             self.format_vimconn_exception(e)
 
     def get_vminstance(self, vm_id):
@@ -902,17 +948,78 @@ class vimconnector(vimconn.VimConnector):
         except Exception as e:
             self.format_vimconn_exception(e)
 
-    def delete_vminstance(self, vm_id, created_items=None):
+    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
         """Removes a VM instance from VIM
         Returns the instance identifier"""
         try:
             self._reload_connection()
             self.logger.debug("DELETING VM_ID: " + str(vm_id))
-            self.conn.terminate_instances(vm_id)
+            reservation = self.conn.get_all_instances(vm_id)[0]
+            if hasattr(reservation, "instances"):
+                instance = reservation.instances[0]
 
-            return vm_id
+                self.conn.terminate_instances(vm_id)
+                if self.wait_for_vm(vm_id, "terminated"):
+                    for interface in instance.interfaces:
+                        self.conn_vpc.delete_network_interface(
+                            network_interface_id=interface.id,
+                        )
+                if self.network_delete_on_termination:
+                    for net in self.network_delete_on_termination:
+                        try:
+                            self.conn_vpc.delete_subnet(net)
+                        except Exception as net_delete_error:
+                            if isinstance(net_delete_error, EC2ResponseError):
+                                self.logger.warning(f"Deleting network {net}: failed")
+                            else:
+                                self.format_vimconn_exception(net_delete_error)
+
+                return vm_id
         except Exception as e:
             self.format_vimconn_exception(e)
+
+    def wait_for_instance_id(self, reservation):
+        if not reservation:
+            return False
+
+        self._reload_connection()
+        elapsed_time = 0
+        while elapsed_time < 30:
+            if reservation.instances:
+                instance_id = reservation.instances[0].id
+                return instance_id
+            time.sleep(5)
+            elapsed_time += 5
+        else:
+            raise vimconn.VimConnException(
+                "Failed to get instance_id for reservation",
+                reservation,
+                http_code=vimconn.HTTP_Request_Timeout,
+            )
+
+    def wait_for_vm(self, vm_id, status):
+        """wait until vm is in the desired status and return True.
+        If the timeout is reached generate an exception"""
+
+        self._reload_connection()
+
+        elapsed_time = 0
+        while elapsed_time < self.server_timeout:
+            if self.conn.get_all_instances(vm_id):
+                reservation = self.conn.get_all_instances(vm_id)[0]
+                if hasattr(reservation, "instances"):
+                    instance = reservation.instances[0]
+                    if instance.state == status:
+                        return True
+            time.sleep(5)
+            elapsed_time += 5
+
+        # if we exceeded the timeout
+        else:
+            raise vimconn.VimConnException(
+                "Timeout waiting for instance " + vm_id + " to get " + status,
+                http_code=vimconn.HTTP_Request_Timeout,
+            )
 
     def refresh_vms_status(self, vm_list):
         """Get the status of the virtual machines and their interfaces/ports
@@ -940,55 +1047,75 @@ class vimconnector(vimconn.VimConnector):
 
         try:
             self._reload_connection()
-            reservation = self.conn.get_all_instances(vm_list)[0]
+            elapsed_time = 0
+            while elapsed_time < self.server_timeout:
+                reservation = self.conn.get_all_instances(vm_list)[0]
+                if reservation:
+                    break
+                time.sleep(5)
+                elapsed_time += 5
+
+            # if we exceeded the timeout
+            else:
+                raise vimconn.VimConnException(
+                    vm_list + "could not be gathered, refresh vm status failed",
+                    http_code=vimconn.HTTP_Request_Timeout,
+                )
+
             instances = {}
             instance_dict = {}
 
             for instance in reservation.instances:
-                try:
-                    if instance.state in ("pending"):
-                        instance_dict["status"] = "BUILD"
-                    elif instance.state in ("available", "running", "up"):
-                        instance_dict["status"] = "ACTIVE"
-                    else:
-                        instance_dict["status"] = "ERROR"
-
-                    instance_dict["error_msg"] = ""
-                    instance_dict["interfaces"] = []
-                    interface_dict = {}
-
-                    for interface in instance.interfaces:
-                        interface_dict["vim_interface_id"] = interface.id
-                        interface_dict["vim_net_id"] = interface.subnet_id
-                        interface_dict["mac_address"] = interface.mac_address
-
-                        if (
-                            hasattr(interface, "publicIp")
-                            and interface.publicIp is not None
-                        ):
-                            interface_dict["ip_address"] = (
-                                interface.publicIp + ";" + interface.private_ip_address
-                            )
-                        else:
-                            interface_dict["ip_address"] = interface.private_ip_address
-
-                        instance_dict["interfaces"].append(interface_dict)
-                except Exception as e:
-                    self.logger.error(
-                        "Exception getting vm status: %s", str(e), exc_info=True
-                    )
-                    instance_dict["status"] = "DELETED"
-                    instance_dict["error_msg"] = str(e)
-                finally:
+                if hasattr(instance, "id"):
                     try:
-                        instance_dict["vim_info"] = yaml.safe_dump(
-                            instance, default_flow_style=True, width=256
-                        )
-                    except yaml.YAMLError:
-                        # self.logger.error("Exception getting vm status: %s", str(e), exc_info=True)
-                        instance_dict["vim_info"] = str(instance)
+                        if instance.state in ("pending"):
+                            instance_dict["status"] = "BUILD"
+                        elif instance.state in ("available", "running", "up"):
+                            instance_dict["status"] = "ACTIVE"
+                        else:
+                            instance_dict["status"] = "ERROR"
 
-                instances[instance.id] = instance_dict
+                        instance_dict["error_msg"] = ""
+                        instance_dict["interfaces"] = []
+
+                        for interface in instance.interfaces:
+                            interface_dict = {
+                                "vim_interface_id": interface.id,
+                                "vim_net_id": interface.subnet_id,
+                                "mac_address": interface.mac_address,
+                            }
+
+                            if (
+                                hasattr(interface, "publicIp")
+                                and interface.publicIp is not None
+                            ):
+                                interface_dict["ip_address"] = (
+                                    interface.publicIp
+                                    + ";"
+                                    + interface.private_ip_address
+                                )
+                            else:
+                                interface_dict[
+                                    "ip_address"
+                                ] = interface.private_ip_address
+
+                            instance_dict["interfaces"].append(interface_dict)
+                    except Exception as e:
+                        self.logger.error(
+                            "Exception getting vm status: %s", str(e), exc_info=True
+                        )
+                        instance_dict["status"] = "DELETED"
+                        instance_dict["error_msg"] = str(e)
+                    finally:
+                        instance_dictionary = vars(instance)
+                        cleared_instance_dict = {
+                            key: instance_dictionary[key]
+                            for key in instance_dictionary
+                            if not (isinstance(instance_dictionary[key], object))
+                        }
+                        instance_dict["vim_info"] = cleared_instance_dict
+
+                    instances[instance.id] = instance_dict
 
             return instances
         except Exception as e:
