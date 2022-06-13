@@ -1230,7 +1230,9 @@ class Ns(object):
                     "floating_ip",
                 )
             }
-            existing_ifaces = existing_vdu["vim_info"][target_id].get("interfaces", [])
+            existing_ifaces = existing_vdu["vim_info"][target_id].get(
+                "interfaces_backup", []
+            )
             net_id = next(
                 (
                     i["vim_net_id"]
