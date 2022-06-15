@@ -958,6 +958,37 @@ class Ns(object):
         extra_dict = {"depends_on": [image_text, flavor_text]}
         net_list = []
 
+        # If the position info is provided for all the interfaces, it will be sorted
+        # according to position number ascendingly.
+        if all(i.get("position") for i in target_vdu["interfaces"]):
+            sorted_interfaces = sorted(
+                target_vdu["interfaces"],
+                key=lambda x: (x.get("position") is None, x.get("position")),
+            )
+            target_vdu["interfaces"] = sorted_interfaces
+
+        # If the position info is provided for some interfaces but not all of them, the interfaces
+        # which has specific position numbers will be placed and others' positions will not be taken care.
+        else:
+            if any(i.get("position") for i in target_vdu["interfaces"]):
+                n = len(target_vdu["interfaces"])
+                sorted_interfaces = [-1] * n
+                k, m = 0, 0
+                while k < n:
+                    if target_vdu["interfaces"][k].get("position"):
+                        idx = target_vdu["interfaces"][k]["position"]
+                        sorted_interfaces[idx - 1] = target_vdu["interfaces"][k]
+                    k += 1
+                while m < n:
+                    if not target_vdu["interfaces"][m].get("position"):
+                        idy = sorted_interfaces.index(-1)
+                        sorted_interfaces[idy] = target_vdu["interfaces"][m]
+                    m += 1
+
+                target_vdu["interfaces"] = sorted_interfaces
+
+        # If the position info is not provided for the interfaces, interfaces will be attached
+        # according to the order in the VNFD.
         for iface_index, interface in enumerate(target_vdu["interfaces"]):
             if interface.get("ns-vld-id"):
                 net_text = ns_preffix + ":vld." + interface["ns-vld-id"]
