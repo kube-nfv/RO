@@ -1,0 +1,24 @@
+#######################################################################################
+# Copyright ETSI Contributors and Others.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#######################################################################################
+---
+other:
+  - |
+    This patch will find and delete the network interface ports regardless of VM's existence.
+    In healing feature, when the VM is deleted manually, network interfaces ports are still
+    exists in the Openstack Cloud. If we check the network ports' existence according to vm_id,
+    those ports are not deleted and heal operation fails. This patch will find all the ports,
+    deletion required interface will be deleted.

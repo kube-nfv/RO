@@ -2295,7 +2295,7 @@ class vimconnector(vimconn.VimConnector):
                 try:
                     k_item, _, k_id = k.partition(":")
                     if k_item == "port":
-                        port_dict = self.neutron.list_ports(device_id=vm_id)
+                        port_dict = self.neutron.list_ports()
                         existing_ports = [
                             port["id"] for port in port_dict["ports"] if port_dict
                         ]
