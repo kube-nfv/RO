@@ -14,15 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
--e RO-plugin
-    # via -r requirements-test.in
-coverage==6.4.1
-    # via
-    #   -r requirements-test.in
-    #   nose2
-mock==4.0.3
-    # via -r requirements-test.in
-nose2==0.11.0
-    # via -r requirements-test.in
-six==1.16.0
-    # via nose2
+---
+other:
+  - |
+    Update pip requirements before creating v12 branch
