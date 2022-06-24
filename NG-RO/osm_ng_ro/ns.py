@@ -1087,7 +1087,11 @@ class Ns(object):
 
         # If the position info is provided for all the interfaces, it will be sorted
         # according to position number ascendingly.
-        if all(i.get("position") for i in target_vdu["interfaces"]):
+        if all(
+            i.get("position") + 1
+            for i in target_vdu["interfaces"]
+            if i.get("position") is not None
+        ):
             sorted_interfaces = sorted(
                 target_vdu["interfaces"],
                 key=lambda x: (x.get("position") is None, x.get("position")),
@@ -1097,7 +1101,11 @@ class Ns(object):
         # If the position info is provided for some interfaces but not all of them, the interfaces
         # which has specific position numbers will be placed and others' positions will not be taken care.
         else:
-            if any(i.get("position") for i in target_vdu["interfaces"]):
+            if any(
+                i.get("position") + 1
+                for i in target_vdu["interfaces"]
+                if i.get("position") is not None
+            ):
                 n = len(target_vdu["interfaces"])
                 sorted_interfaces = [-1] * n
                 k, m = 0, 0
