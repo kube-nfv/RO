@@ -1901,14 +1901,18 @@ class vimconnector(vimconn.VimConnector):
                         # persistent root volume
                         base_disk_index = ord("a")
                         image_id = ""
+                        # use existing persistent root volume
                         if disk.get("vim_volume_id"):
-
-                            # use existing persistent root volume
                             block_device_mapping["vd" + chr(base_disk_index)] = disk[
                                 "vim_volume_id"
                             ]
                             existing_vim_volumes.append({"id": disk["vim_volume_id"]})
-
+                        # use existing persistent root volume
+                        elif disk.get("vim_id"):
+                            block_device_mapping["vd" + chr(base_disk_index)] = disk[
+                                "vim_id"
+                            ]
+                            existing_vim_volumes.append({"id": disk["vim_id"]})
                         else:
                             # create persistent root volume
                             volume = self.cinder.volumes.create(
@@ -1925,16 +1929,18 @@ class vimconnector(vimconn.VimConnector):
                             ] = volume.id
                     else:
                         # non-root persistent volume
-                        if disk.get("vim_volume_id"):
-
+                        key_id = (
+                            "vim_volume_id"
+                            if "vim_volume_id" in disk.keys()
+                            else "vim_id"
+                        )
+                        if disk.get(key_id):
                             # use existing persistent volume
                             block_device_mapping["vd" + chr(base_disk_index)] = disk[
-                                "vim_volume_id"
+                                key_id
                             ]
-                            existing_vim_volumes.append({"id": disk["vim_volume_id"]})
-
+                            existing_vim_volumes.append({"id": disk[key_id]})
                         else:
-
                             # create persistent volume
                             volume = self.cinder.volumes.create(
                                 size=disk["size"],
