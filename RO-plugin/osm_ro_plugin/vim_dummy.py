@@ -424,7 +424,7 @@ class VimDummyConnector(vimconn.VimConnector):
 
         return self.vms[vm_id]
 
-    def delete_vminstance(self, vm_id, created_items=None):
+    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
         if vm_id not in self.vms:
             raise vimconn.VimConnNotFoundException(
                 "vm with id {} not found".format(vm_id)

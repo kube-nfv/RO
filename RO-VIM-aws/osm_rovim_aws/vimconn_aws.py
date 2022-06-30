@@ -948,7 +948,7 @@ class vimconnector(vimconn.VimConnector):
         except Exception as e:
             self.format_vimconn_exception(e)
 
-    def delete_vminstance(self, vm_id, created_items=None, volumes_2hold=None):
+    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
         """Removes a VM instance from VIM
         Returns the instance identifier"""
         try:

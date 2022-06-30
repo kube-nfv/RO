@@ -1099,7 +1099,7 @@ class vimconnector(vimconn.VimConnector):
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
 
-    def delete_vminstance(self, vm_id, created_items=None):
+    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
         """Removes a VM instance from VIM, returns the deleted vm_id"""
         try:
             self._get_my_tenant()

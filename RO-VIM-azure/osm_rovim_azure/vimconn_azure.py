@@ -1481,7 +1481,7 @@ class vimconnector(vimconn.VimConnector):
         nic_delete.wait()
         self.logger.debug("deleted NIC name: %s", nic_name)
 
-    def delete_vminstance(self, vm_id, created_items=None):
+    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
         """Deletes a vm instance from the vim."""
         self.logger.debug(
             "deleting VM instance {} - {}".format(self.resource_group, vm_id)

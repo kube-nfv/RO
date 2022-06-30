@@ -661,7 +661,7 @@ class VimConnector:
         """Returns the VM instance information from VIM"""
         raise VimConnNotImplemented("Should have implemented this")
 
-    def delete_vminstance(self, vm_id, created_items=None):
+    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
         """
         Removes a VM instance from VIM and its associated elements
         :param vm_id: VIM identifier of the VM, provided by method new_vminstance
