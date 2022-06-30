@@ -854,7 +854,7 @@ def _start_service():
             elif k1 == "tools":
                 # update [/] configuration
                 engine_config["/"]["tools." + k2.replace("_", ".")] = yaml.safe_load(v)
-            elif k1 in ("message", "database", "storage", "authentication"):
+            elif k1 in ("message", "database", "storage", "authentication", "period"):
                 engine_config[k1][k2] = yaml.safe_load(v)
 
         except Exception as e:
