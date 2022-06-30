@@ -33,6 +33,7 @@ from shutil import rmtree
 import threading
 import time
 import traceback
+from typing import Dict
 from unittest.mock import Mock
 
 from importlib_metadata import entry_points
@@ -1261,15 +1262,39 @@ class VimInteractionSdnNet(VimInteractionBase):
         return "DONE", ro_vim_item_update_ok
 
 
-class NsWorker(threading.Thread):
-    REFRESH_BUILD = 5  # 5 seconds
-    REFRESH_ACTIVE = 60  # 1 minute
-    REFRESH_ERROR = 600
-    REFRESH_IMAGE = 3600 * 10
-    REFRESH_DELETE = 3600 * 10
-    QUEUE_SIZE = 100
-    terminate = False
+class ConfigValidate:
+    def __init__(self, config: Dict):
+        self.conf = config
 
+    @property
+    def active(self):
+        # default 1 min, allowed >= 60 or -1, -1 disables periodic checks
+        if (
+            self.conf["period"]["refresh_active"] >= 60
+            or self.conf["period"]["refresh_active"] == -1
+        ):
+            return self.conf["period"]["refresh_active"]
+
+        return 60
+
+    @property
+    def build(self):
+        return self.conf["period"]["refresh_build"]
+
+    @property
+    def image(self):
+        return self.conf["period"]["refresh_image"]
+
+    @property
+    def error(self):
+        return self.conf["period"]["refresh_error"]
+
+    @property
+    def queue_size(self):
+        return self.conf["period"]["queue_size"]
+
+
+class NsWorker(threading.Thread):
     def __init__(self, worker_index, config, plugins, db):
         """
 
@@ -1284,7 +1309,9 @@ class NsWorker(threading.Thread):
         self.plugin_name = "unknown"
         self.logger = logging.getLogger("ro.worker{}".format(worker_index))
         self.worker_index = worker_index
-        self.task_queue = queue.Queue(self.QUEUE_SIZE)
+        # refresh periods for created items
+        self.refresh_config = ConfigValidate(config)
+        self.task_queue = queue.Queue(self.refresh_config.queue_size)
         # targetvim: vimplugin class
         self.my_vims = {}
         # targetvim: vim information from database
@@ -1655,6 +1682,7 @@ class NsWorker(threading.Thread):
                         "tasks.status": ["SCHEDULED", "BUILD", "DONE", "FAILED"],
                         "locked_at.lt": now - self.task_locked_time,
                         "to_check_at.lt": self.time_last_task_processed,
+                        "to_check_at.gt": -1,
                     },
                     update_dict={"locked_by": self.my_id, "locked_at": now},
                     fail_on_empty=False,
@@ -1952,6 +1980,52 @@ class NsWorker(threading.Thread):
                         return ro_task_dependency, task_index
         raise NsWorkerException("Cannot get depending task {}".format(task_id))
 
+    def update_vm_refresh(self):
+        """Enables the VM status updates if self.refresh_config.active parameter
+        is not -1 and than updates the DB accordingly
+
+        """
+        try:
+            self.logger.debug("Checking if VM status update config")
+            next_refresh = time.time()
+            if self.refresh_config.active == -1:
+                next_refresh = -1
+            else:
+                next_refresh += self.refresh_config.active
+
+            if next_refresh != -1:
+                db_ro_task_update = {}
+                now = time.time()
+                next_check_at = now + (24 * 60 * 60)
+                next_check_at = min(next_check_at, next_refresh)
+                db_ro_task_update["vim_info.refresh_at"] = next_refresh
+                db_ro_task_update["to_check_at"] = next_check_at
+
+                self.logger.debug(
+                    "Finding tasks which to be updated to enable VM status updates"
+                )
+                refresh_tasks = self.db.get_list(
+                    "ro_tasks",
+                    q_filter={
+                        "tasks.status": "DONE",
+                        "to_check_at.lt": 0,
+                    },
+                )
+                self.logger.debug("Updating tasks to change the to_check_at status")
+                for task in refresh_tasks:
+                    q_filter = {
+                        "_id": task["_id"],
+                    }
+                    self.db.set_one(
+                        "ro_tasks",
+                        q_filter=q_filter,
+                        update_dict=db_ro_task_update,
+                        fail_on_empty=True,
+                    )
+
+        except Exception as e:
+            self.logger.error(f"Error updating tasks to enable VM status updates: {e}")
+
     def _process_pending_tasks(self, ro_task):
         ro_task_id = ro_task["_id"]
         now = time.time()
@@ -1969,13 +2043,16 @@ class NsWorker(threading.Thread):
             next_refresh = time.time()
 
             if task["item"] in ("image", "flavor"):
-                next_refresh += self.REFRESH_IMAGE
+                next_refresh += self.refresh_config.image
             elif new_status == "BUILD":
-                next_refresh += self.REFRESH_BUILD
+                next_refresh += self.refresh_config.build
             elif new_status == "DONE":
-                next_refresh += self.REFRESH_ACTIVE
+                if self.refresh_config.active == -1:
+                    next_refresh = -1
+                else:
+                    next_refresh += self.refresh_config.active
             else:
-                next_refresh += self.REFRESH_ERROR
+                next_refresh += self.refresh_config.error
 
             next_check_at = min(next_check_at, next_refresh)
             db_ro_task_update["vim_info.refresh_at"] = next_refresh
@@ -1987,6 +2064,8 @@ class NsWorker(threading.Thread):
             if self.logger.getEffectiveLevel() == logging.DEBUG:
                 self._log_ro_task(ro_task, None, None, "TASK_WF", "GET_TASK")
             """
+            # Check if vim status refresh is enabled again
+            self.update_vm_refresh()
             # 0: get task_status_create
             lock_object = None
             task_status_create = None
@@ -2140,10 +2219,8 @@ class NsWorker(threading.Thread):
                                     # self._create_task(ro_task, task_index, task_depends, db_ro_task_update)
                                     _update_refresh(new_status)
                             else:
-                                if (
-                                    ro_task["vim_info"]["refresh_at"]
-                                    and now > ro_task["vim_info"]["refresh_at"]
-                                ):
+                                refresh_at = ro_task["vim_info"]["refresh_at"]
+                                if refresh_at and refresh_at != -1 and now > refresh_at:
                                     new_status, db_vim_info_update = self.item2class[
                                         task["item"]
                                     ].refresh(ro_task)
