@@ -1118,7 +1118,7 @@ class vimconnector(vimconn.VimConnector):
         self.logger.debug("get_vminstance Return: response %s", response)
         return response
 
-    def delete_vminstance(self, vm_id, created_items=None):
+    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
         """Deletes a vm instance from the vim."""
         self.logger.debug(
             "delete_vminstance begin: vm_id %s created_items %s",

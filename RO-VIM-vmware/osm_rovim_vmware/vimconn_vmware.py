@@ -3488,18 +3488,16 @@ class vimconnector(vimconn.VimConnector):
 
         return vm_dict
 
-    def delete_vminstance(self, vm__vim_uuid, created_items=None):
+    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
         """Method poweroff and remove VM instance from vcloud director network.
 
         Args:
-            vm__vim_uuid: VM UUID
+            vm_id: VM UUID
 
         Returns:
             Returns the instance identifier
         """
-        self.logger.debug(
-            "Client requesting delete vm instance {} ".format(vm__vim_uuid)
-        )
+        self.logger.debug("Client requesting delete vm instance {} ".format(vm_id))
 
         _, vdc = self.get_vdc_details()
         vdc_obj = VDC(self.client, href=vdc.get("href"))
@@ -3516,24 +3514,22 @@ class vimconnector(vimconn.VimConnector):
             )
 
         try:
-            vapp_name = self.get_namebyvappid(vm__vim_uuid)
+            vapp_name = self.get_namebyvappid(vm_id)
             if vapp_name is None:
                 self.logger.debug(
                     "delete_vminstance(): Failed to get vm by given {} vm uuid".format(
-                        vm__vim_uuid
+                        vm_id
                     )
                 )
 
                 return (
                     -1,
                     "delete_vminstance(): Failed to get vm by given {} vm uuid".format(
-                        vm__vim_uuid
+                        vm_id
                     ),
                 )
 
-            self.logger.info(
-                "Deleting vApp {} and UUID {}".format(vapp_name, vm__vim_uuid)
-            )
+            self.logger.info("Deleting vApp {} and UUID {}".format(vapp_name, vm_id))
             vapp_resource = vdc_obj.get_vapp(vapp_name)
             vapp = VApp(self.client, resource=vapp_resource)
 
@@ -3565,13 +3561,13 @@ class vimconnector(vimconn.VimConnector):
                     if not powered_off:
                         self.logger.debug(
                             "delete_vminstance(): Failed to power off VM instance {} ".format(
-                                vm__vim_uuid
+                                vm_id
                             )
                         )
                     else:
                         self.logger.info(
                             "delete_vminstance(): Powered off VM instance {} ".format(
-                                vm__vim_uuid
+                                vm_id
                             )
                         )
 
@@ -3584,14 +3580,14 @@ class vimconnector(vimconn.VimConnector):
                         if not vapp:
                             self.logger.debug(
                                 "delete_vminstance(): Failed to get vm by given {} vm uuid".format(
-                                    vm__vim_uuid
+                                    vm_id
                                 )
                             )
 
                             return (
                                 -1,
                                 "delete_vminstance(): Failed to get vm by given {} vm uuid".format(
-                                    vm__vim_uuid
+                                    vm_id
                                 ),
                             )
 
@@ -3614,7 +3610,7 @@ class vimconnector(vimconn.VimConnector):
                     if not undeployed:
                         self.logger.debug(
                             "delete_vminstance(): Failed to undeploy vApp {} ".format(
-                                vm__vim_uuid
+                                vm_id
                             )
                         )
 
@@ -3629,14 +3625,14 @@ class vimconnector(vimconn.VimConnector):
                         if not vapp:
                             self.logger.debug(
                                 "delete_vminstance(): Failed to get vm by given {} vm uuid".format(
-                                    vm__vim_uuid
+                                    vm_id
                                 )
                             )
 
                             return (
                                 -1,
                                 "delete_vminstance(): Failed to get vm by given {} vm uuid".format(
-                                    vm__vim_uuid
+                                    vm_id
                                 ),
                             )
 
@@ -3656,16 +3652,14 @@ class vimconnector(vimconn.VimConnector):
 
                     if result is None:
                         self.logger.debug(
-                            "delete_vminstance(): Failed delete uuid {} ".format(
-                                vm__vim_uuid
-                            )
+                            "delete_vminstance(): Failed delete uuid {} ".format(vm_id)
                         )
                     else:
                         self.logger.info(
-                            "Deleted vm instance {} sccessfully".format(vm__vim_uuid)
+                            "Deleted vm instance {} successfully".format(vm_id)
                         )
                         config_drive_catalog_name, config_drive_catalog_id = (
-                            "cfg_drv-" + vm__vim_uuid,
+                            "cfg_drv-" + vm_id,
                             None,
                         )
                         catalog_list = self.get_image_list()
@@ -3688,12 +3682,12 @@ class vimconnector(vimconn.VimConnector):
                             )
                             self.delete_image(config_drive_catalog_id)
 
-                        return vm__vim_uuid
+                        return vm_id
         except Exception:
             self.logger.debug(traceback.format_exc())
 
             raise vimconn.VimConnException(
-                "delete_vminstance(): Failed delete vm instance {}".format(vm__vim_uuid)
+                "delete_vminstance(): Failed delete vm instance {}".format(vm_id)
             )
 
     def refresh_vms_status(self, vm_list):
@@ -4001,17 +3995,15 @@ class vimconnector(vimconn.VimConnector):
                 exc_info=True,
             )
 
-    def action_vminstance(self, vm__vim_uuid=None, action_dict=None, created_items={}):
+    def action_vminstance(self, vm_id=None, action_dict=None, created_items={}):
         """Send and action over a VM instance from VIM
         Returns the vm_id if the action was successfully sent to the VIM"""
 
         self.logger.debug(
-            "Received action for vm {} and action dict {}".format(
-                vm__vim_uuid, action_dict
-            )
+            "Received action for vm {} and action dict {}".format(vm_id, action_dict)
         )
 
-        if vm__vim_uuid is None or action_dict is None:
+        if vm_id is None or action_dict is None:
             raise vimconn.VimConnException("Invalid request. VM id or action is None.")
 
         _, vdc = self.get_vdc_details()
@@ -4022,20 +4014,20 @@ class vimconnector(vimconn.VimConnector):
                 )
             )
 
-        vapp_name = self.get_namebyvappid(vm__vim_uuid)
+        vapp_name = self.get_namebyvappid(vm_id)
         if vapp_name is None:
             self.logger.debug(
                 "action_vminstance(): Failed to get vm by given {} vm uuid".format(
-                    vm__vim_uuid
+                    vm_id
                 )
             )
 
             raise vimconn.VimConnException(
-                "Failed to get vm by given {} vm uuid".format(vm__vim_uuid)
+                "Failed to get vm by given {} vm uuid".format(vm_id)
             )
         else:
             self.logger.info(
-                "Action_vminstance vApp {} and UUID {}".format(vapp_name, vm__vim_uuid)
+                "Action_vminstance vApp {} and UUID {}".format(vapp_name, vm_id)
             )
 
         try:
@@ -4047,7 +4039,7 @@ class vimconnector(vimconn.VimConnector):
                 self.logger.info(
                     "action_vminstance: Power on vApp: {}".format(vapp_name)
                 )
-                poweron_task = self.power_on_vapp(vm__vim_uuid, vapp_name)
+                poweron_task = self.power_on_vapp(vm_id, vapp_name)
                 result = self.client.get_task_monitor().wait_for_success(
                     task=poweron_task
                 )
@@ -4070,7 +4062,7 @@ class vimconnector(vimconn.VimConnector):
                 self.instance_actions_result("pause", result, vapp_name)
             elif "resume" in action_dict:
                 self.logger.info("action_vminstance: resume vApp: {}".format(vapp_name))
-                poweron_task = self.power_on_vapp(vm__vim_uuid, vapp_name)
+                poweron_task = self.power_on_vapp(vm_id, vapp_name)
                 result = self.client.get_task_monitor().wait_for_success(
                     task=poweron_task
                 )
@@ -4102,7 +4094,7 @@ class vimconnector(vimconn.VimConnector):
                     )
                 )
 
-            return vm__vim_uuid
+            return vm_id
         except Exception as exp:
             self.logger.debug("action_vminstance: Failed with Exception {}".format(exp))
 
