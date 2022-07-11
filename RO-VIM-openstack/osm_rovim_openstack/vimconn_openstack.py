@@ -2281,7 +2281,12 @@ class vimconnector(vimconn.VimConnector):
                 try:
                     k_item, _, k_id = k.partition(":")
                     if k_item == "port":
-                        self.neutron.delete_port(k_id)
+                        port_dict = self.neutron.list_ports()
+                        existing_ports = [
+                            port["id"] for port in port_dict["ports"] if port_dict
+                        ]
+                        if k_id in existing_ports:
+                            self.neutron.delete_port(k_id)
                 except Exception as e:
                     self.logger.error(
                         "Error deleting port: {}: {}".format(type(e).__name__, e)
