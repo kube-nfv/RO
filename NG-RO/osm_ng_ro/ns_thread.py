@@ -504,8 +504,10 @@ class VimInteractionVdu(VimInteractionBase):
                 vim_info_info = yaml.safe_load(vim_info["vim_info"])
                 if vim_info_info.get("name"):
                     vim_info["name"] = vim_info_info["name"]
-            except Exception:
-                pass
+            except Exception as vim_info_error:
+                self.logger.exception(
+                    f"{vim_info_error} occured while getting the vim_info from yaml"
+                )
         except vimconn.VimConnException as e:
             # Mark all tasks at VIM_ERROR status
             self.logger.error(
@@ -746,7 +748,7 @@ class VimInteractionFlavor(VimInteractionBase):
                     flavor_data = task["find_params"]["flavor_data"]
                     vim_flavor_id = target_vim.get_flavor_id_from_data(flavor_data)
                 except vimconn.VimConnNotFoundException:
-                    pass
+                    self.logger.exception("VimConnNotFoundException occured.")
 
             if not vim_flavor_id and task.get("params"):
                 # CREATE
@@ -1600,7 +1602,9 @@ class NsWorker(threading.Thread):
                 try:
                     mkdir(file_name)
                 except FileExistsError:
-                    pass
+                    self.logger.exception(
+                        "FileExistsError occured while processing vim_config."
+                    )
 
                 file_name = file_name + "/ca_cert"
 
@@ -1653,7 +1657,8 @@ class NsWorker(threading.Thread):
             self.logger.info("Unloaded {}".format(target_id))
             rmtree("{}:{}".format(target_id, self.worker_index))
         except FileNotFoundError:
-            pass  # this is raised by rmtree if folder does not exist
+            # This is raised by rmtree if folder does not exist.
+            self.logger.exception("FileNotFoundError occured while unloading VIM.")
         except Exception as e:
             self.logger.error("Cannot unload {}: {}".format(target_id, e))
 

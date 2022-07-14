@@ -334,7 +334,7 @@ class VimAdminThread(threading.Thread):
                         self.logger.error("renew_locks task exception: {}".format(exc))
                         self.aiomain_task_renew_lock = None
                 except asyncio.CancelledError:
-                    pass
+                    self.logger.exception("asyncio.CancelledError occured.")
 
             except Exception as e:
                 if self.to_terminate:

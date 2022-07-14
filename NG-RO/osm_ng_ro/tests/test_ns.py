@@ -18,7 +18,14 @@
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
-from jinja2 import TemplateError, TemplateNotFound, UndefinedError
+from jinja2 import (
+    Environment,
+    select_autoescape,
+    StrictUndefined,
+    TemplateError,
+    TemplateNotFound,
+    UndefinedError,
+)
 from osm_ng_ro.ns import Ns, NsException
 
 
@@ -2632,8 +2639,108 @@ class TestNs(unittest.TestCase):
                 cloud_init_content=cloud_init_content, params=params, context=context
             )
 
-    def test__parse_jinja2(self):
-        pass
+    def test_rendering_jinja2_temp_without_special_characters(self):
+        cloud_init_content = """
+        disk_setup:
+            ephemeral0:
+                table_type: {{type}}
+                layout: True
+                overwrite: {{is_override}}
+        runcmd:
+             - [ ls, -l, / ]
+             - [ sh, -xc, "echo $(date) '{{command}}'" ]
+        """
+        params = {
+            "type": "mbr",
+            "is_override": "False",
+            "command": "; mkdir abc",
+        }
+        context = "cloud-init for VM"
+        expected_result = """
+        disk_setup:
+            ephemeral0:
+                table_type: mbr
+                layout: True
+                overwrite: False
+        runcmd:
+             - [ ls, -l, / ]
+             - [ sh, -xc, "echo $(date) '; mkdir abc'" ]
+        """
+        result = Ns._parse_jinja2(
+            cloud_init_content=cloud_init_content, params=params, context=context
+        )
+        self.assertEqual(result, expected_result)
+
+    def test_rendering_jinja2_temp_with_special_characters(self):
+        cloud_init_content = """
+        disk_setup:
+            ephemeral0:
+                table_type: {{type}}
+                layout: True
+                overwrite: {{is_override}}
+        runcmd:
+             - [ ls, -l, / ]
+             - [ sh, -xc, "echo $(date) '{{command}}'" ]
+        """
+        params = {
+            "type": "mbr",
+            "is_override": "False",
+            "command": "& rm -rf",
+        }
+        context = "cloud-init for VM"
+        expected_result = """
+        disk_setup:
+            ephemeral0:
+                table_type: mbr
+                layout: True
+                overwrite: False
+        runcmd:
+             - [ ls, -l, / ]
+             - [ sh, -xc, "echo $(date) '& rm -rf /'" ]
+        """
+        result = Ns._parse_jinja2(
+            cloud_init_content=cloud_init_content, params=params, context=context
+        )
+        self.assertNotEqual(result, expected_result)
+
+    def test_rendering_jinja2_temp_with_special_characters_autoescape_is_false(self):
+        with patch("osm_ng_ro.ns.Environment") as mock_environment:
+            mock_environment.return_value = Environment(
+                undefined=StrictUndefined,
+                autoescape=select_autoescape(default_for_string=False, default=False),
+            )
+            cloud_init_content = """
+                disk_setup:
+                    ephemeral0:
+                        table_type: {{type}}
+                        layout: True
+                        overwrite: {{is_override}}
+                runcmd:
+                     - [ ls, -l, / ]
+                     - [ sh, -xc, "echo $(date) '{{command}}'" ]
+                """
+            params = {
+                "type": "mbr",
+                "is_override": "False",
+                "command": "& rm -rf /",
+            }
+            context = "cloud-init for VM"
+            expected_result = """
+                disk_setup:
+                    ephemeral0:
+                        table_type: mbr
+                        layout: True
+                        overwrite: False
+                runcmd:
+                     - [ ls, -l, / ]
+                     - [ sh, -xc, "echo $(date) '& rm -rf /'" ]
+                """
+            result = Ns._parse_jinja2(
+                cloud_init_content=cloud_init_content,
+                params=params,
+                context=context,
+            )
+            self.assertEqual(result, expected_result)
 
     def test__process_vdu_params_empty_kargs(self):
         pass

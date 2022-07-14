@@ -31,6 +31,7 @@ from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jinja2 import (
     Environment,
+    select_autoescape,
     StrictUndefined,
     TemplateError,
     TemplateNotFound,
@@ -77,8 +78,8 @@ def get_process_id():
 
             if text_id:
                 return text_id
-    except Exception:
-        pass
+    except Exception as error:
+        logging.exception(f"{error} occured while getting process id")
 
     # Return a random id
     return "".join(random_choice("0123456789abcdef") for _ in range(12))
@@ -380,7 +381,10 @@ class Ns(object):
             str: [description]
         """
         try:
-            env = Environment(undefined=StrictUndefined)
+            env = Environment(
+                undefined=StrictUndefined,
+                autoescape=select_autoescape(default_for_string=True, default=True),
+            )
             template = env.from_string(cloud_init_content)
 
             return template.render(params or {})
