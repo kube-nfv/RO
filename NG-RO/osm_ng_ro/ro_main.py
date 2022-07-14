@@ -227,9 +227,7 @@ class Server(object):
                         cherrypy.request.headers.pop("Content-File-MD5", None)
                     elif "application/yaml" in cherrypy.request.headers["Content-Type"]:
                         error_text = "Invalid yaml format "
-                        indata = yaml.load(
-                            cherrypy.request.body, Loader=yaml.SafeLoader
-                        )
+                        indata = yaml.safe_load(cherrypy.request.body)
                         cherrypy.request.headers.pop("Content-File-MD5", None)
                     elif (
                         "application/binary" in cherrypy.request.headers["Content-Type"]
@@ -262,13 +260,11 @@ class Server(object):
                         #                          "Only 'Content-Type' of type 'application/json' or
                         # 'application/yaml' for input format are available")
                         error_text = "Invalid yaml format "
-                        indata = yaml.load(
-                            cherrypy.request.body, Loader=yaml.SafeLoader
-                        )
+                        indata = yaml.safe_load(cherrypy.request.body)
                         cherrypy.request.headers.pop("Content-File-MD5", None)
                 else:
                     error_text = "Invalid yaml format "
-                    indata = yaml.load(cherrypy.request.body, Loader=yaml.SafeLoader)
+                    indata = yaml.safe_load(cherrypy.request.body)
                     cherrypy.request.headers.pop("Content-File-MD5", None)
 
             if not indata:
@@ -284,9 +280,11 @@ class Server(object):
                         kwargs[k] = None
                     elif format_yaml:
                         try:
-                            kwargs[k] = yaml.load(v, Loader=yaml.SafeLoader)
-                        except Exception:
-                            pass
+                            kwargs[k] = yaml.safe_load(v)
+                        except Exception as yaml_error:
+                            logging.exception(
+                                f"{yaml_error} occured while parsing the yaml"
+                            )
                     elif (
                         k.endswith(".gt")
                         or k.endswith(".lt")
@@ -298,8 +296,10 @@ class Server(object):
                         except Exception:
                             try:
                                 kwargs[k] = float(v)
-                            except Exception:
-                                pass
+                            except Exception as keyword_error:
+                                logging.exception(
+                                    f"{keyword_error} occured while getting the keyword arguments"
+                                )
                     elif v.find(",") > 0:
                         kwargs[k] = v.split(",")
                 elif isinstance(v, (list, tuple)):
@@ -308,9 +308,11 @@ class Server(object):
                             v[index] = None
                         elif format_yaml:
                             try:
-                                v[index] = yaml.load(v[index], Loader=yaml.SafeLoader)
-                            except Exception:
-                                pass
+                                v[index] = yaml.safe_load(v[index])
+                            except Exception as error:
+                                logging.exception(
+                                    f"{error} occured while parsing the yaml"
+                                )
 
             return indata
         except (ValueError, yaml.YAMLError) as exc:
@@ -564,18 +566,14 @@ class Server(object):
 
             try:
                 if cherrypy.request.method == "POST":
-                    to_send = yaml.load(cherrypy.request.body, Loader=yaml.SafeLoader)
+                    to_send = yaml.safe_load(cherrypy.request.body)
                     for k, v in to_send.items():
                         self.ns.msg.write(main_topic, k, v)
                         return_text += "  {}: {}\n".format(k, v)
                 elif cherrypy.request.method == "GET":
                     for k, v in kwargs.items():
-                        self.ns.msg.write(
-                            main_topic, k, yaml.load(v, Loader=yaml.SafeLoader)
-                        )
-                        return_text += "  {}: {}\n".format(
-                            k, yaml.load(v, Loader=yaml.SafeLoader)
-                        )
+                        self.ns.msg.write(main_topic, k, yaml.safe_load(v))
+                        return_text += "  {}: {}\n".format(k, yaml.safe_load(v))
             except Exception as e:
                 return_text += "Error: " + str(e)
 
@@ -990,7 +988,7 @@ if __name__ == "__main__":
             elif o in ("-c", "--config"):
                 config_file = a
             else:
-                assert False, "Unhandled option"
+                raise ValueError("Unhandled option")
 
         if config_file:
             if not path.isfile(config_file):

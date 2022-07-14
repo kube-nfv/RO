@@ -632,8 +632,8 @@ class AristaSdnConnector(SdnConnectorBase):
 
             try:
                 self.__addMetadata(s_uid, service_type, s_connInf["vlan_id"])
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.exception(f"{e} occured.")
 
             return (s_uid, s_connInf)
         except CvpLoginError as e:
@@ -959,7 +959,6 @@ class AristaSdnConnector(SdnConnectorBase):
                     self.logger.error(
                         "Error removing configlets from device {}: {}".format(s, e)
                     )
-                    pass
 
         for s in self.switches:
             if allLeafConfigured[s]:
@@ -1136,7 +1135,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 found_in_cvp = True
             except CvpApiError as error:
                 if "Entity does not exist" in error.msg:
-                    pass
+                    self.logger.exception(f"{error} occured.")
                 else:
                     raise error
 
@@ -1356,7 +1355,7 @@ class AristaSdnConnector(SdnConnectorBase):
             found_in_cvp = True
         except CvpApiError as error:
             if "Entity does not exist" in error.msg:
-                pass
+                self.logger.exception(f"{error} occured.")
             else:
                 raise error
 
@@ -1378,7 +1377,6 @@ class AristaSdnConnector(SdnConnectorBase):
                     service_uuid, str(e)
                 )
             )
-            pass
 
     def __removeMetadata(self, service_uuid):
         """Removes the connectivity service from 'OSM_metadata' configLet"""
@@ -1389,7 +1387,7 @@ class AristaSdnConnector(SdnConnectorBase):
             found_in_cvp = True
         except CvpApiError as error:
             if "Entity does not exist" in error.msg:
-                pass
+                self.logger.exception(f"{error} occured.")
             else:
                 raise error
 
@@ -1412,7 +1410,6 @@ class AristaSdnConnector(SdnConnectorBase):
                     service_uuid, str(e)
                 )
             )
-            pass
 
     def edit_connectivity_service(
         self, service_uuid, conn_info=None, connection_points=None, **kwargs
@@ -1605,7 +1602,7 @@ class AristaSdnConnector(SdnConnectorBase):
                 found_in_cvp = True
             except CvpApiError as error:
                 if "Entity does not exist" in error.msg:
-                    pass
+                    self.logger.exception(f"{error} occured.")
                 else:
                     raise error
 
@@ -1626,7 +1623,7 @@ class AristaSdnConnector(SdnConnectorBase):
             found_in_cvp = True
         except CvpApiError as error:
             if "Entity does not exist" in error.msg:
-                pass
+                self.logger.exception(f"{error} occured.")
             else:
                 raise error
 
@@ -1656,7 +1653,7 @@ class AristaSdnConnector(SdnConnectorBase):
             found_in_cvp = True
         except CvpApiError as error:
             if "Entity does not exist" in error.msg:
-                pass
+                self.logger.exception(f"{error} occured.")
             else:
                 raise error
 

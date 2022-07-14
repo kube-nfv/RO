@@ -369,7 +369,7 @@ class SdnConnectorOpenFlow(SdnConnectorBase):
                 try:
                     self.of_connector.del_flow(flow_id)
                 except OpenflowConnNotFoundException:
-                    pass
+                    self.logger.exception("OpenflowConnNotFoundException occured.")
                 except OpenflowConnException as e:
                     error_text = "Cannot remove rule '{}': {}".format(flow_id, e)
                     error_list.append(error_text)

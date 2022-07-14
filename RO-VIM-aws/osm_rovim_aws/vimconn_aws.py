@@ -141,9 +141,9 @@ class vimconnector(vimconn.VimConnector):
                 try:
                     if flavor_data[0] == "@":  # read from a file
                         with open(flavor_data[1:], "r") as stream:
-                            self.flavor_info = yaml.load(stream, Loader=yaml.Loader)
+                            self.flavor_info = yaml.safe_load(stream)
                     else:
-                        self.flavor_info = yaml.load(flavor_data, Loader=yaml.Loader)
+                        self.flavor_info = yaml.safe_load(flavor_data)
                 except yaml.YAMLError as e:
                     self.flavor_info = None
 
