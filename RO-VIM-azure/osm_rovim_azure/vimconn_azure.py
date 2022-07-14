@@ -415,7 +415,7 @@ class vimconnector(vimconn.VimConnector):
             return
         except CloudError as e:
             if e.error.error and "notfound" in e.error.error.lower():
-                pass
+                self.logger.exception("CloudError Exception occured.")
                 # continue and create it
             else:
                 self._format_vimconn_exception(e)
