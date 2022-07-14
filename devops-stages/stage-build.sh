@@ -17,32 +17,35 @@ set -ex
 rm -rf deb_dist/*
 mkdir -p deb_dist
 
-# Building packages
-tox -e dist_ro_plugin &
-tox -e dist_ng_ro &
-tox -e dist_ro_sdn_arista_cloudvision &
-tox -e dist_ro_sdn_dpb &
-tox -e dist_ro_sdn_dynpac &
-tox -e dist_ro_sdn_floodlight_of &
-tox -e dist_ro_sdn_ietfl2vpn &
-tox -e dist_ro_sdn_juniper_contrail &
-tox -e dist_ro_sdn_odl_of &
-tox -e dist_ro_sdn_onos_of &
-tox -e dist_ro_sdn_onos_vpls &
-tox -e dist_ro_vim_aws &
-tox -e dist_ro_vim_azure &
-tox -e dist_ro_vim_openstack &
-tox -e dist_ro_vim_openvim &
-tox -e dist_ro_vim_vmware &
-tox -e dist_ro_vim_gcp &
+PACKAGES="
+dist_ro_plugin
+dist_ng_ro
+dist_ro_sdn_arista_cloudvision
+dist_ro_sdn_dpb
+dist_ro_sdn_dynpac
+dist_ro_sdn_floodlight_of
+dist_ro_sdn_ietfl2vpn
+dist_ro_sdn_juniper_contrail
+dist_ro_sdn_odl_of
+dist_ro_sdn_onos_of
+dist_ro_sdn_onos_vpls
+dist_ro_vim_aws
+dist_ro_vim_azure
+dist_ro_vim_openstack
+dist_ro_vim_openvim
+dist_ro_vim_vmware
+dist_ro_vim_gcp"
 
-while true; do
-  wait -n || {
-    code="$?"
-    ([[ $code = "127" ]] && exit 0 || exit "$code")
-    break
-  }
-done;
+TOX_ENV_LIST="$(echo $PACKAGES | sed "s/ /,/g")"
+<<<<<<< ours
+
+TOX_PARALLEL_NO_SPINNER=1 tox -e $TOX_ENV_LIST --parallel auto
+=======
+PROCESSES=$(expr `nproc --a` / 2)
+
+TOX_PARALLEL_NO_SPINNER=1 tox -e $TOX_ENV_LIST --parallel $PROCESSES
+>>>>>>> theirs
+
 # Copying packages
 # RO plugin
 cp RO-plugin/deb_dist/python3-osm-ro-plugin_*.deb deb_dist/
