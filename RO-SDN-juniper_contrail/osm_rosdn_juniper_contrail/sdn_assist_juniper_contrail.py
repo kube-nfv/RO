@@ -80,6 +80,7 @@ class JuniperContrail(SdnConnectorBase):
         self.fabric = None
         overlay_url = None
         self.vni_range = None
+        self.verify = True
 
         if config:
             auth_url = config.get("auth_url")
@@ -89,6 +90,23 @@ class JuniperContrail(SdnConnectorBase):
             self.fabric = config.get("fabric")
             self.overlay_url = config.get("overlay_url")
             self.vni_range = config.get("vni_range")
+
+            if config.get("insecure") and config.get("ca_cert"):
+                raise SdnConnectorError(
+                    "options insecure and ca_cert are mutually exclusive"
+                )
+
+            if config.get("ca_cert"):
+                self.verify = config.get("ca_cert")
+
+            elif config.get("insecure"):
+                self.verify = False
+
+            else:
+                raise SdnConnectorError(
+                    "certificate should provided or ssl verification should be "
+                    "disabled by setting insecure as True in sdn/wim config."
+                )
 
         if not url:
             raise SdnConnectorError("'url' must be provided")
@@ -150,6 +168,7 @@ class JuniperContrail(SdnConnectorBase):
             "domain": self.domain,
             "asn": self.asn,
             "fabric": self.fabric,
+            "verify": self.verify,
         }
         self.underlay_api = UnderlayApi(
             url,
