@@ -54,6 +54,7 @@ class UnderlayApi:
             self.domain = config.get("domain")
             self.asn = config.get("asn")
             self.fabric = config.get("fabric")
+            self.verify = config.get("verify")
 
         # Init http headers for all requests
         self.http_header = {"Content-Type": "application/json"}
@@ -90,7 +91,7 @@ class UnderlayApi:
 
         # Init http lib
         auth_info = {"auth_url": self.auth_url, "auth_dict": auth_dict}
-        self.http = ContrailHttp(auth_info, self.logger)
+        self.http = ContrailHttp(auth_info, self.logger, self.verify)
 
     def check_auth(self):
         response = self.http.get_cmd(url=self.auth_url, headers=self.http_header)
