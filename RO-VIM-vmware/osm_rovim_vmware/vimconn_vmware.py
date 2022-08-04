@@ -5450,18 +5450,18 @@ class vimconnector(vimconn.VimConnector):
                     return None
 
                 if add_vdc_rest_url is not None and provider_vdc_ref is not None:
-                    data = """ <CreateVdcParams name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5"><Description>{1:s}</Description>
-                            <AllocationModel>ReservationPool</AllocationModel>
-                            <ComputeCapacity><Cpu><Units>MHz</Units><Allocated>2048</Allocated><Limit>2048</Limit></Cpu>
-                            <Memory><Units>MB</Units><Allocated>2048</Allocated><Limit>2048</Limit></Memory>
-                            </ComputeCapacity><NicQuota>0</NicQuota><NetworkQuota>100</NetworkQuota>
-                            <VdcStorageProfile><Enabled>true</Enabled><Units>MB</Units><Limit>20480</Limit><Default>true</Default></VdcStorageProfile>
-                            <ProviderVdcReference
-                            name="Main Provider"
-                            href="{2:s}" />
-                    <UsesFastProvisioning>true</UsesFastProvisioning></CreateVdcParams>""".format(
-                        escape(vdc_name), escape(vdc_name), provider_vdc_ref
-                    )
+                    data = (
+                        ' <CreateVdcParams name="{0:s}" xmlns="http://www.vmware.com/vcloud/v1.5">'
+                        "<Description>{1:s}</Description>"
+                        "<AllocationModel>ReservationPool</AllocationModel>"
+                        "<ComputeCapacity><Cpu><Units>MHz</Units><Allocated>2048</Allocated><Limit>2048</Limit>"
+                        "</Cpu><Memory><Units>MB</Units><Allocated>2048</Allocated><Limit>2048</Limit></Memory>"
+                        "</ComputeCapacity><NicQuota>0</NicQuota><NetworkQuota>100</NetworkQuota>"
+                        "<VdcStorageProfile><Enabled>true</Enabled><Units>MB</Units><Limit>20480</Limit>"
+                        "<Default>true</Default></VdcStorageProfile>"
+                        '<ProviderVdcReference name="Main Provider" href="{2:s}" />'
+                        "<UsesFastProvisioning>true</UsesFastProvisioning></CreateVdcParams>"
+                    ).format(escape(vdc_name), escape(vdc_name), provider_vdc_ref)
                     headers[
                         "Content-Type"
                     ] = "application/vnd.vmware.admin.createVdcParams+xml"
