@@ -2341,15 +2341,23 @@ class Ns(object):
 
         # Check each VNF of the target
         for target_vnf in target_list:
-            # Find this VNF in the list from DB
-            vnfr_id = target_vnf.get("vnfInstanceId", None)
-            if vnfr_id:
-                existing_vnf = db_vnfrs.get(vnfr_id)
-                db_record = "vnfrs:{}:{}".format(vnfr_id, db_path)
-                # vim_account_id = existing_vnf.get("vim-account-id", "")
+            # Find this VNF in the list from DB, raise exception if vnfInstanceId is not found
+            vnfr_id = target_vnf["vnfInstanceId"]
+            existing_vnf = db_vnfrs.get(vnfr_id)
+            db_record = "vnfrs:{}:{}".format(vnfr_id, db_path)
+            # vim_account_id = existing_vnf.get("vim-account-id", "")
 
+            target_vdus = target_vnf.get("additionalParams", {}).get("vdu", [])
             # Check each VDU of this VNF
-            for target_vdu in target_vnf["additionalParams"].get("vdu", None):
+            if not target_vdus:
+                # Create target_vdu_list from DB, if VDUs are not specified
+                target_vdus = []
+                for existing_vdu in existing_vnf.get("vdur"):
+                    vdu_name = existing_vdu.get("vdu-name", None)
+                    vdu_index = existing_vdu.get("count-index", 0)
+                    vdu_to_be_healed = {"vdu-id": vdu_name, "count-index": vdu_index}
+                    target_vdus.append(vdu_to_be_healed)
+            for target_vdu in target_vdus:
                 vdu_name = target_vdu.get("vdu-id", None)
                 # For multi instance VDU count-index is mandatory
                 # For single session VDU count-indes is 0
