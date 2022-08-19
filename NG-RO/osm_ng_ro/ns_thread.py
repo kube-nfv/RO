@@ -27,7 +27,8 @@ A ro_task can contain several 'tasks', each one with a target, where to store th
 from copy import deepcopy
 from http import HTTPStatus
 import logging
-from os import mkdir
+from os import makedirs
+from os import path
 import queue
 from shutil import rmtree
 import threading
@@ -39,7 +40,8 @@ from unittest.mock import Mock
 from importlib_metadata import entry_points
 from osm_common.dbbase import DbException
 from osm_ng_ro.vim_admin import LockRenew
-from osm_ro_plugin import sdnconn, vimconn
+from osm_ro_plugin import sdnconn
+from osm_ro_plugin import vimconn
 from osm_ro_plugin.sdn_dummy import SdnDummyConnector
 from osm_ro_plugin.vim_dummy import VimDummyConnector
 import yaml
@@ -1587,7 +1589,7 @@ class NsWorker(threading.Thread):
                 self.task_lock.release()
                 return False
 
-    def _process_vim_config(self, target_id, db_vim):
+    def _process_vim_config(self, target_id: str, db_vim: dict) -> None:
         """
         Process vim config, creating vim configuration files as ca_cert
         :param target_id: vim/sdn/wim + id
@@ -1598,17 +1600,14 @@ class NsWorker(threading.Thread):
             return
 
         file_name = ""
+        work_dir = "/app/osm_ro/certs"
 
         try:
             if db_vim["config"].get("ca_cert_content"):
-                file_name = "{}:{}".format(target_id, self.worker_index)
+                file_name = f"{work_dir}/{target_id}:{self.worker_index}"
 
-                try:
-                    mkdir(file_name)
-                except FileExistsError:
-                    self.logger.exception(
-                        "FileExistsError occured while processing vim_config."
-                    )
+                if not path.isdir(file_name):
+                    makedirs(file_name)
 
                 file_name = file_name + "/ca_cert"
 

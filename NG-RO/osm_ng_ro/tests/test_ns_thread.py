@@ -17,12 +17,13 @@
 
 import logging
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, mock_open, patch
 
 from osm_common.dbmemory import DbMemory
 from osm_ng_ro.ns_thread import (
     ConfigValidate,
     NsWorker,
+    NsWorkerException,
     VimInteractionAffinityGroup,
     VimInteractionMigration,
     VimInteractionNet,
@@ -256,6 +257,74 @@ class TestNsWorker(unittest.TestCase):
                 self.assertEqual(
                     len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count
                 )
+
+    @patch("osm_ng_ro.ns_thread.makedirs", return_value="")
+    def test_create_file_cert(self, mock_makedirs):
+        vim_config = {"config": {"ca_cert_content": "test"}}
+        target_id = "1234"
+        db = Mock()
+
+        with patch("builtins.open", mock_open()) as mocked_file:
+            nsw = NsWorker(self.worker_index, self.config, self.plugins, db)
+            nsw._process_vim_config(target_id, vim_config)
+            mocked_file.assert_called_once_with(
+                f"/app/osm_ro/certs/{target_id}:{self.worker_index}/ca_cert", "w"
+            )
+            assert (
+                vim_config["config"]["ca_cert"]
+                == f"/app/osm_ro/certs/{target_id}:{self.worker_index}/ca_cert"
+            )
+
+    @patch("osm_ng_ro.ns_thread.makedirs")
+    @patch("osm_ng_ro.ns_thread.path")
+    def test_create_file_cert_exists(self, mock_path, mock_makedirs):
+        vim_config = {"config": {"ca_cert_content": "test"}}
+        target_id = "1234"
+        db = Mock()
+        mock_path.isdir.return_value = True
+
+        with patch("builtins.open", mock_open()) as mocked_file:
+            nsw = NsWorker(self.worker_index, self.config, self.plugins, db)
+            nsw._process_vim_config(target_id, vim_config)
+            mock_makedirs.assert_not_called()
+            mocked_file.assert_called_once_with(
+                f"/app/osm_ro/certs/{target_id}:{self.worker_index}/ca_cert", "w"
+            )
+            assert (
+                vim_config["config"]["ca_cert"]
+                == f"/app/osm_ro/certs/{target_id}:{self.worker_index}/ca_cert"
+            )
+
+    @patch("osm_ng_ro.ns_thread.path")
+    @patch("osm_ng_ro.ns_thread.makedirs", side_effect=Exception)
+    def test_create_file_cert_makedirs_except(self, mock_makedirs, mock_path):
+        vim_config = {"config": {"ca_cert_content": "test"}}
+        target_id = "1234"
+        db = Mock()
+        mock_path.isdir.return_value = False
+
+        with patch("builtins.open", mock_open()) as mocked_file:
+            nsw = NsWorker(self.worker_index, self.config, self.plugins, db)
+            with self.assertRaises(NsWorkerException):
+                nsw._process_vim_config(target_id, vim_config)
+            mocked_file.assert_not_called()
+            assert vim_config["config"]["ca_cert_content"] == "test"
+
+    @patch("osm_ng_ro.ns_thread.makedirs", return_value="")
+    def test_create_file_cert_open_excepts(self, mock_makedirs):
+        vim_config = {"config": {"ca_cert_content": "test"}}
+        target_id = "1234"
+        db = Mock()
+
+        with patch("builtins.open", mock_open()) as mocked_file:
+            mocked_file.side_effect = Exception
+            nsw = NsWorker(self.worker_index, self.config, self.plugins, db)
+            with self.assertRaises(NsWorkerException):
+                nsw._process_vim_config(target_id, vim_config)
+            mocked_file.assert_called_once_with(
+                f"/app/osm_ro/certs/{target_id}:{self.worker_index}/ca_cert", "w"
+            )
+            assert vim_config["config"]["ca_cert_content"] == "test"
 
 
 class TestVimInteractionNet(unittest.TestCase):
