@@ -71,6 +71,9 @@ vnfd_wth_persistent_storage = {
             "id": "persistent-root-volume",
             "type-of-storage": "persistent-storage:persistent-storage",
             "size-of-storage": "10",
+            "vdu-storage-requirements": [
+                {"key": "keep-volume", "value": "true"},
+            ],
         },
         {
             "id": "ephemeral-volume",
@@ -144,6 +147,9 @@ target_vdu_wth_persistent_storage = {
             "id": "persistent-root-volume",
             "size-of-storage": "10",
             "type-of-storage": "persistent-storage:persistent-storage",
+            "vdu-storage-requirements": [
+                {"key": "keep-volume", "value": "true"},
+            ],
         },
         {
             "id": "ephemeral-volume",
@@ -3239,32 +3245,48 @@ class TestProcessVduParams(unittest.TestCase):
         self.ns = Ns()
         self.logger = CopyingMock(autospec=True)
 
-    def test_find_persistent_root_volumes_empty_instantiation_vol_list(self):
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_find_persistent_root_volumes_empty_instantiation_vol_list(
+        self, mock_volume_keeping_required
+    ):
         """Find persistent root volume, instantiation_vol_list is empty."""
         vnfd = deepcopy(vnfd_wth_persistent_storage)
         target_vdu = target_vdu_wth_persistent_storage
         vdu_instantiation_volumes_list = []
         disk_list = []
+        mock_volume_keeping_required.return_value = True
+        expected_root_disk = {
+            "id": "persistent-root-volume",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+            "vdu-storage-requirements": [{"key": "keep-volume", "value": "true"}],
+        }
         expected_persist_root_disk = {
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": True,
             }
         }
         expected_disk_list = [
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": True,
             },
         ]
         persist_root_disk = self.ns.find_persistent_root_volumes(
             vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(persist_root_disk, expected_persist_root_disk)
+        mock_volume_keeping_required.assert_called_once_with(expected_root_disk)
         self.assertEqual(disk_list, expected_disk_list)
         self.assertEqual(len(disk_list), 1)
 
-    def test_find_persistent_root_volumes_always_selects_first_vsd_as_root(self):
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_find_persistent_root_volumes_always_selects_first_vsd_as_root(
+        self, mock_volume_keeping_required
+    ):
         """Find persistent root volume, always selects the first vsd as root volume."""
         vnfd = deepcopy(vnfd_wth_persistent_storage)
         vnfd["vdu"][0]["virtual-storage-desc"] = [
@@ -3275,26 +3297,38 @@ class TestProcessVduParams(unittest.TestCase):
         target_vdu = target_vdu_wth_persistent_storage
         vdu_instantiation_volumes_list = []
         disk_list = []
+        mock_volume_keeping_required.return_value = True
+        expected_root_disk = {
+            "id": "persistent-volume2",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+        }
         expected_persist_root_disk = {
             "persistent-volume2": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": True,
             }
         }
         expected_disk_list = [
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": True,
             },
         ]
         persist_root_disk = self.ns.find_persistent_root_volumes(
             vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(persist_root_disk, expected_persist_root_disk)
+        mock_volume_keeping_required.assert_called_once_with(expected_root_disk)
         self.assertEqual(disk_list, expected_disk_list)
         self.assertEqual(len(disk_list), 1)
 
-    def test_find_persistent_root_volumes_empty_size_of_storage(self):
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_find_persistent_root_volumes_empty_size_of_storage(
+        self, mock_volume_keeping_required
+    ):
         """Find persistent root volume, size of storage is empty."""
         vnfd = deepcopy(vnfd_wth_persistent_storage)
         vnfd["virtual-storage-desc"][0]["size-of-storage"] = ""
@@ -3310,34 +3344,54 @@ class TestProcessVduParams(unittest.TestCase):
             vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(persist_root_disk, None)
+        mock_volume_keeping_required.assert_not_called()
         self.assertEqual(disk_list, [])
 
-    def test_find_persistent_root_empty_disk_list(self):
-        """Find persistent root volume, empty disk list."""
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_find_persistent_root_volumes_keeping_is_not_required(
+        self, mock_volume_keeping_required
+    ):
+        """Find persistent root volume, volume keeping is not required."""
         vnfd = deepcopy(vnfd_wth_persistent_storage)
+        vnfd["virtual-storage-desc"][1]["vdu-storage-requirements"] = [
+            {"key": "keep-volume", "value": "false"},
+        ]
         target_vdu = target_vdu_wth_persistent_storage
         vdu_instantiation_volumes_list = []
         disk_list = []
+        mock_volume_keeping_required.return_value = False
+        expected_root_disk = {
+            "id": "persistent-root-volume",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+            "vdu-storage-requirements": [{"key": "keep-volume", "value": "false"}],
+        }
         expected_persist_root_disk = {
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             }
         }
         expected_disk_list = [
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             },
         ]
         persist_root_disk = self.ns.find_persistent_root_volumes(
             vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(persist_root_disk, expected_persist_root_disk)
+        mock_volume_keeping_required.assert_called_once_with(expected_root_disk)
         self.assertEqual(disk_list, expected_disk_list)
         self.assertEqual(len(disk_list), 1)
 
-    def test_find_persistent_root_volumes_target_vdu_mismatch(self):
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_find_persistent_root_volumes_target_vdu_mismatch(
+        self, mock_volume_keeping_required
+    ):
         """Find persistent root volume, target vdu name is not matching."""
         vnfd = deepcopy(vnfd_wth_persistent_storage)
         vnfd["vdu"][0]["name"] = "Several_Volumes-VM"
@@ -3348,10 +3402,14 @@ class TestProcessVduParams(unittest.TestCase):
             vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(result, None)
+        mock_volume_keeping_required.assert_not_called()
         self.assertEqual(disk_list, [])
         self.assertEqual(len(disk_list), 0)
 
-    def test_find_persistent_root_volumes_with_instantiation_vol_list(self):
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_find_persistent_root_volumes_with_instantiation_vol_list(
+        self, mock_volume_keeping_required
+    ):
         """Find persistent root volume, existing volume needs to be used."""
         vnfd = deepcopy(vnfd_wth_persistent_storage)
         target_vdu = target_vdu_wth_persistent_storage
@@ -3378,10 +3436,14 @@ class TestProcessVduParams(unittest.TestCase):
             vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(persist_root_disk, expected_persist_root_disk)
+        mock_volume_keeping_required.assert_not_called()
         self.assertEqual(disk_list, expected_disk_list)
         self.assertEqual(len(disk_list), 1)
 
-    def test_find_persistent_root_volumes_invalid_instantiation_params(self):
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_find_persistent_root_volumes_invalid_instantiation_params(
+        self, mock_volume_keeping_required
+    ):
         """Find persistent root volume, existing volume id keyword is invalid."""
         vnfd = deepcopy(vnfd_wth_persistent_storage)
         target_vdu = target_vdu_wth_persistent_storage
@@ -3396,50 +3458,64 @@ class TestProcessVduParams(unittest.TestCase):
             self.ns.find_persistent_root_volumes(
                 vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
             )
-
+        mock_volume_keeping_required.assert_not_called()
         self.assertEqual(disk_list, [])
         self.assertEqual(len(disk_list), 0)
 
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
     def test_find_persistent_volumes_vdu_wth_persistent_root_disk_wthout_inst_vol_list(
-        self,
+        self, mock_volume_keeping_required
     ):
         """Find persistent ordinary volume, there is persistent root disk and instatiation volume list is empty."""
         persistent_root_disk = {
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             }
         }
-
+        mock_volume_keeping_required.return_value = False
         target_vdu = target_vdu_wth_persistent_storage
         vdu_instantiation_volumes_list = []
         disk_list = [
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             },
         ]
-
+        expected_disk = {
+            "id": "persistent-volume2",
+            "size-of-storage": "10",
+            "type-of-storage": "persistent-storage:persistent-storage",
+        }
         expected_disk_list = [
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             },
             {
                 "size": "10",
+                "keep": False,
             },
         ]
         self.ns.find_persistent_volumes(
             persistent_root_disk, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(disk_list, expected_disk_list)
+        mock_volume_keeping_required.assert_called_once_with(expected_disk)
 
-    def test_find_persistent_volumes_vdu_wth_inst_vol_list(self):
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_find_persistent_volumes_vdu_wth_inst_vol_list(
+        self, mock_volume_keeping_required
+    ):
         """Find persistent ordinary volume, vim-volume-id is given as instantiation parameter."""
         persistent_root_disk = {
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             }
         }
         vdu_instantiation_volumes_list = [
@@ -3453,12 +3529,14 @@ class TestProcessVduParams(unittest.TestCase):
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             },
         ]
         expected_disk_list = [
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             },
             {
                 "vim_volume_id": vim_volume_id,
@@ -3468,35 +3546,47 @@ class TestProcessVduParams(unittest.TestCase):
             persistent_root_disk, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(disk_list, expected_disk_list)
+        mock_volume_keeping_required.assert_not_called()
 
-    def test_find_persistent_volumes_vdu_wthout_persistent_storage(self):
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_find_persistent_volumes_vdu_wthout_persistent_storage(
+        self, mock_volume_keeping_required
+    ):
         """Find persistent ordinary volume, there is not any persistent disk."""
         persistent_root_disk = {}
         vdu_instantiation_volumes_list = []
+        mock_volume_keeping_required.return_value = False
         target_vdu = target_vdu_wthout_persistent_storage
         disk_list = []
         self.ns.find_persistent_volumes(
             persistent_root_disk, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(disk_list, disk_list)
+        mock_volume_keeping_required.assert_not_called()
 
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
     def test_find_persistent_volumes_vdu_wth_persistent_root_disk_wthout_ordinary_disk(
-        self,
+        self, mock_volume_keeping_required
     ):
         """There is persistent root disk, but there is not ordinary persistent disk."""
         persistent_root_disk = {
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             }
         }
         vdu_instantiation_volumes_list = []
+        mock_volume_keeping_required.return_value = False
         target_vdu = deepcopy(target_vdu_wth_persistent_storage)
         target_vdu["virtual-storages"] = [
             {
                 "id": "persistent-root-volume",
                 "size-of-storage": "10",
                 "type-of-storage": "persistent-storage:persistent-storage",
+                "vdu-storage-requirements": [
+                    {"key": "keep-volume", "value": "true"},
+                ],
             },
             {
                 "id": "ephemeral-volume",
@@ -3508,16 +3598,22 @@ class TestProcessVduParams(unittest.TestCase):
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             },
         ]
         self.ns.find_persistent_volumes(
             persistent_root_disk, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(disk_list, disk_list)
+        mock_volume_keeping_required.assert_not_called()
 
-    def test_find_persistent_volumes_wth_inst_vol_list_disk_id_mismatch(self):
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_find_persistent_volumes_wth_inst_vol_list_disk_id_mismatch(
+        self, mock_volume_keeping_required
+    ):
         """Find persistent ordinary volume, volume id is not persistent_root_disk dict,
         vim-volume-id is given as instantiation parameter but disk id is not matching."""
+        mock_volume_keeping_required.return_value = True
         vdu_instantiation_volumes_list = [
             {
                 "vim-volume-id": vim_volume_id,
@@ -3528,29 +3624,87 @@ class TestProcessVduParams(unittest.TestCase):
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             }
         }
         disk_list = [
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             },
         ]
         expected_disk_list = [
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             },
             {
                 "size": "10",
+                "keep": True,
             },
         ]
-
+        expected_disk = {
+            "id": "persistent-volume2",
+            "size-of-storage": "10",
+            "type-of-storage": "persistent-storage:persistent-storage",
+        }
         target_vdu = target_vdu_wth_persistent_storage
         self.ns.find_persistent_volumes(
             persistent_root_disk, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
         self.assertEqual(disk_list, expected_disk_list)
+        mock_volume_keeping_required.assert_called_once_with(expected_disk)
+
+    def test_is_volume_keeping_required_true(self):
+        """Volume keeping is required."""
+        virtual_storage_descriptor = {
+            "id": "persistent-root-volume",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+            "vdu-storage-requirements": [
+                {"key": "keep-volume", "value": "true"},
+            ],
+        }
+        result = self.ns.is_volume_keeping_required(virtual_storage_descriptor)
+        self.assertEqual(result, True)
+
+    def test_is_volume_keeping_required_false(self):
+        """Volume keeping is not required."""
+        virtual_storage_descriptor = {
+            "id": "persistent-root-volume",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+            "vdu-storage-requirements": [
+                {"key": "keep-volume", "value": "false"},
+            ],
+        }
+        result = self.ns.is_volume_keeping_required(virtual_storage_descriptor)
+        self.assertEqual(result, False)
+
+    def test_is_volume_keeping_required_wthout_vdu_storage_reqirement(self):
+        """Volume keeping is not required, vdu-storage-requirements key does not exist."""
+        virtual_storage_descriptor = {
+            "id": "persistent-root-volume",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+        }
+        result = self.ns.is_volume_keeping_required(virtual_storage_descriptor)
+        self.assertEqual(result, False)
+
+    def test_is_volume_keeping_required_wrong_keyword(self):
+        """vdu-storage-requirements key to indicate keeping-volume is wrong."""
+        virtual_storage_descriptor = {
+            "id": "persistent-root-volume",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+            "vdu-storage-requirements": [
+                {"key": "hold-volume", "value": "true"},
+            ],
+        }
+        result = self.ns.is_volume_keeping_required(virtual_storage_descriptor)
+        self.assertEqual(result, False)
 
     def test_sort_vdu_interfaces_position_all_wth_positions(self):
         """Interfaces are sorted according to position, all have positions."""
@@ -4459,10 +4613,11 @@ class TestProcessVduParams(unittest.TestCase):
         self.assertDictEqual(cloud_config, expected_cloud_config)
 
     @patch("osm_ng_ro.ns.Ns._select_persistent_root_disk")
-    def test_add_persistent_root_disk_to_disk_list(
-        self, mock_select_persistent_root_disk
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_add_persistent_root_disk_to_disk_list_keep_false(
+        self, mock_volume_keeping_required, mock_select_persistent_root_disk
     ):
-        """Add persistent root disk to disk_list"""
+        """Add persistent root disk to disk_list, keep volume set to False."""
         root_disk = {
             "id": "persistent-root-volume",
             "type-of-storage": "persistent-storage:persistent-storage",
@@ -4474,10 +4629,12 @@ class TestProcessVduParams(unittest.TestCase):
         target_vdu = deepcopy(target_vdu_wth_persistent_storage)
         persistent_root_disk = {}
         disk_list = []
+        mock_volume_keeping_required.return_value = False
         expected_disk_list = [
             {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": False,
             }
         ]
         self.ns._add_persistent_root_disk_to_disk_list(
@@ -4485,10 +4642,12 @@ class TestProcessVduParams(unittest.TestCase):
         )
         self.assertEqual(disk_list, expected_disk_list)
         mock_select_persistent_root_disk.assert_called_once()
+        mock_volume_keeping_required.assert_called_once()
 
     @patch("osm_ng_ro.ns.Ns._select_persistent_root_disk")
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
     def test_add_persistent_root_disk_to_disk_list_select_persistent_root_disk_raises(
-        self, mock_select_persistent_root_disk
+        self, mock_volume_keeping_required, mock_select_persistent_root_disk
     ):
         """Add persistent root disk to disk_list"""
         root_disk = {
@@ -4508,35 +4667,86 @@ class TestProcessVduParams(unittest.TestCase):
             )
         self.assertEqual(disk_list, [])
         mock_select_persistent_root_disk.assert_called_once()
+        mock_volume_keeping_required.assert_not_called()
 
-    def test_add_persistent_ordinary_disk_to_disk_list(self):
-        """Add persistent ordinary disk to disk_list"""
+    @patch("osm_ng_ro.ns.Ns._select_persistent_root_disk")
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_add_persistent_root_disk_to_disk_list_keep_true(
+        self, mock_volume_keeping_required, mock_select_persistent_root_disk
+    ):
+        """Add persistent root disk, keeo volume set to True."""
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
         target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        mock_volume_keeping_required.return_value = True
+        root_disk = {
+            "id": "persistent-root-volume",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+            "vdu-storage-requirements": [
+                {"key": "keep-volume", "value": "true"},
+            ],
+        }
+        mock_select_persistent_root_disk.return_value = root_disk
+        persistent_root_disk = {}
+        disk_list = []
+        expected_disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+                "keep": True,
+            }
+        ]
+        self.ns._add_persistent_root_disk_to_disk_list(
+            vnfd, target_vdu, persistent_root_disk, disk_list
+        )
+        self.assertEqual(disk_list, expected_disk_list)
+        mock_volume_keeping_required.assert_called_once_with(root_disk)
+
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_add_persistent_ordinary_disk_to_disk_list(
+        self, mock_volume_keeping_required
+    ):
+        """Add persistent ordinary disk, keeo volume set to True."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        mock_volume_keeping_required.return_value = False
         persistent_root_disk = {
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": True,
             }
+        }
+        ordinary_disk = {
+            "id": "persistent-volume2",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
         }
         persistent_ordinary_disk = {}
         disk_list = []
         expected_disk_list = [
             {
                 "size": "10",
+                "keep": False,
             }
         ]
         self.ns._add_persistent_ordinary_disks_to_disk_list(
             target_vdu, persistent_root_disk, persistent_ordinary_disk, disk_list
         )
         self.assertEqual(disk_list, expected_disk_list)
+        mock_volume_keeping_required.assert_called_once_with(ordinary_disk)
 
-    def test_add_persistent_ordinary_disk_to_disk_list_vsd_id_in_root_disk_dict(self):
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
+    def test_add_persistent_ordinary_disk_to_disk_list_vsd_id_in_root_disk_dict(
+        self, mock_volume_keeping_required
+    ):
         """Add persistent ordinary disk, vsd id is in root_disk dict."""
         target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        mock_volume_keeping_required.return_value = False
         persistent_root_disk = {
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": True,
             },
             "persistent-volume2": {
                 "size": "10",
@@ -4549,10 +4759,12 @@ class TestProcessVduParams(unittest.TestCase):
             target_vdu, persistent_root_disk, persistent_ordinary_disk, disk_list
         )
         self.assertEqual(disk_list, [])
+        mock_volume_keeping_required.assert_not_called()
 
     @patch("osm_ng_ro.ns.Ns._select_persistent_root_disk")
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
     def test_add_persistent_root_disk_to_disk_list_vnfd_wthout_persistent_storage(
-        self, mock_select_persistent_root_disk
+        self, mock_volume_keeping_required, mock_select_persistent_root_disk
     ):
         """VNFD does not have persistent storage."""
         vnfd = deepcopy(vnfd_wthout_persistent_storage)
@@ -4565,10 +4777,12 @@ class TestProcessVduParams(unittest.TestCase):
         )
         self.assertEqual(disk_list, [])
         self.assertEqual(mock_select_persistent_root_disk.call_count, 2)
+        mock_volume_keeping_required.assert_not_called()
 
     @patch("osm_ng_ro.ns.Ns._select_persistent_root_disk")
+    @patch("osm_ng_ro.ns.Ns.is_volume_keeping_required")
     def test_add_persistent_root_disk_to_disk_list_wthout_persistent_root_disk(
-        self, mock_select_persistent_root_disk
+        self, mock_volume_keeping_required, mock_select_persistent_root_disk
     ):
         """Persistent_root_disk dict is empty."""
         vnfd = deepcopy(vnfd_wthout_persistent_storage)
@@ -4581,6 +4795,7 @@ class TestProcessVduParams(unittest.TestCase):
         )
         self.assertEqual(disk_list, [])
         self.assertEqual(mock_select_persistent_root_disk.call_count, 2)
+        mock_volume_keeping_required.assert_not_called()
 
     def test_prepare_vdu_affinity_group_list_invalid_extra_dict(self):
         """Invalid extra dict."""
@@ -4979,6 +5194,7 @@ class TestProcessVduParams(unittest.TestCase):
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": True,
             }
         }
         mock_find_persistent_root_volumes.return_value = persistent_root_disk
@@ -5053,6 +5269,7 @@ class TestProcessVduParams(unittest.TestCase):
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": True,
             }
         }
         mock_find_persistent_root_volumes.return_value = persistent_root_disk
@@ -5126,6 +5343,7 @@ class TestProcessVduParams(unittest.TestCase):
             "persistent-root-volume": {
                 "image_id": "ubuntu20.04",
                 "size": "10",
+                "keep": True,
             }
         }
         mock_find_persistent_root_volumes.return_value = persistent_root_disk

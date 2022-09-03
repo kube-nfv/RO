@@ -1954,10 +1954,45 @@ class vimconnector(vimconn.VimConnector):
                 availability_zone=vm_av_zone,
             )
             boot_volume_id = volume.id
-            created_items["volume:" + str(volume.id)] = True
-            block_device_mapping["vd" + chr(base_disk_index)] = volume.id
+            self.update_block_device_mapping(
+                volume=volume,
+                block_device_mapping=block_device_mapping,
+                base_disk_index=base_disk_index,
+                disk=disk,
+                created_items=created_items,
+            )
 
             return boot_volume_id
+
+    @staticmethod
+    def update_block_device_mapping(
+        volume: object,
+        block_device_mapping: dict,
+        base_disk_index: int,
+        disk: dict,
+        created_items: dict,
+    ) -> None:
+        """Add volume information to block device mapping dict.
+        Args:
+            volume  (object):                   Created volume object
+            block_device_mapping    (dict):     Block device details
+            base_disk_index (int):              Disk index
+            disk    (dict):                     Disk details
+            created_items   (dict):             All created items belongs to VM
+        """
+        if not volume:
+            raise vimconn.VimConnException("Volume is empty.")
+
+        if not hasattr(volume, "id"):
+            raise vimconn.VimConnException(
+                "Created volume is not valid, does not have id attribute."
+            )
+
+        volume_txt = "volume:" + str(volume.id)
+        if disk.get("keep"):
+            volume_txt += ":keep"
+        created_items[volume_txt] = True
+        block_device_mapping["vd" + chr(base_disk_index)] = volume.id
 
     def _prepare_non_root_persistent_volumes(
         self,
@@ -1998,8 +2033,13 @@ class vimconnector(vimconn.VimConnector):
                 # Make sure volume is in the same AZ as the VM to be attached to
                 availability_zone=vm_av_zone,
             )
-            created_items["volume:" + str(volume.id)] = True
-            block_device_mapping["vd" + chr(base_disk_index)] = volume.id
+            self.update_block_device_mapping(
+                volume=volume,
+                block_device_mapping=block_device_mapping,
+                base_disk_index=base_disk_index,
+                disk=disk,
+                created_items=created_items,
+            )
 
     def _wait_for_created_volumes_availability(
         self, elapsed_time: int, created_items: dict
@@ -2017,7 +2057,10 @@ class vimconnector(vimconn.VimConnector):
 
         while elapsed_time < volume_timeout:
             for created_item in created_items:
-                v, _, volume_id = created_item.partition(":")
+                v, volume_id = (
+                    created_item.split(":")[0],
+                    created_item.split(":")[1],
+                )
                 if v == "volume":
                     if self.cinder.volumes.get(volume_id).status != "available":
                         break
@@ -2478,6 +2521,7 @@ class vimconnector(vimconn.VimConnector):
             the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
             Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
             as not present.
+
         """
         self.logger.debug(
             "new_vminstance input: image='%s' flavor='%s' nics='%s'",
@@ -2589,12 +2633,31 @@ class vimconnector(vimconn.VimConnector):
                 server_id = server.id
 
             try:
+                created_items = self.remove_keep_tag_from_persistent_volumes(
+                    created_items
+                )
+
                 self.delete_vminstance(server_id, created_items)
 
             except Exception as e2:
                 self.logger.error("new_vminstance rollback fail {}".format(e2))
 
             self._format_exception(e)
+
+    @staticmethod
+    def remove_keep_tag_from_persistent_volumes(created_items: Dict) -> Dict:
+        """Removes the keep flag from persistent volumes. So, those volumes could be removed.
+
+        Args:
+            created_items (dict):       All created items belongs to VM
+
+        Returns:
+            updated_created_items   (dict):     Dict which does not include keep flag for volumes.
+
+        """
+        return {
+            key.replace(":keep", ""): value for (key, value) in created_items.items()
+        }
 
     def get_vminstance(self, vm_id):
         """Returns the VM instance information from VIM"""
@@ -2802,6 +2865,22 @@ class vimconnector(vimconn.VimConnector):
 
         return keep_waiting
 
+    @staticmethod
+    def _extract_items_wth_keep_flag_from_created_items(created_items: dict) -> dict:
+        """Remove the volumes which has key flag from created_items
+
+        Args:
+            created_items   (dict):         All created items belongs to VM
+
+        Returns:
+            created_items   (dict):         Persistent volumes eliminated created_items
+        """
+        return {
+            key: value
+            for (key, value) in created_items.items()
+            if len(key.split(":")) == 2
+        }
+
     def delete_vminstance(
         self, vm_id: str, created_items: dict = None, volumes_to_hold: list = None
     ) -> None:
@@ -2817,6 +2896,10 @@ class vimconnector(vimconn.VimConnector):
             volumes_to_hold = []
 
         try:
+            created_items = self._extract_items_wth_keep_flag_from_created_items(
+                created_items
+            )
+
             self._reload_connection()
 
             # Delete VM ports attached to the networks before the virtual machine

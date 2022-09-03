@@ -2242,7 +2242,10 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertEqual(existing_vim_volumes, expected_existing_vim_volumes)
         self.vimconn.cinder.volumes.create.assert_not_called()
 
-    def test_prepare_persistent_non_root_volumes_vim_using_volume_id(self):
+    @patch.object(vimconnector, "update_block_device_mapping")
+    def test_prepare_persistent_non_root_volumes_vim_using_volume_id(
+        self, mock_update_block_device_mapping
+    ):
         """Existing persistent non root volume with vim_volume_id."""
         vm_av_zone = ["nova"]
         base_disk_index = ord("b")
@@ -2264,8 +2267,12 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertDictEqual(block_device_mapping, expected_block_device_mapping)
         self.assertEqual(existing_vim_volumes, expected_existing_vim_volumes)
         self.vimconn.cinder.volumes.create.assert_not_called()
+        mock_update_block_device_mapping.assert_not_called()
 
-    def test_prepare_persistent_root_volumes_using_vim_id(self):
+    @patch.object(vimconnector, "update_block_device_mapping")
+    def test_prepare_persistent_root_volumes_using_vim_id(
+        self, mock_update_block_device_mapping
+    ):
         """Existing persistent root volume with vim_id."""
         vm_av_zone = ["nova"]
         base_disk_index = ord("a")
@@ -2289,8 +2296,12 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertDictEqual(block_device_mapping, expected_block_device_mapping)
         self.assertEqual(existing_vim_volumes, expected_existing_vim_volumes)
         self.vimconn.cinder.volumes.create.assert_not_called()
+        mock_update_block_device_mapping.assert_not_called()
 
-    def test_prepare_persistent_non_root_volumes_using_vim_id(self):
+    @patch.object(vimconnector, "update_block_device_mapping")
+    def test_prepare_persistent_non_root_volumes_using_vim_id(
+        self, mock_update_block_device_mapping
+    ):
         """Existing persistent root volume with vim_id."""
         vm_av_zone = ["nova"]
         base_disk_index = ord("b")
@@ -2314,8 +2325,12 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertDictEqual(block_device_mapping, expected_block_device_mapping)
         self.assertEqual(existing_vim_volumes, expected_existing_vim_volumes)
         self.vimconn.cinder.volumes.create.assert_not_called()
+        mock_update_block_device_mapping.assert_not_called()
 
-    def test_prepare_persistent_root_volumes_create(self):
+    @patch.object(vimconnector, "update_block_device_mapping")
+    def test_prepare_persistent_root_volumes_create(
+        self, mock_update_block_device_mapping
+    ):
         """Create persistent root volume."""
         self.vimconn.cinder.volumes.create.return_value.id = volume_id2
         vm_av_zone = ["nova"]
@@ -2325,7 +2340,51 @@ class TestNewVmInstance(unittest.TestCase):
         existing_vim_volumes = []
         created_items = {}
         expected_boot_vol_id = volume_id2
-        expected_block_device_mapping = {"vda": volume_id2}
+        boot_volume_id = self.vimconn._prepare_persistent_root_volumes(
+            name,
+            vm_av_zone,
+            disk,
+            base_disk_index,
+            block_device_mapping,
+            existing_vim_volumes,
+            created_items,
+        )
+        self.assertEqual(boot_volume_id, expected_boot_vol_id)
+        self.vimconn.cinder.volumes.create.assert_called_once_with(
+            size=10,
+            name="basicvmvda",
+            imageRef=image_id,
+            availability_zone=["nova"],
+        )
+        mock_update_block_device_mapping.assert_called_once()
+        _call_mock_update_block_device_mapping = (
+            mock_update_block_device_mapping.call_args_list
+        )
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["block_device_mapping"],
+            block_device_mapping,
+        )
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["base_disk_index"], 97
+        )
+        self.assertEqual(_call_mock_update_block_device_mapping[0].kwargs["disk"], disk)
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["created_items"], {}
+        )
+
+    @patch.object(vimconnector, "update_block_device_mapping")
+    def test_prepare_persistent_root_volumes_create_with_keep(
+        self, mock_update_block_device_mapping
+    ):
+        """Create persistent root volume, disk has keep parameter."""
+        self.vimconn.cinder.volumes.create.return_value.id = volume_id2
+        vm_av_zone = ["nova"]
+        base_disk_index = ord("a")
+        disk = {"size": 10, "image_id": image_id, "keep": True}
+        block_device_mapping = {}
+        existing_vim_volumes = []
+        created_items = {}
+        expected_boot_vol_id = volume_id2
         expected_existing_vim_volumes = []
         boot_volume_id = self.vimconn._prepare_persistent_root_volumes(
             name,
@@ -2337,7 +2396,6 @@ class TestNewVmInstance(unittest.TestCase):
             created_items,
         )
         self.assertEqual(boot_volume_id, expected_boot_vol_id)
-        self.assertDictEqual(block_device_mapping, expected_block_device_mapping)
         self.assertEqual(existing_vim_volumes, expected_existing_vim_volumes)
         self.vimconn.cinder.volumes.create.assert_called_once_with(
             size=10,
@@ -2345,9 +2403,26 @@ class TestNewVmInstance(unittest.TestCase):
             imageRef=image_id,
             availability_zone=["nova"],
         )
-        self.assertEqual(created_items, {f"volume:{volume_id2}": True})
+        mock_update_block_device_mapping.assert_called_once()
+        _call_mock_update_block_device_mapping = (
+            mock_update_block_device_mapping.call_args_list
+        )
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["block_device_mapping"],
+            block_device_mapping,
+        )
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["base_disk_index"], 97
+        )
+        self.assertEqual(_call_mock_update_block_device_mapping[0].kwargs["disk"], disk)
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["created_items"], {}
+        )
 
-    def test_prepare_persistent_non_root_volumes_create(self):
+    @patch.object(vimconnector, "update_block_device_mapping")
+    def test_prepare_persistent_non_root_volumes_create(
+        self, mock_update_block_device_mapping
+    ):
         """Create persistent non-root volume."""
         self.vimconn.cinder = CopyingMock()
         self.vimconn.cinder.volumes.create.return_value.id = volume_id2
@@ -2357,7 +2432,6 @@ class TestNewVmInstance(unittest.TestCase):
         block_device_mapping = {}
         existing_vim_volumes = []
         created_items = {}
-        expected_block_device_mapping = {"vda": volume_id2}
         expected_existing_vim_volumes = []
         self.vimconn._prepare_non_root_persistent_volumes(
             name,
@@ -2369,14 +2443,74 @@ class TestNewVmInstance(unittest.TestCase):
             created_items,
         )
 
-        self.assertDictEqual(block_device_mapping, expected_block_device_mapping)
         self.assertEqual(existing_vim_volumes, expected_existing_vim_volumes)
         self.vimconn.cinder.volumes.create.assert_called_once_with(
             size=10, name="basicvmvda", availability_zone=["nova"]
         )
-        self.assertEqual(created_items, {f"volume:{volume_id2}": True})
+        mock_update_block_device_mapping.assert_called_once()
+        _call_mock_update_block_device_mapping = (
+            mock_update_block_device_mapping.call_args_list
+        )
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["block_device_mapping"],
+            block_device_mapping,
+        )
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["base_disk_index"], 97
+        )
+        self.assertEqual(_call_mock_update_block_device_mapping[0].kwargs["disk"], disk)
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["created_items"], {}
+        )
 
-    def test_prepare_persistent_root_volumes_create_raise_exception(self):
+    @patch.object(vimconnector, "update_block_device_mapping")
+    def test_prepare_persistent_non_root_volumes_create_with_keep(
+        self, mock_update_block_device_mapping
+    ):
+        """Create persistent non-root volume."""
+        self.vimconn.cinder = CopyingMock()
+        self.vimconn.cinder.volumes.create.return_value.id = volume_id2
+        vm_av_zone = ["nova"]
+        base_disk_index = ord("a")
+        disk = {"size": 10, "keep": True}
+        block_device_mapping = {}
+        existing_vim_volumes = []
+        created_items = {}
+        expected_existing_vim_volumes = []
+        self.vimconn._prepare_non_root_persistent_volumes(
+            name,
+            disk,
+            vm_av_zone,
+            block_device_mapping,
+            base_disk_index,
+            existing_vim_volumes,
+            created_items,
+        )
+
+        self.assertEqual(existing_vim_volumes, expected_existing_vim_volumes)
+        self.vimconn.cinder.volumes.create.assert_called_once_with(
+            size=10, name="basicvmvda", availability_zone=["nova"]
+        )
+        mock_update_block_device_mapping.assert_called_once()
+        _call_mock_update_block_device_mapping = (
+            mock_update_block_device_mapping.call_args_list
+        )
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["block_device_mapping"],
+            block_device_mapping,
+        )
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["base_disk_index"], 97
+        )
+        self.assertEqual(_call_mock_update_block_device_mapping[0].kwargs["disk"], disk)
+        self.assertEqual(
+            _call_mock_update_block_device_mapping[0].kwargs["created_items"], {}
+        )
+
+    @patch.object(vimconnector, "update_block_device_mapping")
+    def test_prepare_persistent_root_volumes_create_raise_exception(
+        self, mock_update_block_device_mapping
+    ):
         """Create persistent root volume raise exception."""
         self.vimconn.cinder.volumes.create.side_effect = Exception
         vm_av_zone = ["nova"]
@@ -2408,8 +2542,12 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertEqual(existing_vim_volumes, [])
         self.assertEqual(block_device_mapping, {})
         self.assertEqual(created_items, {})
+        mock_update_block_device_mapping.assert_not_called()
 
-    def test_prepare_persistent_non_root_volumes_create_raise_exception(self):
+    @patch.object(vimconnector, "update_block_device_mapping")
+    def test_prepare_persistent_non_root_volumes_create_raise_exception(
+        self, mock_update_block_device_mapping
+    ):
         """Create persistent non-root volume raise exception."""
         self.vimconn.cinder.volumes.create.side_effect = Exception
         vm_av_zone = ["nova"]
@@ -2436,6 +2574,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertEqual(existing_vim_volumes, [])
         self.assertEqual(block_device_mapping, {})
         self.assertEqual(created_items, {})
+        mock_update_block_device_mapping.assert_not_called()
 
     @patch("time.sleep")
     def test_wait_for_created_volumes_availability_volume_status_available(
@@ -2650,7 +2789,6 @@ class TestNewVmInstance(unittest.TestCase):
         mock_created_vol_availability.return_value = 10
         mock_existing_vol_availability.return_value = 15
         self.vimconn.cinder = CopyingMock()
-
         self.vimconn._prepare_disk_for_vminstance(
             name,
             existing_vim_volumes,
@@ -3986,6 +4124,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.neutron.update_port.assert_not_called()
 
     @patch("time.time")
+    @patch.object(vimconnector, "remove_keep_tag_from_persistent_volumes")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_prepare_network_for_vminstance")
     @patch.object(vimconnector, "_create_user_data")
@@ -4006,6 +4145,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_create_user_data,
         mock_prepare_network_for_vm_instance,
         mock_reload_connection,
+        mock_remove_keep_flag_from_persistent_volumes,
         mock_time,
     ):
         """New VM instance creation is successful."""
@@ -4077,10 +4217,12 @@ class TestNewVmInstance(unittest.TestCase):
             created_items={},
             vm_start_time=time_return_value,
         )
+        mock_remove_keep_flag_from_persistent_volumes.assert_not_called()
         mock_delete_vm_instance.assert_not_called()
         mock_format_exception.assert_not_called()
 
     @patch("time.time")
+    @patch.object(vimconnector, "remove_keep_tag_from_persistent_volumes")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_prepare_network_for_vminstance")
     @patch.object(vimconnector, "_create_user_data")
@@ -4101,6 +4243,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_create_user_data,
         mock_prepare_network_for_vm_instance,
         mock_reload_connection,
+        mock_remove_keep_flag_from_persistent_volumes,
         mock_time,
     ):
         """New VM instance creation failed because of user data creation failure."""
@@ -4110,6 +4253,8 @@ class TestNewVmInstance(unittest.TestCase):
         )
 
         mock_get_vm_availability_zone.return_value = "nova"
+
+        mock_remove_keep_flag_from_persistent_volumes.return_value = {}
 
         self.vimconn.nova.servers.create.return_value = self.server
 
@@ -4145,12 +4290,14 @@ class TestNewVmInstance(unittest.TestCase):
         mock_time.assert_not_called()
         mock_update_port_security.assert_not_called()
         mock_prepare_external_network.assert_not_called()
+        mock_remove_keep_flag_from_persistent_volumes.assert_called_once_with({})
         mock_delete_vm_instance.assert_called_once_with(None, {})
         mock_format_exception.assert_called_once()
         arg = mock_format_exception.call_args[0][0]
         self.assertEqual(str(arg), "User data could not be retrieved.")
 
     @patch("time.time")
+    @patch.object(vimconnector, "remove_keep_tag_from_persistent_volumes")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_prepare_network_for_vminstance")
     @patch.object(vimconnector, "_create_user_data")
@@ -4171,6 +4318,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_create_user_data,
         mock_prepare_network_for_vm_instance,
         mock_reload_connection,
+        mock_remove_keep_flag_from_persistent_volumes,
         mock_time,
     ):
         """New VM instance creation, external network connection has failed as floating
@@ -4183,6 +4331,8 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.nova.servers.create.return_value = self.server
 
         mock_time.return_value = time_return_value
+
+        mock_remove_keep_flag_from_persistent_volumes.return_value = {}
 
         mock_prepare_external_network.side_effect = VimConnException(
             "Can not create floating ip."
@@ -4244,12 +4394,14 @@ class TestNewVmInstance(unittest.TestCase):
             created_items={},
             vm_start_time=time_return_value,
         )
+        mock_remove_keep_flag_from_persistent_volumes.assert_called_once_with({})
         mock_delete_vm_instance.assert_called_once_with(self.server.id, {})
         mock_format_exception.assert_called_once()
         arg = mock_format_exception.call_args[0][0]
         self.assertEqual(str(arg), "Can not create floating ip.")
 
     @patch("time.time")
+    @patch.object(vimconnector, "remove_keep_tag_from_persistent_volumes")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_prepare_network_for_vminstance")
     @patch.object(vimconnector, "_create_user_data")
@@ -4270,6 +4422,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_create_user_data,
         mock_prepare_network_for_vm_instance,
         mock_reload_connection,
+        mock_remove_keep_flag_from_persistent_volumes,
         mock_time,
     ):
         """New VM creation with affinity group."""
@@ -4339,10 +4492,12 @@ class TestNewVmInstance(unittest.TestCase):
             created_items={},
             vm_start_time=time_return_value,
         )
+        mock_remove_keep_flag_from_persistent_volumes.assert_not_called()
         mock_delete_vm_instance.assert_not_called()
         mock_format_exception.assert_not_called()
 
     @patch("time.time")
+    @patch.object(vimconnector, "remove_keep_tag_from_persistent_volumes")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_prepare_network_for_vminstance")
     @patch.object(vimconnector, "_create_user_data")
@@ -4363,6 +4518,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_create_user_data,
         mock_prepare_network_for_vm_instance,
         mock_reload_connection,
+        mock_remove_keep_flag_from_persistent_volumes,
         mock_time,
     ):
         """New VM(server) creation failed."""
@@ -4376,6 +4532,8 @@ class TestNewVmInstance(unittest.TestCase):
         )
 
         mock_time.return_value = time_return_value
+
+        mock_remove_keep_flag_from_persistent_volumes.return_value = {}
 
         self.vimconn.new_vminstance(
             name,
@@ -4429,12 +4587,14 @@ class TestNewVmInstance(unittest.TestCase):
         mock_time.assert_not_called()
         mock_update_port_security.assert_not_called()
         mock_prepare_external_network.assert_not_called()
+        mock_remove_keep_flag_from_persistent_volumes.assert_called_once_with({})
         mock_delete_vm_instance.assert_called_once_with(None, {})
         mock_format_exception.assert_called_once()
         arg = mock_format_exception.call_args[0][0]
         self.assertEqual(str(arg), "Server could not be created.")
 
     @patch("time.time")
+    @patch.object(vimconnector, "remove_keep_tag_from_persistent_volumes")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_prepare_network_for_vminstance")
     @patch.object(vimconnector, "_create_user_data")
@@ -4455,6 +4615,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_create_user_data,
         mock_prepare_network_for_vm_instance,
         mock_reload_connection,
+        mock_remove_keep_flag_from_persistent_volumes,
         mock_time,
     ):
         """Connection to Cloud API has failed."""
@@ -4463,6 +4624,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_get_vm_availability_zone.return_value = "nova"
         self.vimconn.nova.servers.create.return_value = self.server
         mock_time.return_value = time_return_value
+        mock_remove_keep_flag_from_persistent_volumes.return_value = {}
 
         self.vimconn.new_vminstance(
             name,
@@ -4489,6 +4651,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_time.assert_not_called()
         mock_update_port_security.assert_not_called()
         mock_prepare_external_network.assert_not_called()
+        mock_remove_keep_flag_from_persistent_volumes.assert_called_once_with({})
         mock_delete_vm_instance.assert_called_once_with(None, {})
 
     @patch.object(vimconnector, "_delete_ports_by_id_wth_neutron")
@@ -5260,6 +5423,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.logger.error.assert_not_called()
 
     @patch("time.sleep")
+    @patch.object(vimconnector, "_extract_items_wth_keep_flag_from_created_items")
     @patch.object(vimconnector, "_format_exception")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
@@ -5270,10 +5434,12 @@ class TestNewVmInstance(unittest.TestCase):
         mock_delete_vm_ports_attached_to_network,
         mock_reload_connection,
         mock_format_exception,
+        mock_extract_items_wth_keep_flag_from_created_items,
         mock_sleep,
     ):
         vm_id = f"{virtual_mac_id}"
         created_items = deepcopy(created_items_all_true)
+        mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
         mock_delete_created_items.return_value = False
         self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
@@ -5285,8 +5451,96 @@ class TestNewVmInstance(unittest.TestCase):
         )
         mock_sleep.assert_not_called()
         mock_format_exception.assert_not_called()
+        mock_extract_items_wth_keep_flag_from_created_items.assert_called_once_with(
+            created_items
+        )
 
     @patch("time.sleep")
+    @patch.object(vimconnector, "_extract_items_wth_keep_flag_from_created_items")
+    @patch.object(vimconnector, "_format_exception")
+    @patch.object(vimconnector, "_reload_connection")
+    @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
+    @patch.object(vimconnector, "_delete_created_items")
+    def test_delete_vminstance_created_items_has_keep_flag(
+        self,
+        mock_delete_created_items,
+        mock_delete_vm_ports_attached_to_network,
+        mock_reload_connection,
+        mock_format_exception,
+        mock_extract_items_wth_keep_flag_from_created_items,
+        mock_sleep,
+    ):
+        """Created_items includes items which has keep flag."""
+        vm_id = f"{virtual_mac_id}"
+        initial_created_items = {
+            f"port{port_id}": True,
+            f"floating_ip{floating_network_vim_id}": None,
+            f"volume{volume_id}keep": True,
+            f"volume{volume_id2}keep": True,
+        }
+        created_items = {
+            f"port{port_id}": True,
+            f"floating_ip{floating_network_vim_id}": None,
+        }
+        mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
+        volumes_to_hold = []
+        mock_delete_created_items.return_value = False
+        self.vimconn.delete_vminstance(vm_id, initial_created_items, volumes_to_hold)
+        mock_reload_connection.assert_called_once()
+        mock_delete_vm_ports_attached_to_network.assert_called_once_with(created_items)
+        self.vimconn.nova.servers.delete.assert_called_once_with(vm_id)
+        mock_delete_created_items.assert_called_once_with(
+            created_items, volumes_to_hold, False
+        )
+        mock_sleep.assert_not_called()
+        mock_format_exception.assert_not_called()
+        mock_extract_items_wth_keep_flag_from_created_items.assert_called_once_with(
+            initial_created_items
+        )
+
+    @patch("time.sleep")
+    @patch.object(vimconnector, "_extract_items_wth_keep_flag_from_created_items")
+    @patch.object(vimconnector, "_format_exception")
+    @patch.object(vimconnector, "_reload_connection")
+    @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
+    @patch.object(vimconnector, "_delete_created_items")
+    def test_delete_vminstance_extract_items_wth_keep_raises(
+        self,
+        mock_delete_created_items,
+        mock_delete_vm_ports_attached_to_network,
+        mock_reload_connection,
+        mock_format_exception,
+        mock_extract_items_wth_keep_flag_from_created_items,
+        mock_sleep,
+    ):
+        """extract_items_wth_keep_flag_from_created_items raises AttributeError."""
+        vm_id = f"{virtual_mac_id}"
+        initial_created_items = {
+            f"port{port_id}": True,
+            f"floating_ip{floating_network_vim_id}": None,
+            f"volume{volume_id}keep": True,
+            f"volume{volume_id2}keep": True,
+        }
+
+        mock_extract_items_wth_keep_flag_from_created_items.side_effect = AttributeError
+        volumes_to_hold = []
+        mock_delete_created_items.return_value = False
+        with self.assertRaises(AttributeError):
+            self.vimconn.delete_vminstance(
+                vm_id, initial_created_items, volumes_to_hold
+            )
+        mock_reload_connection.assert_not_called()
+        mock_delete_vm_ports_attached_to_network.assert_not_called()
+        self.vimconn.nova.servers.delete.assert_not_called()
+        mock_delete_created_items.assert_not_called()
+        mock_sleep.assert_not_called()
+        mock_format_exception.assert_not_called()
+        mock_extract_items_wth_keep_flag_from_created_items.assert_called_once_with(
+            initial_created_items
+        )
+
+    @patch("time.sleep")
+    @patch.object(vimconnector, "_extract_items_wth_keep_flag_from_created_items")
     @patch.object(vimconnector, "_format_exception")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
@@ -5297,11 +5551,13 @@ class TestNewVmInstance(unittest.TestCase):
         mock_delete_vm_ports_attached_to_network,
         mock_reload_connection,
         mock_format_exception,
+        mock_extract_items_wth_keep_flag_from_created_items,
         mock_sleep,
     ):
         """Delete creted items raises exception."""
         vm_id = f"{virtual_mac_id}"
         created_items = deepcopy(created_items_all_true)
+        mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         mock_sleep = MagicMock()
         volumes_to_hold = []
         err = ConnectionError("ClientException occured.")
@@ -5314,8 +5570,12 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.nova.servers.delete.assert_called_once_with(vm_id)
         mock_delete_created_items.assert_called_once()
         mock_sleep.assert_not_called()
+        mock_extract_items_wth_keep_flag_from_created_items.assert_called_once_with(
+            created_items
+        )
 
     @patch("time.sleep")
+    @patch.object(vimconnector, "_extract_items_wth_keep_flag_from_created_items")
     @patch.object(vimconnector, "_format_exception")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
@@ -5326,11 +5586,13 @@ class TestNewVmInstance(unittest.TestCase):
         mock_delete_vm_ports_attached_to_network,
         mock_reload_connection,
         mock_format_exception,
+        mock_extract_items_wth_keep_flag_from_created_items,
         mock_sleep,
     ):
         """Delete vm ports raises exception."""
         vm_id = f"{virtual_mac_id}"
         created_items = deepcopy(created_items_all_true)
+        mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
         err = ConnectionError("ClientException occured.")
         mock_delete_vm_ports_attached_to_network.side_effect = err
@@ -5343,8 +5605,12 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.nova.servers.delete.assert_not_called()
         mock_delete_created_items.assert_not_called()
         mock_sleep.assert_not_called()
+        mock_extract_items_wth_keep_flag_from_created_items.assert_called_once_with(
+            created_items
+        )
 
     @patch("time.sleep")
+    @patch.object(vimconnector, "_extract_items_wth_keep_flag_from_created_items")
     @patch.object(vimconnector, "_format_exception")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
@@ -5355,11 +5621,13 @@ class TestNewVmInstance(unittest.TestCase):
         mock_delete_vm_ports_attached_to_network,
         mock_reload_connection,
         mock_format_exception,
+        mock_extract_items_wth_keep_flag_from_created_items,
         mock_sleep,
     ):
         """Nova server delete raises exception."""
         vm_id = f"{virtual_mac_id}"
         created_items = deepcopy(created_items_all_true)
+        mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
         err = VimConnConnectionException("ClientException occured.")
         self.vimconn.nova.servers.delete.side_effect = err
@@ -5372,8 +5640,12 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.nova.servers.delete.assert_called_once_with(vm_id)
         mock_delete_created_items.assert_not_called()
         mock_sleep.assert_not_called()
+        mock_extract_items_wth_keep_flag_from_created_items.assert_called_once_with(
+            created_items
+        )
 
     @patch("time.sleep")
+    @patch.object(vimconnector, "_extract_items_wth_keep_flag_from_created_items")
     @patch.object(vimconnector, "_format_exception")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
@@ -5384,11 +5656,13 @@ class TestNewVmInstance(unittest.TestCase):
         mock_delete_vm_ports_attached_to_network,
         mock_reload_connection,
         mock_format_exception,
+        mock_extract_items_wth_keep_flag_from_created_items,
         mock_sleep,
     ):
         """Reload connection raises exception."""
         vm_id = f"{virtual_mac_id}"
         created_items = deepcopy(created_items_all_true)
+        mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         mock_sleep = MagicMock()
         volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
         err = ConnectionError("ClientException occured.")
@@ -5402,8 +5676,12 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.nova.servers.delete.assert_not_called()
         mock_delete_created_items.assert_not_called()
         mock_sleep.assert_not_called()
+        mock_extract_items_wth_keep_flag_from_created_items.assert_called_once_with(
+            created_items
+        )
 
     @patch("time.sleep")
+    @patch.object(vimconnector, "_extract_items_wth_keep_flag_from_created_items")
     @patch.object(vimconnector, "_format_exception")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
@@ -5414,12 +5692,14 @@ class TestNewVmInstance(unittest.TestCase):
         mock_delete_vm_ports_attached_to_network,
         mock_reload_connection,
         mock_format_exception,
+        mock_extract_items_wth_keep_flag_from_created_items,
         mock_sleep,
     ):
         """created_items and volumes_to_hold are None."""
         vm_id = f"{virtual_mac_id}"
         created_items = None
         volumes_to_hold = None
+        mock_extract_items_wth_keep_flag_from_created_items.return_value = {}
         mock_delete_created_items.return_value = False
         self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
         mock_reload_connection.assert_called_once()
@@ -5428,8 +5708,10 @@ class TestNewVmInstance(unittest.TestCase):
         mock_delete_created_items.assert_called_once_with({}, [], False)
         mock_sleep.assert_not_called()
         mock_format_exception.assert_not_called()
+        mock_extract_items_wth_keep_flag_from_created_items.assert_called_once_with({})
 
     @patch("time.sleep")
+    @patch.object(vimconnector, "_extract_items_wth_keep_flag_from_created_items")
     @patch.object(vimconnector, "_format_exception")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
@@ -5440,11 +5722,13 @@ class TestNewVmInstance(unittest.TestCase):
         mock_delete_vm_ports_attached_to_network,
         mock_reload_connection,
         mock_format_exception,
+        mock_extract_items_wth_keep_flag_from_created_items,
         mock_sleep,
     ):
         """vm_id is None."""
         vm_id = None
         created_items = deepcopy(created_items_all_true)
+        mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
         mock_delete_created_items.side_effect = [True, True, False]
         self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
@@ -5454,8 +5738,12 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertEqual(mock_delete_created_items.call_count, 3)
         self.assertEqual(mock_sleep.call_count, 2)
         mock_format_exception.assert_not_called()
+        mock_extract_items_wth_keep_flag_from_created_items.assert_called_once_with(
+            created_items
+        )
 
     @patch("time.sleep")
+    @patch.object(vimconnector, "_extract_items_wth_keep_flag_from_created_items")
     @patch.object(vimconnector, "_format_exception")
     @patch.object(vimconnector, "_reload_connection")
     @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
@@ -5466,11 +5754,13 @@ class TestNewVmInstance(unittest.TestCase):
         mock_delete_vm_ports_attached_to_network,
         mock_reload_connection,
         mock_format_exception,
+        mock_extract_items_wth_keep_flag_from_created_items,
         mock_sleep,
     ):
         """Delete created items always return True."""
         vm_id = None
         created_items = deepcopy(created_items_all_true)
+        mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
         mock_delete_created_items.side_effect = [True] * 1800
         self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
@@ -5480,6 +5770,153 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertEqual(mock_delete_created_items.call_count, 1800)
         self.assertEqual(mock_sleep.call_count, 1800)
         mock_format_exception.assert_not_called()
+        mock_extract_items_wth_keep_flag_from_created_items.assert_called_once_with(
+            created_items
+        )
+
+    def test_remove_keep_tag_from_persistent_volumes_keep_flag_exists(self):
+        """Keep flag exists in created items."""
+        created_items = {
+            f"port:{port_id}": True,
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id}:keep": True,
+            f"volume:{volume_id2}:keep": True,
+        }
+        expected_result = {
+            f"port:{port_id}": True,
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id}": True,
+            f"volume:{volume_id2}": True,
+        }
+        result = self.vimconn.remove_keep_tag_from_persistent_volumes(created_items)
+        self.assertDictEqual(result, expected_result)
+
+    def test_remove_keep_tag_from_persistent_volumes_without_keep_flag(self):
+        """Keep flag does not exist in created items."""
+        created_items = {
+            f"port:{port_id}": True,
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id}": True,
+            f"volume:{volume_id2}": True,
+        }
+        result = self.vimconn.remove_keep_tag_from_persistent_volumes(created_items)
+        self.assertDictEqual(result, created_items)
+
+    def test_update_block_device_mapping_empty_volume(self):
+        """"""
+        volume = ""
+        block_device_mapping = {}
+        base_disk_index = 100
+        disk = {}
+        created_items = {}
+        with self.assertRaises(VimConnException) as err:
+            self.vimconn.update_block_device_mapping(
+                volume, block_device_mapping, base_disk_index, disk, created_items
+            )
+            self.assertEqual(str(err), "Volume is empty.")
+        self.assertEqual(block_device_mapping, {})
+        self.assertEqual(created_items, {})
+
+    def test_update_block_device_mapping_invalid_volume(self):
+        """"""
+        volume = "Volume-A"
+        block_device_mapping = {}
+        base_disk_index = 100
+        disk = {}
+        created_items = {}
+        with self.assertRaises(VimConnException) as err:
+            self.vimconn.update_block_device_mapping(
+                volume, block_device_mapping, base_disk_index, disk, created_items
+            )
+            self.assertEqual(
+                str(err), "Created volume is not valid, does not have id attribute."
+            )
+        self.assertEqual(block_device_mapping, {})
+        self.assertEqual(created_items, {})
+
+    def test_update_block_device_mapping(self):
+        """"""
+        volume = MagicMock(autospec=True)
+        volume.id = volume_id
+        block_device_mapping = {}
+        base_disk_index = 100
+        disk = {}
+        created_items = {}
+        self.vimconn.update_block_device_mapping(
+            volume, block_device_mapping, base_disk_index, disk, created_items
+        )
+        self.assertEqual(
+            block_device_mapping, {"vdd": "ac408b73-b9cc-4a6a-a270-82cc4811bd4a"}
+        )
+        self.assertEqual(
+            created_items, {"volume:ac408b73-b9cc-4a6a-a270-82cc4811bd4a": True}
+        )
+
+    def test_update_block_device_mapping_with_keep_flag(self):
+        """"""
+        volume = MagicMock(autospec=True)
+        volume.id = volume_id
+        block_device_mapping = {}
+        base_disk_index = 100
+        disk = {"size": 10, "keep": True}
+        created_items = {}
+        self.vimconn.update_block_device_mapping(
+            volume, block_device_mapping, base_disk_index, disk, created_items
+        )
+        self.assertEqual(
+            block_device_mapping, {"vdd": "ac408b73-b9cc-4a6a-a270-82cc4811bd4a"}
+        )
+        self.assertEqual(
+            created_items, {"volume:ac408b73-b9cc-4a6a-a270-82cc4811bd4a:keep": True}
+        )
+
+    def test_extract_items_with_keep_flag_item_has_keep_flag(self):
+        created_items = deepcopy(created_items_all_true)
+        created_items[f"volume:{volume_id2}:keep"] = True
+        result = self.vimconn._extract_items_wth_keep_flag_from_created_items(
+            created_items
+        )
+        self.assertEqual(result, deepcopy(created_items_all_true))
+
+    def test_extract_items_with_keep_flag_no_item_wth_keep_flag(self):
+        created_items = deepcopy(created_items_all_true)
+        result = self.vimconn._extract_items_wth_keep_flag_from_created_items(
+            created_items
+        )
+        self.assertEqual(result, deepcopy(created_items_all_true))
+
+    def test_extract_items_with_keep_flag_all_items_are_already_deleted(self):
+        created_items = {
+            f"port:{port_id}": None,
+            f"floating_ip:{floating_network_vim_id}": None,
+            f"volume:{volume_id}:keep": None,
+            f"volume:{volume_id2}:keep": None,
+        }
+        expected_result = {
+            f"port:{port_id}": None,
+            f"floating_ip:{floating_network_vim_id}": None,
+        }
+        result = self.vimconn._extract_items_wth_keep_flag_from_created_items(
+            created_items
+        )
+        self.assertEqual(result, expected_result)
+
+    def test_extract_items_with_keep_flag_without_semicolon(self):
+        created_items = {
+            f"port{port_id}": True,
+            f"floating_ip{floating_network_vim_id}": None,
+            f"volume{volume_id}keep": True,
+            f"volume{volume_id2}keep": True,
+        }
+        result = self.vimconn._extract_items_wth_keep_flag_from_created_items(
+            created_items
+        )
+        self.assertEqual(result, {})
+
+    def test_extract_items_with_keep_flag_invalid_type_created_items(self):
+        created_items = [{f"port{port_id}": True}, {f"volume{volume_id2}keep": True}]
+        with self.assertRaises(AttributeError):
+            self.vimconn._extract_items_wth_keep_flag_from_created_items(created_items)
 
 
 if __name__ == "__main__":

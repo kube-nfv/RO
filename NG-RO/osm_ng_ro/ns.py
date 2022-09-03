@@ -1030,6 +1030,7 @@ class Ns(object):
                             persistent_root_disk[vsd["id"]] = {
                                 "image_id": vdu.get("sw-image-desc"),
                                 "size": root_disk.get("size-of-storage"),
+                                "keep": Ns.is_volume_keeping_required(root_disk),
                             }
 
                             disk_list.append(persistent_root_disk[vsd["id"]])
@@ -1073,8 +1074,28 @@ class Ns(object):
                     if disk["id"] not in persistent_disk.keys():
                         persistent_disk[disk["id"]] = {
                             "size": disk.get("size-of-storage"),
+                            "keep": Ns.is_volume_keeping_required(disk),
                         }
                         disk_list.append(persistent_disk[disk["id"]])
+
+    @staticmethod
+    def is_volume_keeping_required(virtual_storage_desc: Dict[str, Any]) -> bool:
+        """Function to decide keeping persistent volume
+        upon VDU deletion.
+
+        Args:
+            virtual_storage_desc (Dict[str, Any]): virtual storage description dictionary
+
+        Returns:
+            bool (True/False)
+        """
+
+        if not virtual_storage_desc.get("vdu-storage-requirements"):
+            return False
+        for item in virtual_storage_desc.get("vdu-storage-requirements", {}):
+            if item.get("key") == "keep-volume" and item.get("value") == "true":
+                return True
+        return False
 
     @staticmethod
     def _sort_vdu_interfaces(target_vdu: dict) -> None:
@@ -1397,13 +1418,13 @@ class Ns(object):
             if vdu["name"] == target_vdu["vdu-name"]:
                 for vsd in vnfd.get("virtual-storage-desc", ()):
                     root_disk = Ns._select_persistent_root_disk(vsd, vdu)
-
                     if not root_disk:
                         continue
 
                     persistent_root_disk[vsd["id"]] = {
                         "image_id": vdu.get("sw-image-desc"),
                         "size": root_disk["size-of-storage"],
+                        "keep": Ns.is_volume_keeping_required(root_disk),
                     }
 
                     disk_list.append(persistent_root_disk[vsd["id"]])
@@ -1434,6 +1455,7 @@ class Ns(object):
                 ):
                     persistent_ordinary_disk[disk["id"]] = {
                         "size": disk["size-of-storage"],
+                        "keep": Ns.is_volume_keeping_required(disk),
                     }
                     disk_list.append(persistent_ordinary_disk[disk["id"]])
 
