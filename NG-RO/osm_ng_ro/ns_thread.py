@@ -748,7 +748,7 @@ class VimInteractionFlavor(VimInteractionBase):
                     flavor_data = task["find_params"]["flavor_data"]
                     vim_flavor_id = target_vim.get_flavor_id_from_data(flavor_data)
                 except vimconn.VimConnNotFoundException:
-                    self.logger.exception("VimConnNotFoundException occured.")
+                    self.logger.warning("VimConnNotFoundException occured.")
 
             if not vim_flavor_id and task.get("params"):
                 # CREATE
@@ -2073,7 +2073,7 @@ class NsWorker(threading.Thread):
             "created_items", False
         )
 
-        self.logger.warning("Needed delete: {}".format(needed_delete))
+        self.logger.debug("Needed delete: {}".format(needed_delete))
         if my_task["status"] == "FAILED":
             return None, None  # TODO need to be retry??
 
@@ -2097,7 +2097,7 @@ class NsWorker(threading.Thread):
                     needed_delete = False
 
             if needed_delete:
-                self.logger.warning(
+                self.logger.debug(
                     "Deleting ro_task={} task_index={}".format(ro_task, task_index)
                 )
                 return self.item2class[my_task["item"]].delete(ro_task, task_index)
@@ -2202,7 +2202,7 @@ class NsWorker(threading.Thread):
                 fail_on_empty=False,
             )
 
-            self.logger.warning("ro_task_dependency={}".format(ro_task_dependency))
+            self.logger.debug("ro_task_dependency={}".format(ro_task_dependency))
             if ro_task_dependency:
                 for task_index, task in enumerate(ro_task_dependency["tasks"]):
                     if task["task_id"] == task_id:
@@ -2355,7 +2355,7 @@ class NsWorker(threading.Thread):
                                 dependency_task = dependency_ro_task["tasks"][
                                     dependency_task_index
                                 ]
-                                self.logger.warning(
+                                self.logger.debug(
                                     "dependency_ro_task={} dependency_task_index={}".format(
                                         dependency_ro_task, dependency_task_index
                                     )
@@ -2824,7 +2824,7 @@ class NsWorker(threading.Thread):
                 """
                 ro_task = self._get_db_task()
                 if ro_task:
-                    self.logger.warning("Task to process: {}".format(ro_task))
+                    self.logger.debug("Task to process: {}".format(ro_task))
                     time.sleep(1)
                     self._process_pending_tasks(ro_task)
                     busy = True

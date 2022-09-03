@@ -1707,7 +1707,7 @@ class Ns(object):
                     target_record_id += ".sdn"
 
                 kwargs = {}
-                self.logger.warning(
+                self.logger.debug(
                     "ns.calculate_diff_items target_item={}".format(target_item)
                 )
                 if process_params == Ns._process_flavor_params:
@@ -1716,14 +1716,12 @@ class Ns(object):
                             "db": self.db,
                         }
                     )
-                    self.logger.warning(
+                    self.logger.debug(
                         "calculate_diff_items for flavor kwargs={}".format(kwargs)
                     )
 
                 if process_params == Ns._process_vdu_params:
-                    self.logger.warning(
-                        "calculate_diff_items self.fs={}".format(self.fs)
-                    )
+                    self.logger.debug("calculate_diff_items self.fs={}".format(self.fs))
                     kwargs.update(
                         {
                             "vnfr_id": vnfr_id,
@@ -1737,7 +1735,7 @@ class Ns(object):
                             "ro_nsr_public_key": ro_nsr_public_key,
                         }
                     )
-                    self.logger.warning("calculate_diff_items kwargs={}".format(kwargs))
+                    self.logger.debug("calculate_diff_items kwargs={}".format(kwargs))
 
                 extra_dict = process_params(
                     target_item,
@@ -1875,7 +1873,7 @@ class Ns(object):
                 extra_dict=change.get("extra_dict", None),
             )
 
-            self.logger.warning("ns.define_all_tasks task={}".format(task))
+            self.logger.debug("ns.define_all_tasks task={}".format(task))
             tasks_by_target_record_id[change["target_record_id"]] = task
             db_new_tasks.append(task)
 
@@ -1959,7 +1957,7 @@ class Ns(object):
 
         for db_task in db_new_tasks:
             target_id = db_task.pop("target_id")
-            self.logger.warning("target_id={} db_task={}".format(target_id, db_task))
+            self.logger.debug("target_id={} db_task={}".format(target_id, db_task))
 
             action = db_task.get("action", None)
 
@@ -1980,7 +1978,7 @@ class Ns(object):
                 db_ro_task["vim_info"]["vim_id"] = db_task.get("vim_id", None)
 
             nb_ro_tasks += 1
-            self.logger.warning("upload_all_tasks db_ro_task={}".format(db_ro_task))
+            self.logger.debug("upload_all_tasks db_ro_task={}".format(db_ro_task))
             self.db.create("ro_tasks", db_ro_task)
 
         self.logger.debug(
