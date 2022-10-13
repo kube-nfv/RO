@@ -1283,13 +1283,7 @@ class vimconnector(vimconn.VimConnector):
                         if numas:
                             numa_nodes = len(numas)
 
-                            if numa_nodes > 1:
-                                return -1, "Can not add flavor with more than one numa"
-
                             extra_specs["hw:numa_nodes"] = str(numa_nodes)
-                            extra_specs["hw:mem_page_size"] = "large"
-                            extra_specs["hw:cpu_policy"] = "dedicated"
-                            extra_specs["hw:numa_mempolicy"] = "strict"
 
                             if self.vim_type == "VIO":
                                 extra_specs[
@@ -1298,13 +1292,25 @@ class vimconnector(vimconn.VimConnector):
                                 extra_specs["vmware:latency_sensitivity_level"] = "high"
 
                             for numa in numas:
+                                if "id" in numa:
+                                    node_id = numa["id"]
+
+                                    if "memory" in numa:
+                                        memory_mb = numa["memory"] * 1024
+                                        memory = "hw:numa_mem.{}".format(node_id)
+                                        extra_specs[memory] = int(memory_mb)
+
+                                    if "vcpu" in numa:
+                                        vcpu = numa["vcpu"]
+                                        cpu = "hw:numa_cpus.{}".format(node_id)
+                                        vcpu = ",".join(map(str, vcpu))
+                                        extra_specs[cpu] = vcpu
+
                                 # overwrite ram and vcpus
                                 # check if key "memory" is present in numa else use ram value at flavor
-                                if "memory" in numa:
-                                    ram = numa["memory"] * 1024
                                 # See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/
                                 # implemented/virt-driver-cpu-thread-pinning.html
-                                extra_specs["hw:cpu_sockets"] = 1
+                                extra_specs["hw:cpu_sockets"] = str(numa_nodes)
 
                                 if "paired-threads" in numa:
                                     vcpus = numa["paired-threads"] * 2
@@ -1369,6 +1375,23 @@ class vimconnector(vimconn.VimConnector):
                                     "Invalid mempage-size %s. Will be ignored",
                                     extended.get("mempage-size"),
                                 )
+                        if extended.get("cpu-pinning-policy"):
+                            extra_specs["hw:cpu_policy"] = extended.get(
+                                "cpu-pinning-policy"
+                            ).lower()
+
+                        # Set the cpu thread pinning policy as specified in the descriptor
+                        if extended.get("cpu-thread-pinning-policy"):
+                            extra_specs["hw:cpu_thread_policy"] = extended.get(
+                                "cpu-thread-pinning-policy"
+                            ).lower()
+
+                        # Set the mem policy as specified in the descriptor
+                        if extended.get("mem-policy"):
+                            extra_specs["hw:numa_mempolicy"] = extended.get(
+                                "mem-policy"
+                            ).lower()
+
                     # create flavor
                     new_flavor = self.nova.flavors.create(
                         name=name,

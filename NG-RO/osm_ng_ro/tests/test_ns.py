@@ -831,19 +831,18 @@ class TestNs(unittest.TestCase):
         self.assertDictEqual(expected_result, result)
 
     def test__process_guest_epa_numa_params_with_empty_numa_params(self):
-        expected_numa_result = {}
+        expected_numa_result = []
         expected_epa_vcpu_set_result = False
         guest_epa_quota = {}
 
         numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
             guest_epa_quota=guest_epa_quota,
         )
-
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_numa_params_with_wrong_numa_params(self):
-        expected_numa_result = {}
+        expected_numa_result = []
         expected_epa_vcpu_set_result = False
         guest_epa_quota = {"no_nume": "here"}
 
@@ -851,11 +850,11 @@ class TestNs(unittest.TestCase):
             guest_epa_quota=guest_epa_quota,
         )
 
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_numa_params_with_numa_node_policy(self):
-        expected_numa_result = {}
+        expected_numa_result = []
         expected_epa_vcpu_set_result = False
         guest_epa_quota = {"numa-node-policy": {}}
 
@@ -863,11 +862,11 @@ class TestNs(unittest.TestCase):
             guest_epa_quota=guest_epa_quota,
         )
 
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_numa_params_with_no_node(self):
-        expected_numa_result = {}
+        expected_numa_result = []
         expected_epa_vcpu_set_result = False
         guest_epa_quota = {
             "numa-node-policy": {
@@ -879,11 +878,11 @@ class TestNs(unittest.TestCase):
             guest_epa_quota=guest_epa_quota,
         )
 
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_numa_params_with_1_node_num_cores(self):
-        expected_numa_result = {"cores": 3}
+        expected_numa_result = [{"cores": 3}]
         expected_epa_vcpu_set_result = True
         guest_epa_quota = {
             "numa-node-policy": {
@@ -899,11 +898,11 @@ class TestNs(unittest.TestCase):
             guest_epa_quota=guest_epa_quota,
         )
 
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_numa_params_with_1_node_paired_threads(self):
-        expected_numa_result = {"paired-threads": 3}
+        expected_numa_result = [{"paired_threads": 3}]
         expected_epa_vcpu_set_result = True
         guest_epa_quota = {
             "numa-node-policy": {
@@ -919,13 +918,15 @@ class TestNs(unittest.TestCase):
             guest_epa_quota=guest_epa_quota,
         )
 
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_numa_params_with_1_node_paired_threads_ids(self):
-        expected_numa_result = {
-            "paired-threads-id": [("0", "1"), ("4", "5")],
-        }
+        expected_numa_result = [
+            {
+                "paired-threads-id": [("0", "1"), ("4", "5")],
+            }
+        ]
         expected_epa_vcpu_set_result = False
         guest_epa_quota = {
             "numa-node-policy": {
@@ -952,11 +953,11 @@ class TestNs(unittest.TestCase):
             guest_epa_quota=guest_epa_quota,
         )
 
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_numa_params_with_1_node_num_threads(self):
-        expected_numa_result = {"threads": 3}
+        expected_numa_result = [{"threads": 3}]
         expected_epa_vcpu_set_result = True
         guest_epa_quota = {
             "numa-node-policy": {
@@ -972,11 +973,11 @@ class TestNs(unittest.TestCase):
             guest_epa_quota=guest_epa_quota,
         )
 
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_numa_params_with_1_node_memory_mb(self):
-        expected_numa_result = {"memory": 2}
+        expected_numa_result = [{"memory": 2}]
         expected_epa_vcpu_set_result = False
         guest_epa_quota = {
             "numa-node-policy": {
@@ -992,17 +993,71 @@ class TestNs(unittest.TestCase):
             guest_epa_quota=guest_epa_quota,
         )
 
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_1_node_vcpu(self):
+        expected_numa_result = [
+            {
+                "id": 0,
+                "vcpu": [0, 1],
+            }
+        ]
+        expected_epa_vcpu_set_result = False
+        guest_epa_quota = {
+            "numa-node-policy": {
+                "node": [{"id": "0", "vcpu": [{"id": "0"}, {"id": "1"}]}],
+            },
+        }
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_numa_params_with_2_node_vcpu(self):
+        expected_numa_result = [
+            {
+                "id": 0,
+                "vcpu": [0, 1],
+            },
+            {
+                "id": 1,
+                "vcpu": [2, 3],
+            },
+        ]
+
+        expected_epa_vcpu_set_result = False
+        guest_epa_quota = {
+            "numa-node-policy": {
+                "node": [
+                    {"id": "0", "vcpu": [{"id": "0"}, {"id": "1"}]},
+                    {"id": "1", "vcpu": [{"id": "2"}, {"id": "3"}]},
+                ],
+            },
+        }
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_numa_params(
+            guest_epa_quota=guest_epa_quota,
+        )
+
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_numa_params_with_1_node(self):
-        expected_numa_result = {
-            "cores": 3,
-            "paired-threads": 3,
-            "paired-threads-id": [("0", "1"), ("4", "5")],
-            "threads": 3,
-            "memory": 2,
-        }
+        expected_numa_result = [
+            {
+                # "id": 0,
+                # "vcpu": [0, 1],
+                "cores": 3,
+                "paired_threads": 3,
+                "paired-threads-id": [("0", "1"), ("4", "5")],
+                "threads": 3,
+                "memory": 2,
+            }
+        ]
         expected_epa_vcpu_set_result = True
         guest_epa_quota = {
             "numa-node-policy": {
@@ -1033,17 +1088,26 @@ class TestNs(unittest.TestCase):
             guest_epa_quota=guest_epa_quota,
         )
 
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_numa_params_with_2_nodes(self):
-        expected_numa_result = {
-            "cores": 3,
-            "paired-threads": 3,
-            "paired-threads-id": [("0", "1"), ("4", "5")],
-            "threads": 3,
-            "memory": 2,
-        }
+        expected_numa_result = [
+            {
+                "cores": 3,
+                "paired_threads": 3,
+                "paired-threads-id": [("0", "1"), ("4", "5")],
+                "threads": 3,
+                "memory": 2,
+            },
+            {
+                "cores": 7,
+                "paired_threads": 7,
+                "paired-threads-id": [("2", "3"), ("5", "6")],
+                "threads": 4,
+                "memory": 4,
+            },
+        ]
         expected_epa_vcpu_set_result = True
         guest_epa_quota = {
             "numa-node-policy": {
@@ -1092,7 +1156,7 @@ class TestNs(unittest.TestCase):
             guest_epa_quota=guest_epa_quota,
         )
 
-        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
     def test__process_guest_epa_cpu_pinning_params_with_empty_params(self):
@@ -1237,10 +1301,15 @@ class TestNs(unittest.TestCase):
         guest_epa_cpu_pinning_params,
         guest_epa_quota_params,
     ):
-        expected_result = {}
+        expected_result = {
+            "mem-policy": "STRICT",
+        }
         target_flavor = {
             "guest-epa": {
                 "vcpu-count": 1,
+                "numa-node-policy": {
+                    "mem-policy": "STRICT",
+                },
             },
         }
 
@@ -1268,9 +1337,16 @@ class TestNs(unittest.TestCase):
     ):
         expected_result = {
             "mempage-size": "1G",
+            "mem-policy": "STRICT",
         }
         target_flavor = {
-            "guest-epa": {"vcpu-count": 1, "mempage-size": "1G"},
+            "guest-epa": {
+                "vcpu-count": 1,
+                "mempage-size": "1G",
+                "numa-node-policy": {
+                    "mem-policy": "STRICT",
+                },
+            },
         }
 
         guest_epa_numa_params.return_value = ({}, False)
@@ -1297,6 +1373,8 @@ class TestNs(unittest.TestCase):
     ):
         expected_result = {
             "mempage-size": "1G",
+            "cpu-pinning-policy": "DEDICATED",
+            "cpu-thread-pinning-policy": "PREFER",
             "numas": [
                 {
                     "cores": 3,
@@ -1363,13 +1441,15 @@ class TestNs(unittest.TestCase):
         }
 
         guest_epa_numa_params.return_value = (
-            {
-                "cores": 3,
-                "paired-threads": 3,
-                "paired-threads-id": [("0", "1"), ("4", "5")],
-                "threads": 3,
-                "memory": 2,
-            },
+            [
+                {
+                    "cores": 3,
+                    "paired-threads": 3,
+                    "paired-threads-id": [("0", "1"), ("4", "5")],
+                    "threads": 3,
+                    "memory": 2,
+                },
+            ],
             True,
         )
         guest_epa_cpu_pinning_params.return_value = (
@@ -1404,8 +1484,7 @@ class TestNs(unittest.TestCase):
         result = Ns._process_epa_params(
             target_flavor=target_flavor,
         )
-
-        self.assertDictEqual(expected_result, result)
+        self.assertEqual(expected_result, result)
         self.assertTrue(guest_epa_numa_params.called)
         self.assertTrue(guest_epa_cpu_pinning_params.called)
         self.assertTrue(guest_epa_quota_params.called)
