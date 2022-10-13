@@ -647,44 +647,57 @@ class Ns(object):
             Tuple[Dict[str, Any], bool]: [description]
         """
         numa = {}
+        numa_list = []
         epa_vcpu_set = False
 
         if guest_epa_quota.get("numa-node-policy"):
             numa_node_policy = guest_epa_quota.get("numa-node-policy")
 
             if numa_node_policy.get("node"):
-                numa_node = numa_node_policy["node"][0]
+                for numa_node in numa_node_policy["node"]:
+                    vcpu_list = []
+                    if numa_node.get("id"):
+                        numa["id"] = int(numa_node["id"])
 
-                if numa_node.get("num-cores"):
-                    numa["cores"] = numa_node["num-cores"]
-                    epa_vcpu_set = True
+                    if numa_node.get("vcpu"):
+                        for vcpu in numa_node.get("vcpu"):
+                            vcpu_id = int(vcpu.get("id"))
+                            vcpu_list.append(vcpu_id)
+                        numa["vcpu"] = vcpu_list
 
-                paired_threads = numa_node.get("paired-threads", {})
-                if paired_threads.get("num-paired-threads"):
-                    numa["paired-threads"] = int(
-                        numa_node["paired-threads"]["num-paired-threads"]
-                    )
-                    epa_vcpu_set = True
+                    if numa_node.get("num-cores"):
+                        numa["cores"] = numa_node["num-cores"]
+                        epa_vcpu_set = True
 
-                if paired_threads.get("paired-thread-ids"):
-                    numa["paired-threads-id"] = []
-
-                    for pair in paired_threads["paired-thread-ids"]:
-                        numa["paired-threads-id"].append(
-                            (
-                                str(pair["thread-a"]),
-                                str(pair["thread-b"]),
-                            )
+                    paired_threads = numa_node.get("paired-threads", {})
+                    if paired_threads.get("num-paired-threads"):
+                        numa["paired_threads"] = int(
+                            numa_node["paired-threads"]["num-paired-threads"]
                         )
+                        epa_vcpu_set = True
 
-                if numa_node.get("num-threads"):
-                    numa["threads"] = int(numa_node["num-threads"])
-                    epa_vcpu_set = True
+                    if paired_threads.get("paired-thread-ids"):
+                        numa["paired-threads-id"] = []
 
-                if numa_node.get("memory-mb"):
-                    numa["memory"] = max(int(int(numa_node["memory-mb"]) / 1024), 1)
+                        for pair in paired_threads["paired-thread-ids"]:
+                            numa["paired-threads-id"].append(
+                                (
+                                    str(pair["thread-a"]),
+                                    str(pair["thread-b"]),
+                                )
+                            )
 
-        return numa, epa_vcpu_set
+                    if numa_node.get("num-threads"):
+                        numa["threads"] = int(numa_node["num-threads"])
+                        epa_vcpu_set = True
+
+                    if numa_node.get("memory-mb"):
+                        numa["memory"] = max(int(int(numa_node["memory-mb"]) / 1024), 1)
+
+                    numa_list.append(numa)
+                    numa = {}
+
+        return numa_list, epa_vcpu_set
 
     @staticmethod
     def _process_guest_epa_cpu_pinning_params(
@@ -732,23 +745,39 @@ class Ns(object):
         """
         extended = {}
         numa = {}
+        numa_list = []
 
         if target_flavor.get("guest-epa"):
             guest_epa = target_flavor["guest-epa"]
 
-            numa, epa_vcpu_set = Ns._process_guest_epa_numa_params(
+            numa_list, epa_vcpu_set = Ns._process_guest_epa_numa_params(
                 guest_epa_quota=guest_epa
             )
 
             if guest_epa.get("mempage-size"):
                 extended["mempage-size"] = guest_epa.get("mempage-size")
 
+            if guest_epa.get("cpu-pinning-policy"):
+                extended["cpu-pinning-policy"] = guest_epa.get("cpu-pinning-policy")
+
+            if guest_epa.get("cpu-thread-pinning-policy"):
+                extended["cpu-thread-pinning-policy"] = guest_epa.get(
+                    "cpu-thread-pinning-policy"
+                )
+
+            if guest_epa.get("numa-node-policy"):
+                if guest_epa.get("numa-node-policy").get("mem-policy"):
+                    extended["mem-policy"] = guest_epa.get("numa-node-policy").get(
+                        "mem-policy"
+                    )
+
             tmp_numa, epa_vcpu_set = Ns._process_guest_epa_cpu_pinning_params(
                 guest_epa_quota=guest_epa,
                 vcpu_count=int(target_flavor.get("vcpu-count", 1)),
                 epa_vcpu_set=epa_vcpu_set,
             )
-            numa.update(tmp_numa)
+            for numa in numa_list:
+                numa.update(tmp_numa)
 
             extended.update(
                 Ns._process_guest_epa_quota_params(
@@ -758,7 +787,7 @@ class Ns(object):
             )
 
         if numa:
-            extended["numas"] = [numa]
+            extended["numas"] = numa_list
 
         return extended
 
