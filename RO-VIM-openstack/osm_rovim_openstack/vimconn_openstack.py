@@ -38,6 +38,7 @@ from pprint import pformat
 import random
 import re
 import time
+from typing import Dict, Optional, Tuple
 
 from cinderclient import client as cClient
 from glanceclient import client as glClient
@@ -1717,60 +1718,761 @@ class vimconnector(vimconn.VimConnector):
                 "No enough availability zones at VIM for this deployment"
             )
 
+    def _prepare_port_dict_security_groups(self, net: dict, port_dict: dict) -> None:
+        """Fill up the security_groups in the port_dict.
+
+        Args:
+            net (dict):             Network details
+            port_dict   (dict):     Port details
+
+        """
+        if (
+            self.config.get("security_groups")
+            and net.get("port_security") is not False
+            and not self.config.get("no_port_security_extension")
+        ):
+            if not self.security_groups_id:
+                self._get_ids_from_name()
+
+            port_dict["security_groups"] = self.security_groups_id
+
+    def _prepare_port_dict_binding(self, net: dict, port_dict: dict) -> None:
+        """Fill up the network binding depending on network type in the port_dict.
+
+        Args:
+            net (dict):             Network details
+            port_dict   (dict):     Port details
+
+        """
+        if not net.get("type"):
+            raise vimconn.VimConnException("Type is missing in the network details.")
+
+        if net["type"] == "virtual":
+            pass
+
+        # For VF
+        elif net["type"] == "VF" or net["type"] == "SR-IOV":
+
+            port_dict["binding:vnic_type"] = "direct"
+
+            # VIO specific Changes
+            if self.vim_type == "VIO":
+                # Need to create port with port_security_enabled = False and no-security-groups
+                port_dict["port_security_enabled"] = False
+                port_dict["provider_security_groups"] = []
+                port_dict["security_groups"] = []
+
+        else:
+            # For PT PCI-PASSTHROUGH
+            port_dict["binding:vnic_type"] = "direct-physical"
+
+    @staticmethod
+    def _set_fixed_ip(new_port: dict, net: dict) -> None:
+        """Set the "ip" parameter in net dictionary.
+
+        Args:
+            new_port    (dict):     New created port
+            net         (dict):     Network details
+
+        """
+        fixed_ips = new_port["port"].get("fixed_ips")
+
+        if fixed_ips:
+            net["ip"] = fixed_ips[0].get("ip_address")
+        else:
+            net["ip"] = None
+
+    @staticmethod
+    def _prepare_port_dict_mac_ip_addr(net: dict, port_dict: dict) -> None:
+        """Fill up the mac_address and fixed_ips in port_dict.
+
+        Args:
+            net (dict):             Network details
+            port_dict   (dict):     Port details
+
+        """
+        if net.get("mac_address"):
+            port_dict["mac_address"] = net["mac_address"]
+
+        if net.get("ip_address"):
+            port_dict["fixed_ips"] = [{"ip_address": net["ip_address"]}]
+            # TODO add "subnet_id": <subnet_id>
+
+    def _create_new_port(self, port_dict: dict, created_items: dict, net: dict) -> Dict:
+        """Create new port using neutron.
+
+        Args:
+            port_dict   (dict):         Port details
+            created_items   (dict):     All created items
+            net (dict):                 Network details
+
+        Returns:
+            new_port    (dict):         New created port
+
+        """
+        new_port = self.neutron.create_port({"port": port_dict})
+        created_items["port:" + str(new_port["port"]["id"])] = True
+        net["mac_adress"] = new_port["port"]["mac_address"]
+        net["vim_id"] = new_port["port"]["id"]
+
+        return new_port
+
+    def _create_port(
+        self, net: dict, name: str, created_items: dict
+    ) -> Tuple[dict, dict]:
+        """Create port using net details.
+
+        Args:
+            net (dict):                 Network details
+            name    (str):              Name to be used as network name if net dict does not include name
+            created_items   (dict):     All created items
+
+        Returns:
+            new_port, port              New created port, port dictionary
+
+        """
+
+        port_dict = {
+            "network_id": net["net_id"],
+            "name": net.get("name"),
+            "admin_state_up": True,
+        }
+
+        if not port_dict["name"]:
+            port_dict["name"] = name
+
+        self._prepare_port_dict_security_groups(net, port_dict)
+
+        self._prepare_port_dict_binding(net, port_dict)
+
+        vimconnector._prepare_port_dict_mac_ip_addr(net, port_dict)
+
+        new_port = self._create_new_port(port_dict, created_items, net)
+
+        vimconnector._set_fixed_ip(new_port, net)
+
+        port = {"port-id": new_port["port"]["id"]}
+
+        if float(self.nova.api_version.get_string()) >= 2.32:
+            port["tag"] = new_port["port"]["name"]
+
+        return new_port, port
+
+    def _prepare_network_for_vminstance(
+        self,
+        name: str,
+        net_list: list,
+        created_items: dict,
+        net_list_vim: list,
+        external_network: list,
+        no_secured_ports: list,
+    ) -> None:
+        """Create port and fill up net dictionary for new VM instance creation.
+
+        Args:
+            name    (str):                  Name of network
+            net_list    (list):             List of networks
+            created_items   (dict):         All created items belongs to a VM
+            net_list_vim    (list):         List of ports
+            external_network    (list):     List of external-networks
+            no_secured_ports    (list):     Port security disabled ports
+        """
+
+        self._reload_connection()
+
+        for net in net_list:
+            # Skip non-connected iface
+            if not net.get("net_id"):
+                continue
+
+            new_port, port = self._create_port(net, name, created_items)
+
+            net_list_vim.append(port)
+
+            if net.get("floating_ip", False):
+                net["exit_on_floating_ip_error"] = True
+                external_network.append(net)
+
+            elif net["use"] == "mgmt" and self.config.get("use_floating_ip"):
+                net["exit_on_floating_ip_error"] = False
+                external_network.append(net)
+                net["floating_ip"] = self.config.get("use_floating_ip")
+
+            # If port security is disabled when the port has not yet been attached to the VM, then all vm traffic
+            # is dropped. As a workaround we wait until the VM is active and then disable the port-security
+            if net.get("port_security") is False and not self.config.get(
+                "no_port_security_extension"
+            ):
+                no_secured_ports.append(
+                    (
+                        new_port["port"]["id"],
+                        net.get("port_security_disable_strategy"),
+                    )
+                )
+
+    def _prepare_persistent_root_volumes(
+        self,
+        name: str,
+        vm_av_zone: list,
+        disk: dict,
+        base_disk_index: int,
+        block_device_mapping: dict,
+        existing_vim_volumes: list,
+        created_items: dict,
+    ) -> Optional[str]:
+        """Prepare persistent root volumes for new VM instance.
+
+        Args:
+            name    (str):                      Name of VM instance
+            vm_av_zone  (list):                 List of availability zones
+            disk    (dict):                     Disk details
+            base_disk_index (int):              Disk index
+            block_device_mapping    (dict):     Block device details
+            existing_vim_volumes    (list):     Existing disk details
+            created_items   (dict):             All created items belongs to VM
+
+        Returns:
+            boot_volume_id  (str):              ID of boot volume
+
+        """
+        # Disk may include only vim_volume_id or only vim_id."
+        # Use existing persistent root volume finding with volume_id or vim_id
+        key_id = "vim_volume_id" if "vim_volume_id" in disk.keys() else "vim_id"
+
+        if disk.get(key_id):
+
+            block_device_mapping["vd" + chr(base_disk_index)] = disk[key_id]
+            existing_vim_volumes.append({"id": disk[key_id]})
+
+        else:
+            # Create persistent root volume
+            volume = self.cinder.volumes.create(
+                size=disk["size"],
+                name=name + "vd" + chr(base_disk_index),
+                imageRef=disk["image_id"],
+                # Make sure volume is in the same AZ as the VM to be attached to
+                availability_zone=vm_av_zone,
+            )
+            boot_volume_id = volume.id
+            created_items["volume:" + str(volume.id)] = True
+            block_device_mapping["vd" + chr(base_disk_index)] = volume.id
+
+            return boot_volume_id
+
+    def _prepare_non_root_persistent_volumes(
+        self,
+        name: str,
+        disk: dict,
+        vm_av_zone: list,
+        block_device_mapping: dict,
+        base_disk_index: int,
+        existing_vim_volumes: list,
+        created_items: dict,
+    ) -> None:
+        """Prepare persistent volumes for new VM instance.
+
+        Args:
+            name    (str):                      Name of VM instance
+            disk    (dict):                     Disk details
+            vm_av_zone  (list):                 List of availability zones
+            block_device_mapping    (dict):     Block device details
+            base_disk_index (int):              Disk index
+            existing_vim_volumes    (list):     Existing disk details
+            created_items   (dict):             All created items belongs to VM
+        """
+        # Non-root persistent volumes
+        # Disk may include only vim_volume_id or only vim_id."
+        key_id = "vim_volume_id" if "vim_volume_id" in disk.keys() else "vim_id"
+
+        if disk.get(key_id):
+
+            # Use existing persistent volume
+            block_device_mapping["vd" + chr(base_disk_index)] = disk[key_id]
+            existing_vim_volumes.append({"id": disk[key_id]})
+
+        else:
+            # Create persistent volume
+            volume = self.cinder.volumes.create(
+                size=disk["size"],
+                name=name + "vd" + chr(base_disk_index),
+                # Make sure volume is in the same AZ as the VM to be attached to
+                availability_zone=vm_av_zone,
+            )
+            created_items["volume:" + str(volume.id)] = True
+            block_device_mapping["vd" + chr(base_disk_index)] = volume.id
+
+    def _wait_for_created_volumes_availability(
+        self, elapsed_time: int, created_items: dict
+    ) -> Optional[int]:
+        """Wait till created volumes become available.
+
+        Args:
+            elapsed_time    (int):          Passed time while waiting
+            created_items   (dict):         All created items belongs to VM
+
+        Returns:
+            elapsed_time    (int):          Time spent while waiting
+
+        """
+
+        while elapsed_time < volume_timeout:
+            for created_item in created_items:
+                v, _, volume_id = created_item.partition(":")
+                if v == "volume":
+                    if self.cinder.volumes.get(volume_id).status != "available":
+                        break
+            else:
+                # All ready: break from while
+                break
+
+            time.sleep(5)
+            elapsed_time += 5
+
+        return elapsed_time
+
+    def _wait_for_existing_volumes_availability(
+        self, elapsed_time: int, existing_vim_volumes: list
+    ) -> Optional[int]:
+        """Wait till existing volumes become available.
+
+        Args:
+            elapsed_time    (int):          Passed time while waiting
+            existing_vim_volumes   (list):  Existing volume details
+
+        Returns:
+            elapsed_time    (int):          Time spent while waiting
+
+        """
+
+        while elapsed_time < volume_timeout:
+            for volume in existing_vim_volumes:
+                if self.cinder.volumes.get(volume["id"]).status != "available":
+                    break
+            else:  # all ready: break from while
+                break
+
+            time.sleep(5)
+            elapsed_time += 5
+
+        return elapsed_time
+
+    def _prepare_disk_for_vminstance(
+        self,
+        name: str,
+        existing_vim_volumes: list,
+        created_items: dict,
+        vm_av_zone: list,
+        disk_list: list = None,
+    ) -> None:
+        """Prepare all volumes for new VM instance.
+
+        Args:
+            name    (str):                      Name of Instance
+            existing_vim_volumes    (list):     List of existing volumes
+            created_items   (dict):             All created items belongs to VM
+            vm_av_zone  (list):                 VM availability zone
+            disk_list   (list):                 List of disks
+
+        """
+        # Create additional volumes in case these are present in disk_list
+        base_disk_index = ord("b")
+        boot_volume_id = None
+        elapsed_time = 0
+
+        block_device_mapping = {}
+        for disk in disk_list:
+            if "image_id" in disk:
+                # Root persistent volume
+                base_disk_index = ord("a")
+                boot_volume_id = self._prepare_persistent_root_volumes(
+                    name=name,
+                    vm_av_zone=vm_av_zone,
+                    disk=disk,
+                    base_disk_index=base_disk_index,
+                    block_device_mapping=block_device_mapping,
+                    existing_vim_volumes=existing_vim_volumes,
+                    created_items=created_items,
+                )
+            else:
+                # Non-root persistent volume
+                self._prepare_non_root_persistent_volumes(
+                    name=name,
+                    disk=disk,
+                    vm_av_zone=vm_av_zone,
+                    block_device_mapping=block_device_mapping,
+                    base_disk_index=base_disk_index,
+                    existing_vim_volumes=existing_vim_volumes,
+                    created_items=created_items,
+                )
+            base_disk_index += 1
+
+        # Wait until created volumes are with status available
+        elapsed_time = self._wait_for_created_volumes_availability(
+            elapsed_time, created_items
+        )
+        # Wait until existing volumes in vim are with status available
+        elapsed_time = self._wait_for_existing_volumes_availability(
+            elapsed_time, existing_vim_volumes
+        )
+        # If we exceeded the timeout rollback
+        if elapsed_time >= volume_timeout:
+            raise vimconn.VimConnException(
+                "Timeout creating volumes for instance " + name,
+                http_code=vimconn.HTTP_Request_Timeout,
+            )
+        if boot_volume_id:
+            self.cinder.volumes.set_bootable(boot_volume_id, True)
+
+    def _find_the_external_network_for_floating_ip(self):
+        """Get the external network ip in order to create floating IP.
+
+        Returns:
+            pool_id (str):      External network pool ID
+
+        """
+
+        # Find the external network
+        external_nets = list()
+
+        for net in self.neutron.list_networks()["networks"]:
+            if net["router:external"]:
+                external_nets.append(net)
+
+        if len(external_nets) == 0:
+            raise vimconn.VimConnException(
+                "Cannot create floating_ip automatically since "
+                "no external network is present",
+                http_code=vimconn.HTTP_Conflict,
+            )
+
+        if len(external_nets) > 1:
+            raise vimconn.VimConnException(
+                "Cannot create floating_ip automatically since "
+                "multiple external networks are present",
+                http_code=vimconn.HTTP_Conflict,
+            )
+
+        # Pool ID
+        return external_nets[0].get("id")
+
+    def _neutron_create_float_ip(self, param: dict, created_items: dict) -> None:
+        """Trigger neutron to create a new floating IP using external network ID.
+
+        Args:
+            param   (dict):             Input parameters to create a floating IP
+            created_items   (dict):     All created items belongs to new VM instance
+
+        Raises:
+
+            VimConnException
+        """
+        try:
+            self.logger.debug("Creating floating IP")
+            new_floating_ip = self.neutron.create_floatingip(param)
+            free_floating_ip = new_floating_ip["floatingip"]["id"]
+            created_items["floating_ip:" + str(free_floating_ip)] = True
+
+        except Exception as e:
+            raise vimconn.VimConnException(
+                type(e).__name__ + ": Cannot create new floating_ip " + str(e),
+                http_code=vimconn.HTTP_Conflict,
+            )
+
+    def _create_floating_ip(
+        self, floating_network: dict, server: object, created_items: dict
+    ) -> None:
+        """Get the available Pool ID and create a new floating IP.
+
+        Args:
+            floating_network    (dict):         Dict including external network ID
+            server   (object):                  Server object
+            created_items   (dict):             All created items belongs to new VM instance
+
+        """
+
+        # Pool_id is available
+        if (
+            isinstance(floating_network["floating_ip"], str)
+            and floating_network["floating_ip"].lower() != "true"
+        ):
+            pool_id = floating_network["floating_ip"]
+
+        # Find the Pool_id
+        else:
+            pool_id = self._find_the_external_network_for_floating_ip()
+
+        param = {
+            "floatingip": {
+                "floating_network_id": pool_id,
+                "tenant_id": server.tenant_id,
+            }
+        }
+
+        self._neutron_create_float_ip(param, created_items)
+
+    def _find_floating_ip(
+        self,
+        server: object,
+        floating_ips: list,
+        floating_network: dict,
+    ) -> Optional[str]:
+        """Find the available free floating IPs if there are.
+
+        Args:
+            server  (object):                   Server object
+            floating_ips    (list):             List of floating IPs
+            floating_network    (dict):         Details of floating network such as ID
+
+        Returns:
+            free_floating_ip    (str):          Free floating ip address
+
+        """
+        for fip in floating_ips:
+            if fip.get("port_id") or fip.get("tenant_id") != server.tenant_id:
+                continue
+
+            if isinstance(floating_network["floating_ip"], str):
+                if fip.get("floating_network_id") != floating_network["floating_ip"]:
+                    continue
+
+            return fip["id"]
+
+    def _assign_floating_ip(
+        self, free_floating_ip: str, floating_network: dict
+    ) -> Dict:
+        """Assign the free floating ip address to port.
+
+        Args:
+            free_floating_ip    (str):          Floating IP to be assigned
+            floating_network    (dict):         ID of floating network
+
+        Returns:
+            fip (dict)          (dict):         Floating ip details
+
+        """
+        # The vim_id key contains the neutron.port_id
+        self.neutron.update_floatingip(
+            free_floating_ip,
+            {"floatingip": {"port_id": floating_network["vim_id"]}},
+        )
+        # For race condition ensure not re-assigned to other VM after 5 seconds
+        time.sleep(5)
+
+        return self.neutron.show_floatingip(free_floating_ip)
+
+    def _get_free_floating_ip(
+        self, server: object, floating_network: dict, created_items: dict
+    ) -> Optional[str]:
+        """Get the free floating IP address.
+
+        Args:
+            server  (object):               Server Object
+            floating_network    (dict):     Floating network details
+            created_items   (dict):         All created items belongs to new VM instance
+
+        Returns:
+            free_floating_ip    (str):      Free floating ip addr
+
+        """
+
+        floating_ips = self.neutron.list_floatingips().get("floatingips", ())
+
+        # Randomize
+        random.shuffle(floating_ips)
+
+        return self._find_floating_ip(
+            server, floating_ips, floating_network, created_items
+        )
+
+    def _prepare_external_network_for_vminstance(
+        self,
+        external_network: list,
+        server: object,
+        created_items: dict,
+        vm_start_time: float,
+    ) -> None:
+        """Assign floating IP address for VM instance.
+
+        Args:
+            external_network    (list):         ID of External network
+            server  (object):                   Server Object
+            created_items   (dict):             All created items belongs to new VM instance
+            vm_start_time   (float):            Time as a floating point number expressed in seconds since the epoch, in UTC
+
+        Raises:
+            VimConnException
+
+        """
+        for floating_network in external_network:
+            try:
+                assigned = False
+                floating_ip_retries = 3
+                # In case of RO in HA there can be conflicts, two RO trying to assign same floating IP, so retry
+                # several times
+                while not assigned:
+
+                    free_floating_ip = self._get_free_floating_ip(
+                        server, floating_network, created_items
+                    )
+
+                    if not free_floating_ip:
+                        self._create_floating_ip(
+                            floating_network, server, created_items
+                        )
+
+                    try:
+                        # For race condition ensure not already assigned
+                        fip = self.neutron.show_floatingip(free_floating_ip)
+
+                        if fip["floatingip"].get("port_id"):
+                            continue
+
+                        # Assign floating ip
+                        fip = self._assign_floating_ip(
+                            free_floating_ip, floating_network
+                        )
+
+                        if fip["floatingip"]["port_id"] != floating_network["vim_id"]:
+                            self.logger.warning(
+                                "floating_ip {} re-assigned to other port".format(
+                                    free_floating_ip
+                                )
+                            )
+                            continue
+
+                        self.logger.debug(
+                            "Assigned floating_ip {} to VM {}".format(
+                                free_floating_ip, server.id
+                            )
+                        )
+
+                        assigned = True
+
+                    except Exception as e:
+                        # Openstack need some time after VM creation to assign an IP. So retry if fails
+                        vm_status = self.nova.servers.get(server.id).status
+
+                        if vm_status not in ("ACTIVE", "ERROR"):
+                            if time.time() - vm_start_time < server_timeout:
+                                time.sleep(5)
+                                continue
+                        elif floating_ip_retries > 0:
+                            floating_ip_retries -= 1
+                            continue
+
+                        raise vimconn.VimConnException(
+                            "Cannot create floating_ip: {} {}".format(
+                                type(e).__name__, e
+                            ),
+                            http_code=vimconn.HTTP_Conflict,
+                        )
+
+            except Exception as e:
+                if not floating_network["exit_on_floating_ip_error"]:
+                    self.logger.error("Cannot create floating_ip. %s", str(e))
+                    continue
+
+                raise
+
+    def _update_port_security_for_vminstance(
+        self,
+        no_secured_ports: list,
+        server: object,
+    ) -> None:
+        """Updates the port security according to no_secured_ports list.
+
+        Args:
+            no_secured_ports    (list):     List of ports that security will be disabled
+            server  (object):               Server Object
+
+        Raises:
+            VimConnException
+
+        """
+        # Wait until the VM is active and then disable the port-security
+        if no_secured_ports:
+            self.__wait_for_vm(server.id, "ACTIVE")
+
+        for port in no_secured_ports:
+            port_update = {
+                "port": {"port_security_enabled": False, "security_groups": None}
+            }
+
+            if port[1] == "allow-address-pairs":
+                port_update = {
+                    "port": {"allowed_address_pairs": [{"ip_address": "0.0.0.0/0"}]}
+                }
+
+            try:
+                self.neutron.update_port(port[0], port_update)
+
+            except Exception:
+
+                raise vimconn.VimConnException(
+                    "It was not possible to disable port security for port {}".format(
+                        port[0]
+                    )
+                )
+
     def new_vminstance(
         self,
-        name,
-        description,
-        start,
-        image_id,
-        flavor_id,
-        affinity_group_list,
-        net_list,
+        name: str,
+        description: str,
+        start: bool,
+        image_id: str,
+        flavor_id: str,
+        affinity_group_list: list,
+        net_list: list,
         cloud_config=None,
         disk_list=None,
         availability_zone_index=None,
         availability_zone_list=None,
-    ):
-        """Adds a VM instance to VIM
-        Params:
-            start: indicates if VM must start or boot in pause mode. Ignored
-            image_id,flavor_id: image and flavor uuid
-            affinity_group_list: list of affinity groups, each one is a dictionary.
-                Ignore if empty.
-            net_list: list of interfaces, each one is a dictionary with:
-                name:
-                net_id: network uuid to connect
-                vpci: virtual vcpi to assign, ignored because openstack lack #TODO
-                model: interface model, ignored #TODO
-                mac_address: used for  SR-IOV ifaces #TODO for other types
-                use: 'data', 'bridge',  'mgmt'
-                type: 'virtual', 'PCI-PASSTHROUGH'('PF'), 'SR-IOV'('VF'), 'VFnotShared'
-                vim_id: filled/added by this function
-                floating_ip: True/False (or it can be None)
-                port_security: True/False
-            'cloud_config': (optional) dictionary with:
-                'key-pairs': (optional) list of strings with the public key to be inserted to the default user
-                'users': (optional) list of users to be inserted, each item is a dict with:
-                    'name': (mandatory) user name,
-                    'key-pairs': (optional) list of strings with the public key to be inserted to the user
-                'user-data': (optional) string is a text script to be passed directly to cloud-init
-                'config-files': (optional). List of files to be transferred. Each item is a dict with:
-                    'dest': (mandatory) string with the destination absolute path
-                    'encoding': (optional, by default text). Can be one of:
+    ) -> tuple:
+        """Adds a VM instance to VIM.
+
+        Args:
+            name    (str):          name of VM
+            description (str):      description
+            start   (bool):         indicates if VM must start or boot in pause mode. Ignored
+            image_id    (str)       image uuid
+            flavor_id   (str)       flavor uuid
+            affinity_group_list (list):     list of affinity groups, each one is a dictionary.Ignore if empty.
+            net_list    (list):         list of interfaces, each one is a dictionary with:
+                name:   name of network
+                net_id:     network uuid to connect
+                vpci:   virtual vcpi to assign, ignored because openstack lack #TODO
+                model:  interface model, ignored #TODO
+                mac_address:    used for  SR-IOV ifaces #TODO for other types
+                use:    'data', 'bridge',  'mgmt'
+                type:   'virtual', 'PCI-PASSTHROUGH'('PF'), 'SR-IOV'('VF'), 'VFnotShared'
+                vim_id:     filled/added by this function
+                floating_ip:    True/False (or it can be None)
+                port_security:  True/False
+            cloud_config    (dict): (optional) dictionary with:
+                key-pairs:      (optional) list of strings with the public key to be inserted to the default user
+                users:      (optional) list of users to be inserted, each item is a dict with:
+                    name:   (mandatory) user name,
+                    key-pairs: (optional) list of strings with the public key to be inserted to the user
+                user-data:  (optional) string is a text script to be passed directly to cloud-init
+                config-files:   (optional). List of files to be transferred. Each item is a dict with:
+                    dest:   (mandatory) string with the destination absolute path
+                    encoding:   (optional, by default text). Can be one of:
                         'b64', 'base64', 'gz', 'gz+b64', 'gz+base64', 'gzip+b64', 'gzip+base64'
-                    'content' (mandatory): string with the content of the file
-                    'permissions': (optional) string with file permissions, typically octal notation '0644'
-                    'owner': (optional) file owner, string with the format 'owner:group'
-                'boot-data-drive': boolean to indicate if user-data must be passed using a boot drive (hard disk)
-            'disk_list': (optional) list with additional disks to the VM. Each item is a dict with:
-                'image_id': (optional). VIM id of an existing image. If not provided an empty disk must be mounted
-                'size': (mandatory) string with the size of the disk in GB
-                'vim_id' (optional) should use this existing volume id
-            availability_zone_index: Index of availability_zone_list to use for this this VM. None if not AV required
-            availability_zone_list: list of availability zones given by user in the VNFD descriptor.  Ignore if
+                    content :    (mandatory) string with the content of the file
+                    permissions:    (optional) string with file permissions, typically octal notation '0644'
+                    owner:  (optional) file owner, string with the format 'owner:group'
+                boot-data-drive:    boolean to indicate if user-data must be passed using a boot drive (hard disk)
+            disk_list:  (optional) list with additional disks to the VM. Each item is a dict with:
+                image_id:   (optional). VIM id of an existing image. If not provided an empty disk must be mounted
+                size:   (mandatory) string with the size of the disk in GB
+                vim_id:  (optional) should use this existing volume id
+            availability_zone_index:    Index of availability_zone_list to use for this this VM. None if not AV required
+            availability_zone_list:     list of availability zones given by user in the VNFD descriptor.  Ignore if
                 availability_zone_index is None
                 #TODO ip, security groups
-        Returns a tuple with the instance identifier and created_items or raises an exception on error
+
+        Returns:
+            A tuple with the instance identifier and created_items or raises an exception on error
             created_items can be None or a dictionary where this method can include key-values that will be passed to
             the method delete_vminstance and action_vminstance. Can be used to store created ports, volumes, etc.
             Format is vimconnector dependent, but do not use nested dictionaries and a value of None should be the same
@@ -1786,235 +2488,46 @@ class vimconnector(vimconn.VimConnector):
         try:
             server = None
             created_items = {}
-            # metadata = {}
             net_list_vim = []
+            # list of external networks to be connected to instance, later on used to create floating_ip
             external_network = []
-            # ^list of external networks to be connected to instance, later on used to create floating_ip
-            no_secured_ports = []  # List of port-is with port-security disabled
-            self._reload_connection()
-            # metadata_vpci = {}  # For a specific neutron plugin
+            # List of ports with port-security disabled
+            no_secured_ports = []
             block_device_mapping = None
+            existing_vim_volumes = []
+            server_group_id = None
+            scheduller_hints = {}
 
-            for net in net_list:
-                if not net.get("net_id"):  # skip non connected iface
-                    continue
+            # Check the Openstack Connection
+            self._reload_connection()
 
-                port_dict = {
-                    "network_id": net["net_id"],
-                    "name": net.get("name"),
-                    "admin_state_up": True,
-                }
-
-                if (
-                    self.config.get("security_groups")
-                    and net.get("port_security") is not False
-                    and not self.config.get("no_port_security_extension")
-                ):
-                    if not self.security_groups_id:
-                        self._get_ids_from_name()
-
-                    port_dict["security_groups"] = self.security_groups_id
-
-                if net["type"] == "virtual":
-                    pass
-                    # if "vpci" in net:
-                    #     metadata_vpci[ net["net_id"] ] = [[ net["vpci"], "" ]]
-                elif net["type"] == "VF" or net["type"] == "SR-IOV":  # for VF
-                    # if "vpci" in net:
-                    #     if "VF" not in metadata_vpci:
-                    #         metadata_vpci["VF"]=[]
-                    #     metadata_vpci["VF"].append([ net["vpci"], "" ])
-                    port_dict["binding:vnic_type"] = "direct"
-
-                    # VIO specific Changes
-                    if self.vim_type == "VIO":
-                        # Need to create port with port_security_enabled = False and no-security-groups
-                        port_dict["port_security_enabled"] = False
-                        port_dict["provider_security_groups"] = []
-                        port_dict["security_groups"] = []
-                else:  # For PT PCI-PASSTHROUGH
-                    # if "vpci" in net:
-                    #     if "PF" not in metadata_vpci:
-                    #         metadata_vpci["PF"]=[]
-                    #     metadata_vpci["PF"].append([ net["vpci"], "" ])
-                    port_dict["binding:vnic_type"] = "direct-physical"
-
-                if not port_dict["name"]:
-                    port_dict["name"] = name
-
-                if net.get("mac_address"):
-                    port_dict["mac_address"] = net["mac_address"]
-
-                if net.get("ip_address"):
-                    port_dict["fixed_ips"] = [{"ip_address": net["ip_address"]}]
-                    # TODO add "subnet_id": <subnet_id>
-
-                new_port = self.neutron.create_port({"port": port_dict})
-                created_items["port:" + str(new_port["port"]["id"])] = True
-                net["mac_adress"] = new_port["port"]["mac_address"]
-                net["vim_id"] = new_port["port"]["id"]
-                # if try to use a network without subnetwork, it will return a emtpy list
-                fixed_ips = new_port["port"].get("fixed_ips")
-
-                if fixed_ips:
-                    net["ip"] = fixed_ips[0].get("ip_address")
-                else:
-                    net["ip"] = None
-
-                port = {"port-id": new_port["port"]["id"]}
-                if float(self.nova.api_version.get_string()) >= 2.32:
-                    port["tag"] = new_port["port"]["name"]
-
-                net_list_vim.append(port)
-
-                if net.get("floating_ip", False):
-                    net["exit_on_floating_ip_error"] = True
-                    external_network.append(net)
-                elif net["use"] == "mgmt" and self.config.get("use_floating_ip"):
-                    net["exit_on_floating_ip_error"] = False
-                    external_network.append(net)
-                    net["floating_ip"] = self.config.get("use_floating_ip")
-
-                # If port security is disabled when the port has not yet been attached to the VM, then all vm traffic
-                # is dropped.
-                # As a workaround we wait until the VM is active and then disable the port-security
-                if net.get("port_security") is False and not self.config.get(
-                    "no_port_security_extension"
-                ):
-                    no_secured_ports.append(
-                        (
-                            new_port["port"]["id"],
-                            net.get("port_security_disable_strategy"),
-                        )
-                    )
-
-            # if metadata_vpci:
-            #     metadata = {"pci_assignement": json.dumps(metadata_vpci)}
-            #     if len(metadata["pci_assignement"]) >255:
-            #         #limit the metadata size
-            #         #metadata["pci_assignement"] = metadata["pci_assignement"][0:255]
-            #         self.logger.warn("Metadata deleted since it exceeds the expected length (255) ")
-            #         metadata = {}
-
-            self.logger.debug(
-                "name '%s' image_id '%s'flavor_id '%s' net_list_vim '%s' description '%s'",
-                name,
-                image_id,
-                flavor_id,
-                str(net_list_vim),
-                description,
+            # Prepare network list
+            self._prepare_network_for_vminstance(
+                name=name,
+                net_list=net_list,
+                created_items=created_items,
+                net_list_vim=net_list_vim,
+                external_network=external_network,
+                no_secured_ports=no_secured_ports,
             )
 
-            # cloud config
+            # Cloud config
             config_drive, userdata = self._create_user_data(cloud_config)
 
-            # get availability Zone
+            # Get availability Zone
             vm_av_zone = self._get_vm_availability_zone(
                 availability_zone_index, availability_zone_list
             )
 
-            # Create additional volumes in case these are present in disk_list
-            existing_vim_volumes = []
-            base_disk_index = ord("b")
-            boot_volume_id = None
             if disk_list:
-                block_device_mapping = {}
-                for disk in disk_list:
-                    if "image_id" in disk:
-                        # persistent root volume
-                        base_disk_index = ord("a")
-                        image_id = ""
-                        # use existing persistent root volume
-                        if disk.get("vim_volume_id"):
-                            block_device_mapping["vd" + chr(base_disk_index)] = disk[
-                                "vim_volume_id"
-                            ]
-                            existing_vim_volumes.append({"id": disk["vim_volume_id"]})
-                        # use existing persistent root volume
-                        elif disk.get("vim_id"):
-                            block_device_mapping["vd" + chr(base_disk_index)] = disk[
-                                "vim_id"
-                            ]
-                            existing_vim_volumes.append({"id": disk["vim_id"]})
-                        else:
-                            # create persistent root volume
-                            volume = self.cinder.volumes.create(
-                                size=disk["size"],
-                                name=name + "vd" + chr(base_disk_index),
-                                imageRef=disk["image_id"],
-                                # Make sure volume is in the same AZ as the VM to be attached to
-                                availability_zone=vm_av_zone,
-                            )
-                            boot_volume_id = volume.id
-                            created_items["volume:" + str(volume.id)] = True
-                            block_device_mapping[
-                                "vd" + chr(base_disk_index)
-                            ] = volume.id
-                    else:
-                        # non-root persistent volume
-                        key_id = (
-                            "vim_volume_id"
-                            if "vim_volume_id" in disk.keys()
-                            else "vim_id"
-                        )
-                        if disk.get(key_id):
-                            # use existing persistent volume
-                            block_device_mapping["vd" + chr(base_disk_index)] = disk[
-                                key_id
-                            ]
-                            existing_vim_volumes.append({"id": disk[key_id]})
-                        else:
-                            # create persistent volume
-                            volume = self.cinder.volumes.create(
-                                size=disk["size"],
-                                name=name + "vd" + chr(base_disk_index),
-                                # Make sure volume is in the same AZ as the VM to be attached to
-                                availability_zone=vm_av_zone,
-                            )
-                            created_items["volume:" + str(volume.id)] = True
-                            block_device_mapping[
-                                "vd" + chr(base_disk_index)
-                            ] = volume.id
-
-                    base_disk_index += 1
-
-                # Wait until created volumes are with status available
-                elapsed_time = 0
-                while elapsed_time < volume_timeout:
-                    for created_item in created_items:
-                        v, _, volume_id = created_item.partition(":")
-                        if v == "volume":
-                            if self.cinder.volumes.get(volume_id).status != "available":
-                                break
-                    else:  # all ready: break from while
-                        break
-
-                    time.sleep(5)
-                    elapsed_time += 5
-
-                # Wait until existing volumes in vim are with status available
-                while elapsed_time < volume_timeout:
-                    for volume in existing_vim_volumes:
-                        if self.cinder.volumes.get(volume["id"]).status != "available":
-                            break
-                    else:  # all ready: break from while
-                        break
-
-                    time.sleep(5)
-                    elapsed_time += 5
-
-                # If we exceeded the timeout rollback
-                if elapsed_time >= volume_timeout:
-                    raise vimconn.VimConnException(
-                        "Timeout creating volumes for instance " + name,
-                        http_code=vimconn.HTTP_Request_Timeout,
-                    )
-                if boot_volume_id:
-                    self.cinder.volumes.set_bootable(boot_volume_id, True)
-
-            # Manage affinity groups/server groups
-            server_group_id = None
-            scheduller_hints = {}
+                # Prepare disks
+                self._prepare_disk_for_vminstance(
+                    name=name,
+                    existing_vim_volumes=existing_vim_volumes,
+                    created_items=created_items,
+                    vm_av_zone=vm_av_zone,
+                    disk_list=disk_list,
+                )
 
             if affinity_group_list:
                 # Only first id on the list will be used. Openstack restriction
@@ -2038,6 +2551,8 @@ class vimconnector(vimconn.VimConnector):
                     server_group_id,
                 )
             )
+
+            # Create VM
             server = self.nova.servers.create(
                 name=name,
                 image=image_id,
@@ -2051,179 +2566,20 @@ class vimconnector(vimconn.VimConnector):
                 config_drive=config_drive,
                 block_device_mapping=block_device_mapping,
                 scheduler_hints=scheduller_hints,
-            )  # , description=description)
+            )
 
             vm_start_time = time.time()
-            # Previously mentioned workaround to wait until the VM is active and then disable the port-security
-            if no_secured_ports:
-                self.__wait_for_vm(server.id, "ACTIVE")
 
-            for port in no_secured_ports:
-                port_update = {
-                    "port": {"port_security_enabled": False, "security_groups": None}
-                }
+            self._update_port_security_for_vminstance(no_secured_ports, server)
 
-                if port[1] == "allow-address-pairs":
-                    port_update = {
-                        "port": {"allowed_address_pairs": [{"ip_address": "0.0.0.0/0"}]}
-                    }
-
-                try:
-                    self.neutron.update_port(port[0], port_update)
-                except Exception:
-                    raise vimconn.VimConnException(
-                        "It was not possible to disable port security for port {}".format(
-                            port[0]
-                        )
-                    )
-
-            # print "DONE :-)", server
-
-            # pool_id = None
-            for floating_network in external_network:
-                try:
-                    assigned = False
-                    floating_ip_retries = 3
-                    # In case of RO in HA there can be conflicts, two RO trying to assign same floating IP, so retry
-                    # several times
-                    while not assigned:
-                        floating_ips = self.neutron.list_floatingips().get(
-                            "floatingips", ()
-                        )
-                        random.shuffle(floating_ips)  # randomize
-                        for fip in floating_ips:
-                            if (
-                                fip.get("port_id")
-                                or fip.get("tenant_id") != server.tenant_id
-                            ):
-                                continue
-
-                            if isinstance(floating_network["floating_ip"], str):
-                                if (
-                                    fip.get("floating_network_id")
-                                    != floating_network["floating_ip"]
-                                ):
-                                    continue
-
-                            free_floating_ip = fip["id"]
-                            break
-                        else:
-                            if (
-                                isinstance(floating_network["floating_ip"], str)
-                                and floating_network["floating_ip"].lower() != "true"
-                            ):
-                                pool_id = floating_network["floating_ip"]
-                            else:
-                                # Find the external network
-                                external_nets = list()
-
-                                for net in self.neutron.list_networks()["networks"]:
-                                    if net["router:external"]:
-                                        external_nets.append(net)
-
-                                if len(external_nets) == 0:
-                                    raise vimconn.VimConnException(
-                                        "Cannot create floating_ip automatically since "
-                                        "no external network is present",
-                                        http_code=vimconn.HTTP_Conflict,
-                                    )
-
-                                if len(external_nets) > 1:
-                                    raise vimconn.VimConnException(
-                                        "Cannot create floating_ip automatically since "
-                                        "multiple external networks are present",
-                                        http_code=vimconn.HTTP_Conflict,
-                                    )
-
-                                pool_id = external_nets[0].get("id")
-
-                            param = {
-                                "floatingip": {
-                                    "floating_network_id": pool_id,
-                                    "tenant_id": server.tenant_id,
-                                }
-                            }
-
-                            try:
-                                # self.logger.debug("Creating floating IP")
-                                new_floating_ip = self.neutron.create_floatingip(param)
-                                free_floating_ip = new_floating_ip["floatingip"]["id"]
-                                created_items[
-                                    "floating_ip:" + str(free_floating_ip)
-                                ] = True
-                            except Exception as e:
-                                raise vimconn.VimConnException(
-                                    type(e).__name__
-                                    + ": Cannot create new floating_ip "
-                                    + str(e),
-                                    http_code=vimconn.HTTP_Conflict,
-                                )
-
-                        try:
-                            # for race condition ensure not already assigned
-                            fip = self.neutron.show_floatingip(free_floating_ip)
-
-                            if fip["floatingip"]["port_id"]:
-                                continue
-
-                            # the vim_id key contains the neutron.port_id
-                            self.neutron.update_floatingip(
-                                free_floating_ip,
-                                {"floatingip": {"port_id": floating_network["vim_id"]}},
-                            )
-                            # for race condition ensure not re-assigned to other VM after 5 seconds
-                            time.sleep(5)
-                            fip = self.neutron.show_floatingip(free_floating_ip)
-
-                            if (
-                                fip["floatingip"]["port_id"]
-                                != floating_network["vim_id"]
-                            ):
-                                self.logger.error(
-                                    "floating_ip {} re-assigned to other port".format(
-                                        free_floating_ip
-                                    )
-                                )
-                                continue
-
-                            self.logger.debug(
-                                "Assigned floating_ip {} to VM {}".format(
-                                    free_floating_ip, server.id
-                                )
-                            )
-                            assigned = True
-                        except Exception as e:
-                            # openstack need some time after VM creation to assign an IP. So retry if fails
-                            vm_status = self.nova.servers.get(server.id).status
-
-                            if vm_status not in ("ACTIVE", "ERROR"):
-                                if time.time() - vm_start_time < server_timeout:
-                                    time.sleep(5)
-                                    continue
-                            elif floating_ip_retries > 0:
-                                floating_ip_retries -= 1
-                                continue
-
-                            raise vimconn.VimConnException(
-                                "Cannot create floating_ip: {} {}".format(
-                                    type(e).__name__, e
-                                ),
-                                http_code=vimconn.HTTP_Conflict,
-                            )
-
-                except Exception as e:
-                    if not floating_network["exit_on_floating_ip_error"]:
-                        self.logger.error("Cannot create floating_ip. %s", str(e))
-                        continue
-
-                    raise
+            self._prepare_external_network_for_vminstance(
+                external_network=external_network,
+                server=server,
+                created_items=created_items,
+                vm_start_time=vm_start_time,
+            )
 
             return server.id, created_items
-        # except nvExceptions.NotFound as e:
-        #     error_value=-vimconn.HTTP_Not_Found
-        #     error_text= "vm instance %s not found" % vm_id
-        # except TypeError as e:
-        #     raise vimconn.VimConnException(type(e).__name__ + ": "+  str(e), http_code=vimconn.HTTP_Bad_Request)
 
         except Exception as e:
             server_id = None
@@ -2232,6 +2588,7 @@ class vimconnector(vimconn.VimConnector):
 
             try:
                 self.delete_vminstance(server_id, created_items)
+
             except Exception as e2:
                 self.logger.error("new_vminstance rollback fail {}".format(e2))
 
