@@ -1353,8 +1353,7 @@ class vimconnector(vimconn.VimConnector):
         cpu_cores, cpu_threads = 0, 0
 
         if self.vim_type == "VIO":
-            extra_specs["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
-            extra_specs["vmware:latency_sensitivity_level"] = "high"
+            self.process_vio_numa_nodes(numa_nodes, extra_specs)
 
         for numa in numas:
             if "id" in numa:
@@ -1383,6 +1382,23 @@ class vimconnector(vimconn.VimConnector):
             extra_specs["hw:cpu_cores"] = str(cpu_cores)
         if cpu_threads:
             extra_specs["hw:cpu_threads"] = str(cpu_threads)
+
+    @staticmethod
+    def process_vio_numa_nodes(numa_nodes: int, extra_specs: Dict) -> None:
+        """According to number of numa nodes, updates the extra_specs for VIO.
+
+        Args:
+
+            numa_nodes      (int):         List keeps the numa node numbers
+            extra_specs     (dict):        Extra specs dict to be updated
+
+        """
+        # If there is not any numa, numas_nodes equals to 0.
+        if not numa_nodes:
+            extra_specs["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
+
+        # If there are several numas, we do not define specific affinity.
+        extra_specs["vmware:latency_sensitivity_level"] = "high"
 
     def _change_flavor_name(
         self, name: str, name_suffix: int, flavor_data: dict
