@@ -5945,6 +5945,7 @@ class TestNewFlavor(unittest.TestCase):
         for mocking in mocks:
             mocking.assert_not_called()
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -5961,6 +5962,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, memory, vcpu exist, vim type is VIO,
         paired-threads, cores, threads do not exist in numa.
@@ -5972,8 +5974,6 @@ class TestNewFlavor(unittest.TestCase):
         extra_specs = {}
         expected_extra_specs = {
             "hw:numa_nodes": "2",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-            "vmware:latency_sensitivity_level": "high",
             "hw:cpu_sockets": "2",
         }
         self.vimconn.vim_type = "VIO"
@@ -5981,6 +5981,7 @@ class TestNewFlavor(unittest.TestCase):
 
         self.assertEqual(mock_process_numa_memory.call_count, 2)
         self.assertEqual(mock_process_numa_vcpu.call_count, 2)
+        mock_process_vio_numa_nodes.assert_called_once_with(2, {"hw:numa_nodes": "2"})
         _call_mock_process_numa_memory = mock_process_numa_memory.call_args_list
         self.assertEqual(
             _call_mock_process_numa_memory[0].args,
@@ -5989,8 +5990,6 @@ class TestNewFlavor(unittest.TestCase):
                 0,
                 {
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
@@ -6002,8 +6001,6 @@ class TestNewFlavor(unittest.TestCase):
                 {
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
@@ -6015,8 +6012,6 @@ class TestNewFlavor(unittest.TestCase):
                 0,
                 {
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
@@ -6028,8 +6023,6 @@ class TestNewFlavor(unittest.TestCase):
                 {
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
@@ -6042,6 +6035,7 @@ class TestNewFlavor(unittest.TestCase):
             ]
         )
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6058,6 +6052,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, memory, vcpu exist, vim type is openstack,
         paired-threads, cores, threads do not exist in numa.
@@ -6119,6 +6114,7 @@ class TestNewFlavor(unittest.TestCase):
             ]
         )
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6135,6 +6131,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, paired-threads exist, vim type is openstack.
         vcpus calculation according to paired-threads in numa, there is extra_spec.
@@ -6176,6 +6173,7 @@ class TestNewFlavor(unittest.TestCase):
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6192,6 +6190,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, paired-threads exist, vim type is VIO.
         vcpus calculation according to paired-threads in numa, there is extra_spec.
@@ -6200,8 +6199,6 @@ class TestNewFlavor(unittest.TestCase):
         extra_specs = {"some-key": "some-value"}
         expected_extra_specs = {
             "hw:numa_nodes": "2",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-            "vmware:latency_sensitivity_level": "high",
             "hw:cpu_sockets": "2",
             "hw:cpu_threads": "8",
             "some-key": "some-value",
@@ -6218,6 +6215,9 @@ class TestNewFlavor(unittest.TestCase):
         _call_mock_process_numa_paired_threads = (
             mock_process_numa_paired_threads.call_args_list
         )
+        mock_process_vio_numa_nodes.assert_called_once_with(
+            2, {"some-key": "some-value", "hw:numa_nodes": "2"}
+        )
         self.assertEqual(
             _call_mock_process_numa_paired_threads[0].args,
             (
@@ -6226,8 +6226,6 @@ class TestNewFlavor(unittest.TestCase):
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
                     "some-key": "some-value",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
@@ -6239,13 +6237,12 @@ class TestNewFlavor(unittest.TestCase):
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
                     "some-key": "some-value",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6262,6 +6259,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, cores exist, vim type is openstack.
         vcpus calculation according to cores in numa.
@@ -6295,6 +6293,7 @@ class TestNewFlavor(unittest.TestCase):
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6311,6 +6310,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, cores exist, vim type is VIO.
         vcpus calculation according to cores in numa.
@@ -6321,8 +6321,6 @@ class TestNewFlavor(unittest.TestCase):
             "hw:cpu_cores": "3",
             "hw:cpu_sockets": "2",
             "hw:numa_nodes": "2",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-            "vmware:latency_sensitivity_level": "high",
         }
         self.vimconn.vim_type = "VIO"
         mock_process_numa_cores.side_effect = [1, 2]
@@ -6333,6 +6331,7 @@ class TestNewFlavor(unittest.TestCase):
         self.assertEqual(mock_process_numa_memory.call_count, 2)
         self.assertEqual(mock_process_numa_vcpu.call_count, 2)
         self.assertEqual(mock_process_numa_cores.call_count, 2)
+        mock_process_vio_numa_nodes.assert_called_once_with(2, {"hw:numa_nodes": "2"})
         _call_mock_process_numa_cores = mock_process_numa_cores.call_args_list
         self.assertEqual(
             _call_mock_process_numa_cores[0].args,
@@ -6341,8 +6340,6 @@ class TestNewFlavor(unittest.TestCase):
                 {
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
@@ -6353,13 +6350,12 @@ class TestNewFlavor(unittest.TestCase):
                 {
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6376,6 +6372,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, memory, vcpu, thread exist, vim type is VIO,
         vcpus calculation according threads in numa, there are not numa ids.
@@ -6387,8 +6384,6 @@ class TestNewFlavor(unittest.TestCase):
         extra_specs = {}
         expected_extra_specs = {
             "hw:numa_nodes": "2",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-            "vmware:latency_sensitivity_level": "high",
             "hw:cpu_sockets": "2",
             "hw:cpu_threads": "3",
         }
@@ -6403,6 +6398,7 @@ class TestNewFlavor(unittest.TestCase):
                 mock_process_numa_paired_threads,
             ]
         )
+        mock_process_vio_numa_nodes.assert_called_once_with(2, {"hw:numa_nodes": "2"})
         self.assertEqual(mock_process_numa_threads.call_count, 1)
         _call_mock_process_numa_threads = mock_process_numa_threads.call_args_list
         self.assertEqual(
@@ -6412,13 +6408,12 @@ class TestNewFlavor(unittest.TestCase):
                 {
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6435,6 +6430,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, memory, vcpu, thread exist, vim type is openstack,
         vcpus calculation according threads in numa, there are not numa ids.
@@ -6459,6 +6455,7 @@ class TestNewFlavor(unittest.TestCase):
                 mock_process_numa_vcpu,
                 mock_process_numa_cores,
                 mock_process_numa_paired_threads,
+                mock_process_vio_numa_nodes,
             ]
         )
         self.assertEqual(mock_process_numa_threads.call_count, 1)
@@ -6472,6 +6469,7 @@ class TestNewFlavor(unittest.TestCase):
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6488,15 +6486,12 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Numa list is empty, vim type is VIO."""
         numas = []
         extra_specs = {}
-        expected_extra_specs = {
-            "hw:numa_nodes": "0",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-            "vmware:latency_sensitivity_level": "high",
-        }
+        expected_extra_specs = {"hw:numa_nodes": "0"}
         self.vimconn.vim_type = "VIO"
         self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
         self.check_if_assert_not_called(
@@ -6508,8 +6503,10 @@ class TestNewFlavor(unittest.TestCase):
                 mock_process_numa_threads,
             ]
         )
+        mock_process_vio_numa_nodes.assert_called_once_with(0, {"hw:numa_nodes": "0"})
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6526,6 +6523,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Numa list is empty, vim type is openstack."""
         numas = []
@@ -6542,6 +6540,7 @@ class TestNewFlavor(unittest.TestCase):
                 mock_process_numa_cores,
                 mock_process_numa_paired_threads,
                 mock_process_numa_threads,
+                mock_process_vio_numa_nodes,
             ]
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
@@ -7759,6 +7758,53 @@ class TestNewFlavor(unittest.TestCase):
             str(call_mock_format_exception[0][0]), str(Conflict(error_msg))
         )
         self.assertEqual(mock_format_exception.call_count, 1)
+
+    def test_process_process_vio_numa_nodes_without_numa_with_extra_spec(self):
+        numa_nodes = 0
+        extra_specs = {"hw:numa_nodes": "0"}
+        expected_extra_spec = {
+            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+            "vmware:latency_sensitivity_level": "high",
+            "hw:numa_nodes": "0",
+        }
+        self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_process_vio_numa_nodes_list_type_numa_nodes_empty_extra_spec(self):
+        numa_nodes = [7, 9, 4]
+        extra_specs = {}
+        expected_extra_spec = {
+            "vmware:latency_sensitivity_level": "high",
+        }
+        self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_process_vio_numa_nodes_with_numa_with_extra_spec(self):
+        numa_nodes = 5
+        extra_specs = {"hw:numa_nodes": "5"}
+        expected_extra_spec = {
+            "vmware:latency_sensitivity_level": "high",
+            "hw:numa_nodes": "5",
+        }
+        self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_process_vio_numa_nodes_none_numa_nodes(self):
+        numa_nodes = None
+        extra_specs = {"hw:numa_nodes": "None"}
+        expected_extra_spec = {
+            "vmware:latency_sensitivity_level": "high",
+            "hw:numa_nodes": "None",
+            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+        }
+        self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_process_vio_numa_nodes_invalid_type_extra_specs(self):
+        numa_nodes = 5
+        extra_specs = []
+        with self.assertRaises(TypeError):
+            self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
 
 
 if __name__ == "__main__":
