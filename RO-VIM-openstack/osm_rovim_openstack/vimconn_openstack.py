@@ -2062,6 +2062,7 @@ class vimconnector(vimconn.VimConnector):
         existing_vim_volumes: list,
         created_items: dict,
         vm_av_zone: list,
+        block_device_mapping: dict,
         disk_list: list = None,
     ) -> None:
         """Prepare all volumes for new VM instance.
@@ -2071,6 +2072,7 @@ class vimconnector(vimconn.VimConnector):
             existing_vim_volumes    (list):     List of existing volumes
             created_items   (dict):             All created items belongs to VM
             vm_av_zone  (list):                 VM availability zone
+            block_device_mapping (dict):        Block devices to be attached to VM
             disk_list   (list):                 List of disks
 
         """
@@ -2079,7 +2081,6 @@ class vimconnector(vimconn.VimConnector):
         boot_volume_id = None
         elapsed_time = 0
 
-        block_device_mapping = {}
         for disk in disk_list:
             if "image_id" in disk:
                 # Root persistent volume
@@ -2493,7 +2494,7 @@ class vimconnector(vimconn.VimConnector):
             external_network = []
             # List of ports with port-security disabled
             no_secured_ports = []
-            block_device_mapping = None
+            block_device_mapping = {}
             existing_vim_volumes = []
             server_group_id = None
             scheduller_hints = {}
@@ -2526,6 +2527,7 @@ class vimconnector(vimconn.VimConnector):
                     existing_vim_volumes=existing_vim_volumes,
                     created_items=created_items,
                     vm_av_zone=vm_av_zone,
+                    block_device_mapping=block_device_mapping,
                     disk_list=disk_list,
                 )
 
