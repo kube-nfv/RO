@@ -2671,6 +2671,7 @@ class TestNewVmInstance(unittest.TestCase):
         """Prepare disks for VM instance successfully."""
         existing_vim_volumes = []
         created_items = {}
+        block_device_mapping = {}
         vm_av_zone = ["nova"]
 
         mock_root_volumes.return_value = root_vol_id
@@ -2679,7 +2680,12 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.cinder = CopyingMock()
 
         self.vimconn._prepare_disk_for_vminstance(
-            name, existing_vim_volumes, created_items, vm_av_zone, disk_list2
+            name,
+            existing_vim_volumes,
+            created_items,
+            vm_av_zone,
+            block_device_mapping,
+            disk_list2,
         )
         self.vimconn.cinder.volumes.set_bootable.assert_called_once_with(
             root_vol_id, True
@@ -2722,6 +2728,7 @@ class TestNewVmInstance(unittest.TestCase):
         existing_vim_volumes = []
         created_items = {}
         vm_av_zone = ["nova"]
+        block_device_mapping = {}
 
         mock_root_volumes.return_value = root_vol_id
         mock_created_vol_availability.return_value = 1700
@@ -2729,7 +2736,12 @@ class TestNewVmInstance(unittest.TestCase):
 
         with self.assertRaises(VimConnException) as err:
             self.vimconn._prepare_disk_for_vminstance(
-                name, existing_vim_volumes, created_items, vm_av_zone, disk_list2
+                name,
+                existing_vim_volumes,
+                created_items,
+                vm_av_zone,
+                block_device_mapping,
+                disk_list2,
             )
         self.assertEqual(
             str(err.exception), "Timeout creating volumes for instance basicvm"
@@ -2774,12 +2786,18 @@ class TestNewVmInstance(unittest.TestCase):
         """Disk list is empty."""
         existing_vim_volumes = []
         created_items = {}
+        block_device_mapping = {}
         vm_av_zone = ["nova"]
         mock_created_vol_availability.return_value = 2
         mock_existing_vol_availability.return_value = 3
 
         self.vimconn._prepare_disk_for_vminstance(
-            name, existing_vim_volumes, created_items, vm_av_zone, disk_list
+            name,
+            existing_vim_volumes,
+            created_items,
+            vm_av_zone,
+            block_device_mapping,
+            disk_list,
         )
         self.vimconn.cinder.volumes.set_bootable.assert_not_called()
         mock_created_vol_availability.assert_called_once_with(0, created_items)
@@ -2802,6 +2820,7 @@ class TestNewVmInstance(unittest.TestCase):
         existing_vim_volumes = []
         created_items = {}
         vm_av_zone = ["nova"]
+        block_device_mapping = {}
 
         mock_root_volumes.side_effect = Exception()
         mock_created_vol_availability.return_value = 10
@@ -2809,7 +2828,12 @@ class TestNewVmInstance(unittest.TestCase):
 
         with self.assertRaises(Exception):
             self.vimconn._prepare_disk_for_vminstance(
-                name, existing_vim_volumes, created_items, vm_av_zone, disk_list2
+                name,
+                existing_vim_volumes,
+                created_items,
+                vm_av_zone,
+                block_device_mapping,
+                disk_list2,
             )
         self.vimconn.cinder.volumes.set_bootable.assert_not_called()
         mock_created_vol_availability.assert_not_called()
@@ -2840,13 +2864,19 @@ class TestNewVmInstance(unittest.TestCase):
         existing_vim_volumes = []
         created_items = {}
         vm_av_zone = ["nova"]
+        block_device_mapping = {}
 
         mock_root_volumes.return_value = root_vol_id
         mock_non_root_volumes.side_effect = Exception
 
         with self.assertRaises(Exception):
             self.vimconn._prepare_disk_for_vminstance(
-                name, existing_vim_volumes, created_items, vm_av_zone, disk_list2
+                name,
+                existing_vim_volumes,
+                created_items,
+                vm_av_zone,
+                block_device_mapping,
+                disk_list2,
             )
         self.vimconn.cinder.volumes.set_bootable.assert_not_called()
         mock_created_vol_availability.assert_not_called()
@@ -4021,6 +4051,7 @@ class TestNewVmInstance(unittest.TestCase):
             existing_vim_volumes=[],
             created_items={},
             vm_av_zone="nova",
+            block_device_mapping={},
             disk_list=disk_list2,
         )
         self.vimconn.nova.servers.create.assert_called_once_with(
@@ -4033,7 +4064,7 @@ class TestNewVmInstance(unittest.TestCase):
             key_name="my_keypair",
             userdata="userdata",
             config_drive=True,
-            block_device_mapping=None,
+            block_device_mapping={},
             scheduler_hints={},
         )
         mock_time.assert_called_once()
@@ -4187,6 +4218,7 @@ class TestNewVmInstance(unittest.TestCase):
             existing_vim_volumes=[],
             created_items={},
             vm_av_zone="nova",
+            block_device_mapping={},
             disk_list=disk_list2,
         )
         self.vimconn.nova.servers.create.assert_called_once_with(
@@ -4199,7 +4231,7 @@ class TestNewVmInstance(unittest.TestCase):
             key_name="my_keypair",
             userdata="userdata",
             config_drive=True,
-            block_device_mapping=None,
+            block_device_mapping={},
             scheduler_hints={},
         )
         mock_time.assert_called_once()
@@ -4281,6 +4313,7 @@ class TestNewVmInstance(unittest.TestCase):
             existing_vim_volumes=[],
             created_items={},
             vm_av_zone="nova",
+            block_device_mapping={},
             disk_list=disk_list2,
         )
         self.vimconn.nova.servers.create.assert_called_once_with(
@@ -4293,7 +4326,7 @@ class TestNewVmInstance(unittest.TestCase):
             key_name="my_keypair",
             userdata="userdata",
             config_drive=True,
-            block_device_mapping=None,
+            block_device_mapping={},
             scheduler_hints={"group": "38b73-e9cc-5a6a-t270-82cc4811bd4a"},
         )
         mock_time.assert_called_once()
@@ -4374,6 +4407,7 @@ class TestNewVmInstance(unittest.TestCase):
             existing_vim_volumes=[],
             created_items={},
             vm_av_zone="nova",
+            block_device_mapping={},
             disk_list=disk_list2,
         )
 
@@ -4387,7 +4421,7 @@ class TestNewVmInstance(unittest.TestCase):
             key_name="my_keypair",
             userdata="userdata",
             config_drive=True,
-            block_device_mapping=None,
+            block_device_mapping={},
             scheduler_hints={},
         )
         mock_time.assert_not_called()
