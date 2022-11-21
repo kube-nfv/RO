@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
-
+from copy import deepcopy
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
@@ -31,6 +31,283 @@ from osm_ng_ro.ns import Ns, NsException
 
 __author__ = "Eduardo Sousa"
 __date__ = "$19-NOV-2021 00:00:00$"
+
+
+# Variables used in Tests
+vnfd_wth_persistent_storage = {
+    "_id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+    "df": [
+        {
+            "id": "default-df",
+            "vdu-profile": [{"id": "several_volumes-VM", "min-number-of-instances": 1}],
+        }
+    ],
+    "id": "several_volumes-vnf",
+    "product-name": "several_volumes-vnf",
+    "vdu": [
+        {
+            "id": "several_volumes-VM",
+            "name": "several_volumes-VM",
+            "sw-image-desc": "ubuntu20.04",
+            "alternative-sw-image-desc": [
+                "ubuntu20.04-aws",
+                "ubuntu20.04-azure",
+            ],
+            "virtual-storage-desc": [
+                "persistent-root-volume",
+                "persistent-volume2",
+                "ephemeral-volume",
+            ],
+        }
+    ],
+    "version": "1.0",
+    "virtual-storage-desc": [
+        {
+            "id": "persistent-volume2",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+        },
+        {
+            "id": "persistent-root-volume",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+        },
+        {
+            "id": "ephemeral-volume",
+            "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+            "size-of-storage": "1",
+        },
+    ],
+    "_admin": {
+        "storage": {
+            "fs": "mongo",
+            "path": "/app/storage/",
+        },
+        "type": "vnfd",
+    },
+}
+vim_volume_id = "ru937f49-3870-4169-b758-9732e1ff40f3"
+task_by_target_record_id = {
+    "nsrs:th47f48-9870-4169-b758-9732e1ff40f3": {
+        "extra_dict": {"params": {"net_type": "SR-IOV"}}
+    }
+}
+interfaces_wthout_positions = [
+    {
+        "name": "vdu-eth1",
+        "ns-vld-id": "net1",
+    },
+    {
+        "name": "vdu-eth2",
+        "ns-vld-id": "net2",
+    },
+    {
+        "name": "vdu-eth3",
+        "ns-vld-id": "mgmtnet",
+    },
+]
+interfaces_wth_all_positions = [
+    {
+        "name": "vdu-eth1",
+        "ns-vld-id": "net1",
+        "position": 2,
+    },
+    {
+        "name": "vdu-eth2",
+        "ns-vld-id": "net2",
+        "position": 0,
+    },
+    {
+        "name": "vdu-eth3",
+        "ns-vld-id": "mgmtnet",
+        "position": 1,
+    },
+]
+target_vdu_wth_persistent_storage = {
+    "_id": "09a0baa7-b7cb-4924-bd63-9f04a1c23960",
+    "ns-flavor-id": "0",
+    "ns-image-id": "0",
+    "vdu-name": "several_volumes-VM",
+    "interfaces": [
+        {
+            "name": "vdu-eth0",
+            "ns-vld-id": "mgmtnet",
+        }
+    ],
+    "virtual-storages": [
+        {
+            "id": "persistent-volume2",
+            "size-of-storage": "10",
+            "type-of-storage": "persistent-storage:persistent-storage",
+        },
+        {
+            "id": "persistent-root-volume",
+            "size-of-storage": "10",
+            "type-of-storage": "persistent-storage:persistent-storage",
+        },
+        {
+            "id": "ephemeral-volume",
+            "size-of-storage": "1",
+            "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+        },
+    ],
+}
+db = MagicMock(name="database mock")
+fs = MagicMock(name="database mock")
+ns_preffix = "nsrs:th47f48-9870-4169-b758-9732e1ff40f3"
+vnf_preffix = "vnfrs:wh47f48-y870-4169-b758-5732e1ff40f5"
+vnfr_id = "wh47f48-y870-4169-b758-5732e1ff40f5"
+nsr_id = "th47f48-9870-4169-b758-9732e1ff40f3"
+indata = {
+    "name": "sample_name",
+}
+expected_extra_dict = {
+    "depends_on": [
+        f"{ns_preffix}:image.0",
+        f"{ns_preffix}:flavor.0",
+    ],
+    "params": {
+        "affinity_group_list": [],
+        "availability_zone_index": None,
+        "availability_zone_list": None,
+        "cloud_config": None,
+        "description": "several_volumes-VM",
+        "disk_list": [],
+        "flavor_id": f"TASK-{ns_preffix}:flavor.0",
+        "image_id": f"TASK-{ns_preffix}:image.0",
+        "name": "sample_name-vnf-several-volu-several_volumes-VM-0",
+        "net_list": [],
+        "start": True,
+    },
+}
+
+expected_extra_dict2 = {
+    "depends_on": [
+        f"{ns_preffix}:image.0",
+        f"{ns_preffix}:flavor.0",
+    ],
+    "params": {
+        "affinity_group_list": [],
+        "availability_zone_index": None,
+        "availability_zone_list": None,
+        "cloud_config": None,
+        "description": "without_volumes-VM",
+        "disk_list": [],
+        "flavor_id": f"TASK-{ns_preffix}:flavor.0",
+        "image_id": f"TASK-{ns_preffix}:image.0",
+        "name": "sample_name-vnf-several-volu-without_volumes-VM-0",
+        "net_list": [],
+        "start": True,
+    },
+}
+tasks_by_target_record_id = {
+    "nsrs:th47f48-9870-4169-b758-9732e1ff40f3": {
+        "extra_dict": {
+            "params": {
+                "net_type": "SR-IOV",
+            }
+        }
+    }
+}
+kwargs = {
+    "db": MagicMock(),
+    "vdu2cloud_init": {},
+    "vnfr": {
+        "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+        "member-vnf-index-ref": "vnf-several-volumes",
+    },
+}
+vnfd_wthout_persistent_storage = {
+    "_id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
+    "df": [
+        {
+            "id": "default-df",
+            "vdu-profile": [{"id": "without_volumes-VM", "min-number-of-instances": 1}],
+        }
+    ],
+    "id": "without_volumes-vnf",
+    "product-name": "without_volumes-vnf",
+    "vdu": [
+        {
+            "id": "without_volumes-VM",
+            "name": "without_volumes-VM",
+            "sw-image-desc": "ubuntu20.04",
+            "alternative-sw-image-desc": [
+                "ubuntu20.04-aws",
+                "ubuntu20.04-azure",
+            ],
+            "virtual-storage-desc": ["root-volume", "ephemeral-volume"],
+        }
+    ],
+    "version": "1.0",
+    "virtual-storage-desc": [
+        {"id": "root-volume", "size-of-storage": "10"},
+        {
+            "id": "ephemeral-volume",
+            "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+            "size-of-storage": "1",
+        },
+    ],
+    "_admin": {
+        "storage": {
+            "fs": "mongo",
+            "path": "/app/storage/",
+        },
+        "type": "vnfd",
+    },
+}
+
+target_vdu_wthout_persistent_storage = {
+    "_id": "09a0baa7-b7cb-4924-bd63-9f04a1c23960",
+    "ns-flavor-id": "0",
+    "ns-image-id": "0",
+    "vdu-name": "without_volumes-VM",
+    "interfaces": [
+        {
+            "name": "vdu-eth0",
+            "ns-vld-id": "mgmtnet",
+        }
+    ],
+    "virtual-storages": [
+        {
+            "id": "root-volume",
+            "size-of-storage": "10",
+        },
+        {
+            "id": "ephemeral-volume",
+            "size-of-storage": "1",
+            "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+        },
+    ],
+}
+cloud_init_content = """
+disk_setup:
+    ephemeral0:
+        table_type: {{type}}
+        layout: True
+        overwrite: {{is_override}}
+runcmd:
+     - [ ls, -l, / ]
+     - [ sh, -xc, "echo $(date) '{{command}}'" ]
+"""
+
+user_data = """
+disk_setup:
+    ephemeral0:
+        table_type: mbr
+        layout: True
+        overwrite: False
+runcmd:
+     - [ ls, -l, / ]
+     - [ sh, -xc, "echo $(date) '& rm -rf /'" ]
+"""
+
+
+class CopyingMock(MagicMock):
+    def __call__(self, *args, **kwargs):
+        args = deepcopy(args)
+        kwargs = deepcopy(kwargs)
+        return super(CopyingMock, self).__call__(*args, **kwargs)
 
 
 class TestNs(unittest.TestCase):
@@ -1632,7 +1909,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-        db = MagicMock(name="database mock")
         kwargs = {
             "db": db,
         }
@@ -1807,8 +2083,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-        db = MagicMock(name="database mock")
-
         kwargs = {
             "db": db,
         }
@@ -1983,8 +2257,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-        db = MagicMock(name="database mock")
-
         kwargs = {
             "db": db,
         }
@@ -2815,269 +3087,6 @@ class TestNs(unittest.TestCase):
             )
             self.assertEqual(result, expected_result)
 
-    def test__process_vdu_params_empty_kargs(self):
-        pass
-
-    def test__process_vdu_params_interface_ns_vld_id(self):
-        pass
-
-    def test__process_vdu_params_interface_vnf_vld_id(self):
-        pass
-
-    def test__process_vdu_params_interface_unknown(self):
-        pass
-
-    def test__process_vdu_params_interface_port_security_enabled(self):
-        pass
-
-    def test__process_vdu_params_interface_port_security_disable_strategy(self):
-        pass
-
-    def test__process_vdu_params_interface_sriov(self):
-        pass
-
-    def test__process_vdu_params_interface_pci_passthrough(self):
-        pass
-
-    def test__process_vdu_params_interface_om_mgmt(self):
-        pass
-
-    def test__process_vdu_params_interface_mgmt_interface(self):
-        pass
-
-    def test__process_vdu_params_interface_mgmt_vnf(self):
-        pass
-
-    def test__process_vdu_params_interface_bridge(self):
-        pass
-
-    def test__process_vdu_params_interface_ip_address(self):
-        pass
-
-    def test__process_vdu_params_interface_mac_address(self):
-        pass
-
-    def test__process_vdu_params_vdu_cloud_init_missing(self):
-        pass
-
-    def test__process_vdu_params_vdu_cloud_init_present(self):
-        pass
-
-    def test__process_vdu_params_vdu_boot_data_drive(self):
-        pass
-
-    def test__process_vdu_params_vdu_ssh_keys(self):
-        pass
-
-    def test__process_vdu_params_vdu_ssh_access_required(self):
-        pass
-
-    @patch("osm_ng_ro.ns.Ns._get_cloud_init")
-    @patch("osm_ng_ro.ns.Ns._parse_jinja2")
-    def test__process_vdu_params_vdu_persistent_root_volume(
-        self, get_cloud_init, parse_jinja2
-    ):
-        db = MagicMock(name="database mock")
-        kwargs = {
-            "db": db,
-            "vdu2cloud_init": {},
-            "vnfr": {
-                "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
-                "member-vnf-index-ref": "vnf-several-volumes",
-            },
-        }
-        get_cloud_init.return_value = {}
-        parse_jinja2.return_value = {}
-        db.get_one.return_value = {
-            "_id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
-            "df": [
-                {
-                    "id": "default-df",
-                    "vdu-profile": [
-                        {"id": "several_volumes-VM", "min-number-of-instances": 1}
-                    ],
-                }
-            ],
-            "id": "several_volumes-vnf",
-            "product-name": "several_volumes-vnf",
-            "vdu": [
-                {
-                    "id": "several_volumes-VM",
-                    "name": "several_volumes-VM",
-                    "sw-image-desc": "ubuntu20.04",
-                    "alternative-sw-image-desc": [
-                        "ubuntu20.04-aws",
-                        "ubuntu20.04-azure",
-                    ],
-                    "virtual-storage-desc": [
-                        "persistent-root-volume",
-                        "persistent-volume2",
-                        "ephemeral-volume",
-                    ],
-                }
-            ],
-            "version": "1.0",
-            "virtual-storage-desc": [
-                {
-                    "id": "persistent-volume2",
-                    "type-of-storage": "persistent-storage:persistent-storage",
-                    "size-of-storage": "10",
-                },
-                {
-                    "id": "persistent-root-volume",
-                    "type-of-storage": "persistent-storage:persistent-storage",
-                    "size-of-storage": "10",
-                },
-                {
-                    "id": "ephemeral-volume",
-                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
-                    "size-of-storage": "1",
-                },
-            ],
-            "_admin": {
-                "storage": {
-                    "fs": "mongo",
-                    "path": "/app/storage/",
-                },
-                "type": "vnfd",
-            },
-        }
-
-        target_vdu = {
-            "_id": "09a0baa7-b7cb-4924-bd63-9f04a1c23960",
-            "ns-flavor-id": "0",
-            "ns-image-id": "0",
-            "vdu-name": "several_volumes-VM",
-            "interfaces": [
-                {
-                    "name": "vdu-eth0",
-                    "ns-vld-id": "mgmtnet",
-                }
-            ],
-            "virtual-storages": [
-                {
-                    "id": "persistent-volume2",
-                    "size-of-storage": "10",
-                    "type-of-storage": "persistent-storage:persistent-storage",
-                },
-                {
-                    "id": "persistent-root-volume",
-                    "size-of-storage": "10",
-                    "type-of-storage": "persistent-storage:persistent-storage",
-                },
-                {
-                    "id": "ephemeral-volume",
-                    "size-of-storage": "1",
-                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
-                },
-            ],
-        }
-        indata = {
-            "name": "sample_name",
-        }
-        expected_result = [{"image_id": "ubuntu20.04", "size": "10"}, {"size": "10"}]
-        result = Ns._process_vdu_params(
-            target_vdu, indata, vim_info=None, target_record_id=None, **kwargs
-        )
-        self.assertEqual(
-            expected_result, result["params"]["disk_list"], "Wrong Disk List"
-        )
-
-    @patch("osm_ng_ro.ns.Ns._get_cloud_init")
-    @patch("osm_ng_ro.ns.Ns._parse_jinja2")
-    def test__process_vdu_params_vdu_without_persistent_storage(
-        self, get_cloud_init, parse_jinja2
-    ):
-        db = MagicMock(name="database mock")
-        kwargs = {
-            "db": db,
-            "vdu2cloud_init": {},
-            "vnfr": {
-                "vnfd-id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
-                "member-vnf-index-ref": "vnf-several-volumes",
-            },
-        }
-        get_cloud_init.return_value = {}
-        parse_jinja2.return_value = {}
-        db.get_one.return_value = {
-            "_id": "ad6356e3-698c-43bf-9901-3aae9e9b9d18",
-            "df": [
-                {
-                    "id": "default-df",
-                    "vdu-profile": [
-                        {"id": "without_volumes-VM", "min-number-of-instances": 1}
-                    ],
-                }
-            ],
-            "id": "without_volumes-vnf",
-            "product-name": "without_volumes-vnf",
-            "vdu": [
-                {
-                    "id": "without_volumes-VM",
-                    "name": "without_volumes-VM",
-                    "sw-image-desc": "ubuntu20.04",
-                    "alternative-sw-image-desc": [
-                        "ubuntu20.04-aws",
-                        "ubuntu20.04-azure",
-                    ],
-                    "virtual-storage-desc": ["root-volume", "ephemeral-volume"],
-                }
-            ],
-            "version": "1.0",
-            "virtual-storage-desc": [
-                {"id": "root-volume", "size-of-storage": "10"},
-                {
-                    "id": "ephemeral-volume",
-                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
-                    "size-of-storage": "1",
-                },
-            ],
-            "_admin": {
-                "storage": {
-                    "fs": "mongo",
-                    "path": "/app/storage/",
-                },
-                "type": "vnfd",
-            },
-        }
-
-        target_vdu = {
-            "_id": "09a0baa7-b7cb-4924-bd63-9f04a1c23960",
-            "ns-flavor-id": "0",
-            "ns-image-id": "0",
-            "vdu-name": "without_volumes-VM",
-            "interfaces": [
-                {
-                    "name": "vdu-eth0",
-                    "ns-vld-id": "mgmtnet",
-                }
-            ],
-            "virtual-storages": [
-                {
-                    "id": "root-volume",
-                    "size-of-storage": "10",
-                },
-                {
-                    "id": "ephemeral-volume",
-                    "size-of-storage": "1",
-                    "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
-                },
-            ],
-        }
-        indata = {
-            "name": "sample_name",
-        }
-        expected_result = []
-        result = Ns._process_vdu_params(
-            target_vdu, indata, vim_info=None, target_record_id=None, **kwargs
-        )
-        self.assertEqual(
-            expected_result, result["params"]["disk_list"], "Wrong Disk List"
-        )
-
-    def test__process_vdu_params(self):
-        pass
-
     @patch("osm_ng_ro.ns.Ns._assign_vim")
     def test__rebuild_start_stop_task(self, assign_vim):
         self.ns = Ns()
@@ -3215,3 +3224,2070 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(task, expected_result)
+
+
+class TestProcessVduParams(unittest.TestCase):
+    def setUp(self):
+        self.ns = Ns()
+        self.logger = CopyingMock(autospec=True)
+
+    def test_find_persistent_root_volumes_empty_instantiation_vol_list(self):
+        """Find persistent root volume, instantiation_vol_list is empty."""
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        target_vdu = target_vdu_wth_persistent_storage
+        vdu_instantiation_volumes_list = []
+        disk_list = []
+        expected_persist_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        expected_disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+        ]
+        persist_root_disk = self.ns.find_persistent_root_volumes(
+            vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(persist_root_disk, expected_persist_root_disk)
+        self.assertEqual(disk_list, expected_disk_list)
+        self.assertEqual(len(disk_list), 1)
+
+    def test_find_persistent_root_volumes_always_selects_first_vsd_as_root(self):
+        """Find persistent root volume, always selects the first vsd as root volume."""
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        vnfd["vdu"][0]["virtual-storage-desc"] = [
+            "persistent-volume2",
+            "persistent-root-volume",
+            "ephemeral-volume",
+        ]
+        target_vdu = target_vdu_wth_persistent_storage
+        vdu_instantiation_volumes_list = []
+        disk_list = []
+        expected_persist_root_disk = {
+            "persistent-volume2": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        expected_disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+        ]
+        persist_root_disk = self.ns.find_persistent_root_volumes(
+            vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(persist_root_disk, expected_persist_root_disk)
+        self.assertEqual(disk_list, expected_disk_list)
+        self.assertEqual(len(disk_list), 1)
+
+    def test_find_persistent_root_volumes_empty_size_of_storage(self):
+        """Find persistent root volume, size of storage is empty."""
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        vnfd["virtual-storage-desc"][0]["size-of-storage"] = ""
+        vnfd["vdu"][0]["virtual-storage-desc"] = [
+            "persistent-volume2",
+            "persistent-root-volume",
+            "ephemeral-volume",
+        ]
+        target_vdu = target_vdu_wth_persistent_storage
+        vdu_instantiation_volumes_list = []
+        disk_list = []
+        persist_root_disk = self.ns.find_persistent_root_volumes(
+            vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(persist_root_disk, None)
+        self.assertEqual(disk_list, [])
+
+    def test_find_persistent_root_empty_disk_list(self):
+        """Find persistent root volume, empty disk list."""
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        target_vdu = target_vdu_wth_persistent_storage
+        vdu_instantiation_volumes_list = []
+        disk_list = []
+        expected_persist_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        expected_disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+        ]
+        persist_root_disk = self.ns.find_persistent_root_volumes(
+            vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(persist_root_disk, expected_persist_root_disk)
+        self.assertEqual(disk_list, expected_disk_list)
+        self.assertEqual(len(disk_list), 1)
+
+    def test_find_persistent_root_volumes_target_vdu_mismatch(self):
+        """Find persistent root volume, target vdu name is not matching."""
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        vnfd["vdu"][0]["name"] = "Several_Volumes-VM"
+        target_vdu = target_vdu_wth_persistent_storage
+        vdu_instantiation_volumes_list = []
+        disk_list = []
+        result = self.ns.find_persistent_root_volumes(
+            vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(result, None)
+        self.assertEqual(disk_list, [])
+        self.assertEqual(len(disk_list), 0)
+
+    def test_find_persistent_root_volumes_with_instantiation_vol_list(self):
+        """Find persistent root volume, existing volume needs to be used."""
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        target_vdu = target_vdu_wth_persistent_storage
+        vdu_instantiation_volumes_list = [
+            {
+                "vim-volume-id": vim_volume_id,
+                "name": "persistent-root-volume",
+            }
+        ]
+        disk_list = []
+        expected_persist_root_disk = {
+            "persistent-root-volume": {
+                "vim_volume_id": vim_volume_id,
+                "image_id": "ubuntu20.04",
+            },
+        }
+        expected_disk_list = [
+            {
+                "vim_volume_id": vim_volume_id,
+                "image_id": "ubuntu20.04",
+            },
+        ]
+        persist_root_disk = self.ns.find_persistent_root_volumes(
+            vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(persist_root_disk, expected_persist_root_disk)
+        self.assertEqual(disk_list, expected_disk_list)
+        self.assertEqual(len(disk_list), 1)
+
+    def test_find_persistent_root_volumes_invalid_instantiation_params(self):
+        """Find persistent root volume, existing volume id keyword is invalid."""
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        target_vdu = target_vdu_wth_persistent_storage
+        vdu_instantiation_volumes_list = [
+            {
+                "volume-id": vim_volume_id,
+                "name": "persistent-root-volume",
+            }
+        ]
+        disk_list = []
+        with self.assertRaises(KeyError):
+            self.ns.find_persistent_root_volumes(
+                vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
+            )
+
+        self.assertEqual(disk_list, [])
+        self.assertEqual(len(disk_list), 0)
+
+    def test_find_persistent_volumes_vdu_wth_persistent_root_disk_wthout_inst_vol_list(
+        self,
+    ):
+        """Find persistent ordinary volume, there is persistent root disk and instatiation volume list is empty."""
+        persistent_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+
+        target_vdu = target_vdu_wth_persistent_storage
+        vdu_instantiation_volumes_list = []
+        disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+        ]
+
+        expected_disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+            {
+                "size": "10",
+            },
+        ]
+        self.ns.find_persistent_volumes(
+            persistent_root_disk, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(disk_list, expected_disk_list)
+
+    def test_find_persistent_volumes_vdu_wth_inst_vol_list(self):
+        """Find persistent ordinary volume, vim-volume-id is given as instantiation parameter."""
+        persistent_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        vdu_instantiation_volumes_list = [
+            {
+                "vim-volume-id": vim_volume_id,
+                "name": "persistent-volume2",
+            }
+        ]
+        target_vdu = target_vdu_wth_persistent_storage
+        disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+        ]
+        expected_disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+            {
+                "vim_volume_id": vim_volume_id,
+            },
+        ]
+        self.ns.find_persistent_volumes(
+            persistent_root_disk, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(disk_list, expected_disk_list)
+
+    def test_find_persistent_volumes_vdu_wthout_persistent_storage(self):
+        """Find persistent ordinary volume, there is not any persistent disk."""
+        persistent_root_disk = {}
+        vdu_instantiation_volumes_list = []
+        target_vdu = target_vdu_wthout_persistent_storage
+        disk_list = []
+        self.ns.find_persistent_volumes(
+            persistent_root_disk, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(disk_list, disk_list)
+
+    def test_find_persistent_volumes_vdu_wth_persistent_root_disk_wthout_ordinary_disk(
+        self,
+    ):
+        """There is persistent root disk, but there is not ordinary persistent disk."""
+        persistent_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        vdu_instantiation_volumes_list = []
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["virtual-storages"] = [
+            {
+                "id": "persistent-root-volume",
+                "size-of-storage": "10",
+                "type-of-storage": "persistent-storage:persistent-storage",
+            },
+            {
+                "id": "ephemeral-volume",
+                "size-of-storage": "1",
+                "type-of-storage": "etsi-nfv-descriptors:ephemeral-storage",
+            },
+        ]
+        disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+        ]
+        self.ns.find_persistent_volumes(
+            persistent_root_disk, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(disk_list, disk_list)
+
+    def test_find_persistent_volumes_wth_inst_vol_list_disk_id_mismatch(self):
+        """Find persistent ordinary volume, volume id is not persistent_root_disk dict,
+        vim-volume-id is given as instantiation parameter but disk id is not matching.
+        """
+        vdu_instantiation_volumes_list = [
+            {
+                "vim-volume-id": vim_volume_id,
+                "name": "persistent-volume3",
+            }
+        ]
+        persistent_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+        ]
+        expected_disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+            {
+                "size": "10",
+            },
+        ]
+
+        target_vdu = target_vdu_wth_persistent_storage
+        self.ns.find_persistent_volumes(
+            persistent_root_disk, target_vdu, vdu_instantiation_volumes_list, disk_list
+        )
+        self.assertEqual(disk_list, expected_disk_list)
+
+    def test_sort_vdu_interfaces_position_all_wth_positions(self):
+        """Interfaces are sorted according to position, all have positions."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["interfaces"] = [
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "datanet",
+                "position": 2,
+            },
+            {
+                "name": "vdu-eth0",
+                "ns-vld-id": "mgmtnet",
+                "position": 1,
+            },
+        ]
+        sorted_interfaces = [
+            {
+                "name": "vdu-eth0",
+                "ns-vld-id": "mgmtnet",
+                "position": 1,
+            },
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "datanet",
+                "position": 2,
+            },
+        ]
+        self.ns._sort_vdu_interfaces(target_vdu)
+        self.assertEqual(target_vdu["interfaces"], sorted_interfaces)
+
+    def test_sort_vdu_interfaces_position_some_wth_position(self):
+        """Interfaces are sorted according to position, some of them have positions."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["interfaces"] = [
+            {
+                "name": "vdu-eth0",
+                "ns-vld-id": "mgmtnet",
+            },
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "datanet",
+                "position": 1,
+            },
+        ]
+        sorted_interfaces = [
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "datanet",
+                "position": 1,
+            },
+            {
+                "name": "vdu-eth0",
+                "ns-vld-id": "mgmtnet",
+            },
+        ]
+        self.ns._sort_vdu_interfaces(target_vdu)
+        self.assertEqual(target_vdu["interfaces"], sorted_interfaces)
+
+    def test_sort_vdu_interfaces_position_empty_interface_list(self):
+        """Interface list is empty."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["interfaces"] = []
+        sorted_interfaces = []
+        self.ns._sort_vdu_interfaces(target_vdu)
+        self.assertEqual(target_vdu["interfaces"], sorted_interfaces)
+
+    def test_partially_locate_vdu_interfaces(self):
+        """Some interfaces have positions."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["interfaces"] = [
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "net1",
+            },
+            {"name": "vdu-eth2", "ns-vld-id": "net2", "position": 3},
+            {
+                "name": "vdu-eth3",
+                "ns-vld-id": "mgmtnet",
+            },
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "datanet",
+                "position": 1,
+            },
+        ]
+        self.ns._partially_locate_vdu_interfaces(target_vdu)
+        self.assertDictEqual(
+            target_vdu["interfaces"][0],
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "datanet",
+                "position": 1,
+            },
+        )
+        self.assertDictEqual(
+            target_vdu["interfaces"][2],
+            {"name": "vdu-eth2", "ns-vld-id": "net2", "position": 3},
+        )
+
+    def test_partially_locate_vdu_interfaces_position_start_from_0(self):
+        """Some interfaces have positions, position start from 0."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["interfaces"] = [
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "net1",
+            },
+            {"name": "vdu-eth2", "ns-vld-id": "net2", "position": 3},
+            {
+                "name": "vdu-eth3",
+                "ns-vld-id": "mgmtnet",
+            },
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "datanet",
+                "position": 0,
+            },
+        ]
+        self.ns._partially_locate_vdu_interfaces(target_vdu)
+        self.assertDictEqual(
+            target_vdu["interfaces"][0],
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "datanet",
+                "position": 0,
+            },
+        )
+        self.assertDictEqual(
+            target_vdu["interfaces"][3],
+            {"name": "vdu-eth2", "ns-vld-id": "net2", "position": 3},
+        )
+
+    def test_partially_locate_vdu_interfaces_wthout_position(self):
+        """Interfaces do not have positions."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["interfaces"] = interfaces_wthout_positions
+        expected_result = deepcopy(target_vdu["interfaces"])
+        self.ns._partially_locate_vdu_interfaces(target_vdu)
+        self.assertEqual(target_vdu["interfaces"], expected_result)
+
+    def test_partially_locate_vdu_interfaces_all_has_position(self):
+        """All interfaces have position."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["interfaces"] = interfaces_wth_all_positions
+        expected_interfaces = [
+            {
+                "name": "vdu-eth2",
+                "ns-vld-id": "net2",
+                "position": 0,
+            },
+            {
+                "name": "vdu-eth3",
+                "ns-vld-id": "mgmtnet",
+                "position": 1,
+            },
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "net1",
+                "position": 2,
+            },
+        ]
+        self.ns._partially_locate_vdu_interfaces(target_vdu)
+        self.assertEqual(target_vdu["interfaces"], expected_interfaces)
+
+    @patch("osm_ng_ro.ns.Ns._get_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._parse_jinja2")
+    def test_prepare_vdu_cloud_init(self, mock_parse_jinja2, mock_get_cloud_init):
+        """Target_vdu has cloud-init and boot-data-drive."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["cloud-init"] = "sample-cloud-init-path"
+        target_vdu["boot-data-drive"] = "vda"
+        vdu2cloud_init = {}
+        mock_get_cloud_init.return_value = cloud_init_content
+        mock_parse_jinja2.return_value = user_data
+        expected_result = {
+            "user-data": user_data,
+            "boot-data-drive": "vda",
+        }
+        result = self.ns._prepare_vdu_cloud_init(target_vdu, vdu2cloud_init, db, fs)
+        self.assertDictEqual(result, expected_result)
+        mock_get_cloud_init.assert_called_once_with(
+            db=db, fs=fs, location="sample-cloud-init-path"
+        )
+        mock_parse_jinja2.assert_called_once_with(
+            cloud_init_content=cloud_init_content,
+            params=None,
+            context="sample-cloud-init-path",
+        )
+
+    @patch("osm_ng_ro.ns.Ns._get_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._parse_jinja2")
+    def test_prepare_vdu_cloud_init_get_cloud_init_raise_exception(
+        self, mock_parse_jinja2, mock_get_cloud_init
+    ):
+        """Target_vdu has cloud-init and boot-data-drive, get_cloud_init method raises exception."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["cloud-init"] = "sample-cloud-init-path"
+        target_vdu["boot-data-drive"] = "vda"
+        vdu2cloud_init = {}
+        mock_get_cloud_init.side_effect = NsException(
+            "Mismatch descriptor for cloud init."
+        )
+
+        with self.assertRaises(NsException) as err:
+            self.ns._prepare_vdu_cloud_init(target_vdu, vdu2cloud_init, db, fs)
+            self.assertEqual(str(err.exception), "Mismatch descriptor for cloud init.")
+
+        mock_get_cloud_init.assert_called_once_with(
+            db=db, fs=fs, location="sample-cloud-init-path"
+        )
+        mock_parse_jinja2.assert_not_called()
+
+    @patch("osm_ng_ro.ns.Ns._get_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._parse_jinja2")
+    def test_prepare_vdu_cloud_init_parse_jinja2_raise_exception(
+        self, mock_parse_jinja2, mock_get_cloud_init
+    ):
+        """Target_vdu has cloud-init and boot-data-drive, parse_jinja2 method raises exception."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["cloud-init"] = "sample-cloud-init-path"
+        target_vdu["boot-data-drive"] = "vda"
+        vdu2cloud_init = {}
+        mock_get_cloud_init.return_value = cloud_init_content
+        mock_parse_jinja2.side_effect = NsException("Error parsing cloud-init content.")
+
+        with self.assertRaises(NsException) as err:
+            self.ns._prepare_vdu_cloud_init(target_vdu, vdu2cloud_init, db, fs)
+            self.assertEqual(str(err.exception), "Error parsing cloud-init content.")
+        mock_get_cloud_init.assert_called_once_with(
+            db=db, fs=fs, location="sample-cloud-init-path"
+        )
+        mock_parse_jinja2.assert_called_once_with(
+            cloud_init_content=cloud_init_content,
+            params=None,
+            context="sample-cloud-init-path",
+        )
+
+    @patch("osm_ng_ro.ns.Ns._get_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._parse_jinja2")
+    def test_prepare_vdu_cloud_init_vdu_wthout_boot_data_drive(
+        self, mock_parse_jinja2, mock_get_cloud_init
+    ):
+        """Target_vdu has cloud-init but do not have boot-data-drive."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["cloud-init"] = "sample-cloud-init-path"
+        vdu2cloud_init = {}
+        mock_get_cloud_init.return_value = cloud_init_content
+        mock_parse_jinja2.return_value = user_data
+        expected_result = {
+            "user-data": user_data,
+        }
+        result = self.ns._prepare_vdu_cloud_init(target_vdu, vdu2cloud_init, db, fs)
+        self.assertDictEqual(result, expected_result)
+        mock_get_cloud_init.assert_called_once_with(
+            db=db, fs=fs, location="sample-cloud-init-path"
+        )
+        mock_parse_jinja2.assert_called_once_with(
+            cloud_init_content=cloud_init_content,
+            params=None,
+            context="sample-cloud-init-path",
+        )
+
+    @patch("osm_ng_ro.ns.Ns._get_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._parse_jinja2")
+    def test_prepare_vdu_cloud_init_exists_in_vdu2cloud_init(
+        self, mock_parse_jinja2, mock_get_cloud_init
+    ):
+        """Target_vdu has cloud-init, vdu2cloud_init dict has cloud-init_content."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["cloud-init"] = "sample-cloud-init-path"
+        target_vdu["boot-data-drive"] = "vda"
+        vdu2cloud_init = {"sample-cloud-init-path": cloud_init_content}
+        mock_parse_jinja2.return_value = user_data
+        expected_result = {
+            "user-data": user_data,
+            "boot-data-drive": "vda",
+        }
+        result = self.ns._prepare_vdu_cloud_init(target_vdu, vdu2cloud_init, db, fs)
+        self.assertDictEqual(result, expected_result)
+        mock_get_cloud_init.assert_not_called()
+        mock_parse_jinja2.assert_called_once_with(
+            cloud_init_content=cloud_init_content,
+            params=None,
+            context="sample-cloud-init-path",
+        )
+
+    @patch("osm_ng_ro.ns.Ns._get_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._parse_jinja2")
+    def test_prepare_vdu_cloud_init_no_cloud_init(
+        self, mock_parse_jinja2, mock_get_cloud_init
+    ):
+        """Target_vdu do not have cloud-init."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["boot-data-drive"] = "vda"
+        vdu2cloud_init = {}
+        expected_result = {
+            "boot-data-drive": "vda",
+        }
+        result = self.ns._prepare_vdu_cloud_init(target_vdu, vdu2cloud_init, db, fs)
+        self.assertDictEqual(result, expected_result)
+        mock_get_cloud_init.assert_not_called()
+        mock_parse_jinja2.assert_not_called()
+
+    def test_check_vld_information_of_interfaces_ns_vld_vnf_vld_both_exist(self):
+        """ns_vld and vnf_vld both exist."""
+        interface = {
+            "name": "vdu-eth0",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+        }
+        expected_result = f"{ns_preffix}:vld.mgmtnet"
+        result = self.ns._check_vld_information_of_interfaces(
+            interface, ns_preffix, vnf_preffix
+        )
+        self.assertEqual(result, expected_result)
+
+    def test_check_vld_information_of_interfaces_empty_interfaces(self):
+        """Interface dict is empty."""
+        interface = {}
+        result = self.ns._check_vld_information_of_interfaces(
+            interface, ns_preffix, vnf_preffix
+        )
+        self.assertEqual(result, "")
+
+    def test_check_vld_information_of_interfaces_has_only_vnf_vld(self):
+        """Interface dict has only vnf_vld."""
+        interface = {
+            "name": "vdu-eth0",
+            "vnf-vld-id": "mgmt_cp_int",
+        }
+        expected_result = f"{vnf_preffix}:vld.mgmt_cp_int"
+        result = self.ns._check_vld_information_of_interfaces(
+            interface, ns_preffix, vnf_preffix
+        )
+        self.assertEqual(result, expected_result)
+
+    def test_check_vld_information_of_interfaces_has_vnf_vld_wthout_vnf_prefix(
+        self,
+    ):
+        """Interface dict has only vnf_vld but vnf_preffix does not exist."""
+        interface = {
+            "name": "vdu-eth0",
+            "vnf-vld-id": "mgmt_cp_int",
+        }
+        vnf_preffix = None
+        with self.assertRaises(Exception) as err:
+            self.ns._check_vld_information_of_interfaces(
+                interface, ns_preffix, vnf_preffix
+            )
+            self.assertEqual(type(err), TypeError)
+
+    def test_prepare_interface_port_security_has_security_details(self):
+        """Interface dict has port security details."""
+        interface = {
+            "name": "vdu-eth0",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+            "port-security-enabled": True,
+            "port-security-disable-strategy": "allow-address-pairs",
+        }
+        expected_interface = {
+            "name": "vdu-eth0",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+            "port_security": True,
+            "port_security_disable_strategy": "allow-address-pairs",
+        }
+        self.ns._prepare_interface_port_security(interface)
+        self.assertDictEqual(interface, expected_interface)
+
+    def test_prepare_interface_port_security_empty_interfaces(self):
+        """Interface dict is empty."""
+        interface = {}
+        expected_interface = {}
+        self.ns._prepare_interface_port_security(interface)
+        self.assertDictEqual(interface, expected_interface)
+
+    def test_prepare_interface_port_security_wthout_port_security(self):
+        """Interface dict does not have port security details."""
+        interface = {
+            "name": "vdu-eth0",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+        }
+        expected_interface = {
+            "name": "vdu-eth0",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+        }
+        self.ns._prepare_interface_port_security(interface)
+        self.assertDictEqual(interface, expected_interface)
+
+    def test_create_net_item_of_interface_floating_ip_port_security(self):
+        """Interface dict has floating ip, port-security details."""
+        interface = {
+            "name": "vdu-eth0",
+            "vcpi": "sample_vcpi",
+            "port_security": True,
+            "port_security_disable_strategy": "allow-address-pairs",
+            "floating_ip": "10.1.1.12",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+        }
+        net_text = f"{ns_preffix}"
+        expected_net_item = {
+            "name": "vdu-eth0",
+            "port_security": True,
+            "port_security_disable_strategy": "allow-address-pairs",
+            "floating_ip": "10.1.1.12",
+            "net_id": f"TASK-{ns_preffix}",
+            "type": "virtual",
+        }
+        result = self.ns._create_net_item_of_interface(interface, net_text)
+        self.assertDictEqual(result, expected_net_item)
+
+    def test_create_net_item_of_interface_invalid_net_text(self):
+        """net-text is invalid."""
+        interface = {
+            "name": "vdu-eth0",
+            "vcpi": "sample_vcpi",
+            "port_security": True,
+            "port_security_disable_strategy": "allow-address-pairs",
+            "floating_ip": "10.1.1.12",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+        }
+        net_text = None
+        with self.assertRaises(TypeError):
+            self.ns._create_net_item_of_interface(interface, net_text)
+
+    def test_create_net_item_of_interface_empty_interface(self):
+        """Interface dict is empty."""
+        interface = {}
+        net_text = ns_preffix
+        expected_net_item = {
+            "net_id": f"TASK-{ns_preffix}",
+            "type": "virtual",
+        }
+        result = self.ns._create_net_item_of_interface(interface, net_text)
+        self.assertDictEqual(result, expected_net_item)
+
+    @patch("osm_ng_ro.ns.deep_get")
+    def test_prepare_type_of_interface_type_sriov(self, mock_deep_get):
+        """Interface type is SR-IOV."""
+        interface = {
+            "name": "vdu-eth0",
+            "vcpi": "sample_vcpi",
+            "port_security": True,
+            "port_security_disable_strategy": "allow-address-pairs",
+            "floating_ip": "10.1.1.12",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+            "type": "SR-IOV",
+        }
+        mock_deep_get.return_value = "SR-IOV"
+        net_text = ns_preffix
+        net_item = {}
+        expected_net_item = {
+            "use": "data",
+            "model": "SR-IOV",
+            "type": "SR-IOV",
+        }
+        self.ns._prepare_type_of_interface(
+            interface, tasks_by_target_record_id, net_text, net_item
+        )
+        self.assertDictEqual(net_item, expected_net_item)
+        self.assertEqual(
+            "data",
+            tasks_by_target_record_id[net_text]["extra_dict"]["params"]["net_type"],
+        )
+        mock_deep_get.assert_called_once_with(
+            tasks_by_target_record_id, net_text, "extra_dict", "params", "net_type"
+        )
+
+    @patch("osm_ng_ro.ns.deep_get")
+    def test_prepare_type_of_interface_type_pic_passthrough_deep_get_return_empty_dict(
+        self, mock_deep_get
+    ):
+        """Interface type is PCI-PASSTHROUGH, deep_get method return empty dict."""
+        interface = {
+            "name": "vdu-eth0",
+            "vcpi": "sample_vcpi",
+            "port_security": True,
+            "port_security_disable_strategy": "allow-address-pairs",
+            "floating_ip": "10.1.1.12",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+            "type": "PCI-PASSTHROUGH",
+        }
+        mock_deep_get.return_value = {}
+        tasks_by_target_record_id = {}
+        net_text = ns_preffix
+        net_item = {}
+        expected_net_item = {
+            "use": "data",
+            "model": "PCI-PASSTHROUGH",
+            "type": "PCI-PASSTHROUGH",
+        }
+        self.ns._prepare_type_of_interface(
+            interface, tasks_by_target_record_id, net_text, net_item
+        )
+        self.assertDictEqual(net_item, expected_net_item)
+        mock_deep_get.assert_called_once_with(
+            tasks_by_target_record_id, net_text, "extra_dict", "params", "net_type"
+        )
+
+    @patch("osm_ng_ro.ns.deep_get")
+    def test_prepare_type_of_interface_type_mgmt(self, mock_deep_get):
+        """Interface type is mgmt."""
+        interface = {
+            "name": "vdu-eth0",
+            "vcpi": "sample_vcpi",
+            "port_security": True,
+            "port_security_disable_strategy": "allow-address-pairs",
+            "floating_ip": "10.1.1.12",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+            "type": "OM-MGMT",
+        }
+        tasks_by_target_record_id = {}
+        net_text = ns_preffix
+        net_item = {}
+        expected_net_item = {
+            "use": "mgmt",
+        }
+        self.ns._prepare_type_of_interface(
+            interface, tasks_by_target_record_id, net_text, net_item
+        )
+        self.assertDictEqual(net_item, expected_net_item)
+        mock_deep_get.assert_not_called()
+
+    @patch("osm_ng_ro.ns.deep_get")
+    def test_prepare_type_of_interface_type_bridge(self, mock_deep_get):
+        """Interface type is bridge."""
+        interface = {
+            "name": "vdu-eth0",
+            "vcpi": "sample_vcpi",
+            "port_security": True,
+            "port_security_disable_strategy": "allow-address-pairs",
+            "floating_ip": "10.1.1.12",
+            "ns-vld-id": "mgmtnet",
+            "vnf-vld-id": "mgmt_cp_int",
+        }
+        tasks_by_target_record_id = {}
+        net_text = ns_preffix
+        net_item = {}
+        expected_net_item = {
+            "use": "bridge",
+            "model": None,
+        }
+        self.ns._prepare_type_of_interface(
+            interface, tasks_by_target_record_id, net_text, net_item
+        )
+        self.assertDictEqual(net_item, expected_net_item)
+        mock_deep_get.assert_not_called()
+
+    @patch("osm_ng_ro.ns.Ns._check_vld_information_of_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_interface_port_security")
+    @patch("osm_ng_ro.ns.Ns._create_net_item_of_interface")
+    @patch("osm_ng_ro.ns.Ns._prepare_type_of_interface")
+    def test_prepare_vdu_interfaces(
+        self,
+        mock_type_of_interface,
+        mock_item_of_interface,
+        mock_port_security,
+        mock_vld_information_of_interface,
+    ):
+        """Prepare vdu interfaces successfully."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        interface_1 = {
+            "name": "vdu-eth1",
+            "ns-vld-id": "net1",
+            "ip-address": "13.2.12.31",
+            "mgmt-interface": True,
+        }
+        interface_2 = {
+            "name": "vdu-eth2",
+            "vnf-vld-id": "net2",
+            "mac-address": "d0:94:66:ed:fc:e2",
+        }
+        interface_3 = {
+            "name": "vdu-eth3",
+            "ns-vld-id": "mgmtnet",
+        }
+        target_vdu["interfaces"] = [interface_1, interface_2, interface_3]
+        extra_dict = {
+            "params": "test_params",
+            "find_params": "test_find_params",
+            "depends_on": [],
+        }
+
+        net_text_1 = f"{ns_preffix}:net1"
+        net_text_2 = f"{vnf_preffix}:net2"
+        net_text_3 = f"{ns_preffix}:mgmtnet"
+        net_item_1 = {
+            "name": "vdu-eth1",
+            "net_id": f"TASK-{ns_preffix}",
+            "type": "virtual",
+        }
+        net_item_2 = {
+            "name": "vdu-eth2",
+            "net_id": f"TASK-{ns_preffix}",
+            "type": "virtual",
+        }
+        net_item_3 = {
+            "name": "vdu-eth3",
+            "net_id": f"TASK-{ns_preffix}",
+            "type": "virtual",
+        }
+        mock_item_of_interface.side_effect = [net_item_1, net_item_2, net_item_3]
+        mock_vld_information_of_interface.side_effect = [
+            net_text_1,
+            net_text_2,
+            net_text_3,
+        ]
+        net_list = []
+        expected_extra_dict = {
+            "params": "test_params",
+            "find_params": "test_find_params",
+            "depends_on": [net_text_1, net_text_2, net_text_3],
+            "mgmt_vdu_interface": 0,
+        }
+        updated_net_item1 = deepcopy(net_item_1)
+        updated_net_item1.update({"ip_address": "13.2.12.31"})
+        updated_net_item2 = deepcopy(net_item_2)
+        updated_net_item2.update({"mac_address": "d0:94:66:ed:fc:e2"})
+        expected_net_list = [updated_net_item1, updated_net_item2, net_item_3]
+        self.ns._prepare_vdu_interfaces(
+            target_vdu,
+            extra_dict,
+            ns_preffix,
+            vnf_preffix,
+            self.logger,
+            tasks_by_target_record_id,
+            net_list,
+        )
+        _call_mock_vld_information_of_interface = (
+            mock_vld_information_of_interface.call_args_list
+        )
+        self.assertEqual(
+            _call_mock_vld_information_of_interface[0][0],
+            (interface_1, ns_preffix, vnf_preffix),
+        )
+        self.assertEqual(
+            _call_mock_vld_information_of_interface[1][0],
+            (interface_2, ns_preffix, vnf_preffix),
+        )
+        self.assertEqual(
+            _call_mock_vld_information_of_interface[2][0],
+            (interface_3, ns_preffix, vnf_preffix),
+        )
+
+        _call_mock_port_security = mock_port_security.call_args_list
+        self.assertEqual(_call_mock_port_security[0].args[0], interface_1)
+        self.assertEqual(_call_mock_port_security[1].args[0], interface_2)
+        self.assertEqual(_call_mock_port_security[2].args[0], interface_3)
+
+        _call_mock_item_of_interface = mock_item_of_interface.call_args_list
+        self.assertEqual(_call_mock_item_of_interface[0][0], (interface_1, net_text_1))
+        self.assertEqual(_call_mock_item_of_interface[1][0], (interface_2, net_text_2))
+        self.assertEqual(_call_mock_item_of_interface[2][0], (interface_3, net_text_3))
+
+        _call_mock_type_of_interface = mock_type_of_interface.call_args_list
+        self.assertEqual(
+            _call_mock_type_of_interface[0][0],
+            (interface_1, tasks_by_target_record_id, net_text_1, net_item_1),
+        )
+        self.assertEqual(
+            _call_mock_type_of_interface[1][0],
+            (interface_2, tasks_by_target_record_id, net_text_2, net_item_2),
+        )
+        self.assertEqual(
+            _call_mock_type_of_interface[2][0],
+            (interface_3, tasks_by_target_record_id, net_text_3, net_item_3),
+        )
+        self.assertEqual(net_list, expected_net_list)
+        self.assertEqual(extra_dict, expected_extra_dict)
+        self.logger.error.assert_not_called()
+
+    @patch("osm_ng_ro.ns.Ns._check_vld_information_of_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_interface_port_security")
+    @patch("osm_ng_ro.ns.Ns._create_net_item_of_interface")
+    @patch("osm_ng_ro.ns.Ns._prepare_type_of_interface")
+    def test_prepare_vdu_interfaces_create_net_item_raise_exception(
+        self,
+        mock_type_of_interface,
+        mock_item_of_interface,
+        mock_port_security,
+        mock_vld_information_of_interface,
+    ):
+        """Prepare vdu interfaces, create_net_item_of_interface method raise exception."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        interface_1 = {
+            "name": "vdu-eth1",
+            "ns-vld-id": "net1",
+            "ip-address": "13.2.12.31",
+            "mgmt-interface": True,
+        }
+        interface_2 = {
+            "name": "vdu-eth2",
+            "vnf-vld-id": "net2",
+            "mac-address": "d0:94:66:ed:fc:e2",
+        }
+        interface_3 = {
+            "name": "vdu-eth3",
+            "ns-vld-id": "mgmtnet",
+        }
+        target_vdu["interfaces"] = [interface_1, interface_2, interface_3]
+        extra_dict = {
+            "params": "test_params",
+            "find_params": "test_find_params",
+            "depends_on": [],
+        }
+        net_text_1 = f"{ns_preffix}:net1"
+        mock_item_of_interface.side_effect = [TypeError, TypeError, TypeError]
+
+        mock_vld_information_of_interface.side_effect = [net_text_1]
+        net_list = []
+        expected_extra_dict = {
+            "params": "test_params",
+            "find_params": "test_find_params",
+            "depends_on": [net_text_1],
+        }
+        with self.assertRaises(TypeError):
+            self.ns._prepare_vdu_interfaces(
+                target_vdu,
+                extra_dict,
+                ns_preffix,
+                vnf_preffix,
+                self.logger,
+                tasks_by_target_record_id,
+                net_list,
+            )
+
+        _call_mock_vld_information_of_interface = (
+            mock_vld_information_of_interface.call_args_list
+        )
+        self.assertEqual(
+            _call_mock_vld_information_of_interface[0][0],
+            (interface_1, ns_preffix, vnf_preffix),
+        )
+
+        _call_mock_port_security = mock_port_security.call_args_list
+        self.assertEqual(_call_mock_port_security[0].args[0], interface_1)
+
+        _call_mock_item_of_interface = mock_item_of_interface.call_args_list
+        self.assertEqual(_call_mock_item_of_interface[0][0], (interface_1, net_text_1))
+
+        mock_type_of_interface.assert_not_called()
+        self.logger.error.assert_not_called()
+        self.assertEqual(net_list, [])
+        self.assertEqual(extra_dict, expected_extra_dict)
+
+    @patch("osm_ng_ro.ns.Ns._check_vld_information_of_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_interface_port_security")
+    @patch("osm_ng_ro.ns.Ns._create_net_item_of_interface")
+    @patch("osm_ng_ro.ns.Ns._prepare_type_of_interface")
+    def test_prepare_vdu_interfaces_vld_information_is_empty(
+        self,
+        mock_type_of_interface,
+        mock_item_of_interface,
+        mock_port_security,
+        mock_vld_information_of_interface,
+    ):
+        """Prepare vdu interfaces, check_vld_information_of_interface method returns empty result."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        interface_1 = {
+            "name": "vdu-eth1",
+            "ns-vld-id": "net1",
+            "ip-address": "13.2.12.31",
+            "mgmt-interface": True,
+        }
+        interface_2 = {
+            "name": "vdu-eth2",
+            "vnf-vld-id": "net2",
+            "mac-address": "d0:94:66:ed:fc:e2",
+        }
+        interface_3 = {
+            "name": "vdu-eth3",
+            "ns-vld-id": "mgmtnet",
+        }
+        target_vdu["interfaces"] = [interface_1, interface_2, interface_3]
+        extra_dict = {
+            "params": "test_params",
+            "find_params": "test_find_params",
+            "depends_on": [],
+        }
+        mock_vld_information_of_interface.side_effect = ["", "", ""]
+        net_list = []
+        self.ns._prepare_vdu_interfaces(
+            target_vdu,
+            extra_dict,
+            ns_preffix,
+            vnf_preffix,
+            self.logger,
+            tasks_by_target_record_id,
+            net_list,
+        )
+
+        _call_mock_vld_information_of_interface = (
+            mock_vld_information_of_interface.call_args_list
+        )
+        self.assertEqual(
+            _call_mock_vld_information_of_interface[0][0],
+            (interface_1, ns_preffix, vnf_preffix),
+        )
+        self.assertEqual(
+            _call_mock_vld_information_of_interface[1][0],
+            (interface_2, ns_preffix, vnf_preffix),
+        )
+        self.assertEqual(
+            _call_mock_vld_information_of_interface[2][0],
+            (interface_3, ns_preffix, vnf_preffix),
+        )
+
+        _call_logger = self.logger.error.call_args_list
+        self.assertEqual(
+            _call_logger[0][0],
+            ("Interface 0 from vdu several_volumes-VM not connected to any vld",),
+        )
+        self.assertEqual(
+            _call_logger[1][0],
+            ("Interface 1 from vdu several_volumes-VM not connected to any vld",),
+        )
+        self.assertEqual(
+            _call_logger[2][0],
+            ("Interface 2 from vdu several_volumes-VM not connected to any vld",),
+        )
+        self.assertEqual(net_list, [])
+        self.assertEqual(
+            extra_dict,
+            {
+                "params": "test_params",
+                "find_params": "test_find_params",
+                "depends_on": [],
+            },
+        )
+
+        mock_item_of_interface.assert_not_called()
+        mock_port_security.assert_not_called()
+        mock_type_of_interface.assert_not_called()
+
+    @patch("osm_ng_ro.ns.Ns._check_vld_information_of_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_interface_port_security")
+    @patch("osm_ng_ro.ns.Ns._create_net_item_of_interface")
+    @patch("osm_ng_ro.ns.Ns._prepare_type_of_interface")
+    def test_prepare_vdu_interfaces_empty_interface_list(
+        self,
+        mock_type_of_interface,
+        mock_item_of_interface,
+        mock_port_security,
+        mock_vld_information_of_interface,
+    ):
+        """Prepare vdu interfaces, interface list is empty."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["interfaces"] = []
+        extra_dict = {}
+        net_list = []
+        self.ns._prepare_vdu_interfaces(
+            target_vdu,
+            extra_dict,
+            ns_preffix,
+            vnf_preffix,
+            self.logger,
+            tasks_by_target_record_id,
+            net_list,
+        )
+        mock_type_of_interface.assert_not_called()
+        mock_vld_information_of_interface.assert_not_called()
+        mock_item_of_interface.assert_not_called()
+        mock_port_security.assert_not_called()
+
+    def test_prepare_vdu_ssh_keys(self):
+        """Target_vdu has ssh-keys and ro_nsr_public_key exists."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["ssh-keys"] = ["sample-ssh-key"]
+        ro_nsr_public_key = {"public_key": "path_of_public_key"}
+        target_vdu["ssh-access-required"] = True
+        cloud_config = {}
+        expected_cloud_config = {
+            "key-pairs": ["sample-ssh-key", {"public_key": "path_of_public_key"}]
+        }
+        self.ns._prepare_vdu_ssh_keys(target_vdu, ro_nsr_public_key, cloud_config)
+        self.assertDictEqual(cloud_config, expected_cloud_config)
+
+    def test_prepare_vdu_ssh_keys_target_vdu_wthout_ssh_keys(self):
+        """Target_vdu does not have ssh-keys."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        ro_nsr_public_key = {"public_key": "path_of_public_key"}
+        target_vdu["ssh-access-required"] = True
+        cloud_config = {}
+        expected_cloud_config = {"key-pairs": [{"public_key": "path_of_public_key"}]}
+        self.ns._prepare_vdu_ssh_keys(target_vdu, ro_nsr_public_key, cloud_config)
+        self.assertDictEqual(cloud_config, expected_cloud_config)
+
+    def test_prepare_vdu_ssh_keys_ssh_access_is_not_required(self):
+        """Target_vdu has ssh-keys, ssh-access is not required."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["ssh-keys"] = ["sample-ssh-key"]
+        ro_nsr_public_key = {"public_key": "path_of_public_key"}
+        target_vdu["ssh-access-required"] = False
+        cloud_config = {}
+        expected_cloud_config = {"key-pairs": ["sample-ssh-key"]}
+        self.ns._prepare_vdu_ssh_keys(target_vdu, ro_nsr_public_key, cloud_config)
+        self.assertDictEqual(cloud_config, expected_cloud_config)
+
+    @patch("osm_ng_ro.ns.Ns._select_persistent_root_disk")
+    def test_add_persistent_root_disk_to_disk_list(
+        self, mock_select_persistent_root_disk
+    ):
+        """Add persistent root disk to disk_list"""
+        root_disk = {
+            "id": "persistent-root-volume",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+        }
+        mock_select_persistent_root_disk.return_value = root_disk
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        vnfd["virtual-storage-desc"][1] = root_disk
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        persistent_root_disk = {}
+        disk_list = []
+        expected_disk_list = [
+            {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        ]
+        self.ns._add_persistent_root_disk_to_disk_list(
+            vnfd, target_vdu, persistent_root_disk, disk_list
+        )
+        self.assertEqual(disk_list, expected_disk_list)
+        mock_select_persistent_root_disk.assert_called_once()
+
+    @patch("osm_ng_ro.ns.Ns._select_persistent_root_disk")
+    def test_add_persistent_root_disk_to_disk_list_select_persistent_root_disk_raises(
+        self, mock_select_persistent_root_disk
+    ):
+        """Add persistent root disk to disk_list"""
+        root_disk = {
+            "id": "persistent-root-volume",
+            "type-of-storage": "persistent-storage:persistent-storage",
+            "size-of-storage": "10",
+        }
+        mock_select_persistent_root_disk.side_effect = AttributeError
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        vnfd["virtual-storage-desc"][1] = root_disk
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        persistent_root_disk = {}
+        disk_list = []
+        with self.assertRaises(AttributeError):
+            self.ns._add_persistent_root_disk_to_disk_list(
+                vnfd, target_vdu, persistent_root_disk, disk_list
+            )
+        self.assertEqual(disk_list, [])
+        mock_select_persistent_root_disk.assert_called_once()
+
+    def test_add_persistent_ordinary_disk_to_disk_list(self):
+        """Add persistent ordinary disk to disk_list"""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        persistent_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        persistent_ordinary_disk = {}
+        disk_list = []
+        expected_disk_list = [
+            {
+                "size": "10",
+            }
+        ]
+        self.ns._add_persistent_ordinary_disks_to_disk_list(
+            target_vdu, persistent_root_disk, persistent_ordinary_disk, disk_list
+        )
+        self.assertEqual(disk_list, expected_disk_list)
+
+    def test_add_persistent_ordinary_disk_to_disk_list_vsd_id_in_root_disk_dict(self):
+        """Add persistent ordinary disk, vsd id is in root_disk dict."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        persistent_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            },
+            "persistent-volume2": {
+                "size": "10",
+            },
+        }
+        persistent_ordinary_disk = {}
+        disk_list = []
+
+        self.ns._add_persistent_ordinary_disks_to_disk_list(
+            target_vdu, persistent_root_disk, persistent_ordinary_disk, disk_list
+        )
+        self.assertEqual(disk_list, [])
+
+    @patch("osm_ng_ro.ns.Ns._select_persistent_root_disk")
+    def test_add_persistent_root_disk_to_disk_list_vnfd_wthout_persistent_storage(
+        self, mock_select_persistent_root_disk
+    ):
+        """VNFD does not have persistent storage."""
+        vnfd = deepcopy(vnfd_wthout_persistent_storage)
+        target_vdu = deepcopy(target_vdu_wthout_persistent_storage)
+        mock_select_persistent_root_disk.return_value = None
+        persistent_root_disk = {}
+        disk_list = []
+        self.ns._add_persistent_root_disk_to_disk_list(
+            vnfd, target_vdu, persistent_root_disk, disk_list
+        )
+        self.assertEqual(disk_list, [])
+        self.assertEqual(mock_select_persistent_root_disk.call_count, 2)
+
+    @patch("osm_ng_ro.ns.Ns._select_persistent_root_disk")
+    def test_add_persistent_root_disk_to_disk_list_wthout_persistent_root_disk(
+        self, mock_select_persistent_root_disk
+    ):
+        """Persistent_root_disk dict is empty."""
+        vnfd = deepcopy(vnfd_wthout_persistent_storage)
+        target_vdu = deepcopy(target_vdu_wthout_persistent_storage)
+        mock_select_persistent_root_disk.return_value = None
+        persistent_root_disk = {}
+        disk_list = []
+        self.ns._add_persistent_root_disk_to_disk_list(
+            vnfd, target_vdu, persistent_root_disk, disk_list
+        )
+        self.assertEqual(disk_list, [])
+        self.assertEqual(mock_select_persistent_root_disk.call_count, 2)
+
+    def test_prepare_vdu_affinity_group_list_invalid_extra_dict(self):
+        """Invalid extra dict."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["affinity-or-anti-affinity-group-id"] = "sample_affinity-group-id"
+        extra_dict = {}
+        ns_preffix = "nsrs:th47f48-9870-4169-b758-9732e1ff40f3"
+        with self.assertRaises(NsException) as err:
+            self.ns._prepare_vdu_affinity_group_list(target_vdu, extra_dict, ns_preffix)
+            self.assertEqual(str(err.exception), "Invalid extra_dict format.")
+
+    def test_prepare_vdu_affinity_group_list_one_affinity_group(self):
+        """There is one affinity-group."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["affinity-or-anti-affinity-group-id"] = ["sample_affinity-group-id"]
+        extra_dict = {"depends_on": []}
+        ns_preffix = "nsrs:th47f48-9870-4169-b758-9732e1ff40f3"
+        affinity_group_txt = "nsrs:th47f48-9870-4169-b758-9732e1ff40f3:affinity-or-anti-affinity-group.sample_affinity-group-id"
+        expected_result = [{"affinity_group_id": "TASK-" + affinity_group_txt}]
+        expected_extra_dict = {"depends_on": [affinity_group_txt]}
+        result = self.ns._prepare_vdu_affinity_group_list(
+            target_vdu, extra_dict, ns_preffix
+        )
+        self.assertDictEqual(extra_dict, expected_extra_dict)
+        self.assertEqual(result, expected_result)
+
+    def test_prepare_vdu_affinity_group_list_several_affinity_groups(self):
+        """There are two affinity-groups."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        target_vdu["affinity-or-anti-affinity-group-id"] = [
+            "affinity-group-id1",
+            "affinity-group-id2",
+        ]
+        extra_dict = {"depends_on": []}
+        ns_preffix = "nsrs:th47f48-9870-4169-b758-9732e1ff40f3"
+        affinity_group_txt1 = "nsrs:th47f48-9870-4169-b758-9732e1ff40f3:affinity-or-anti-affinity-group.affinity-group-id1"
+        affinity_group_txt2 = "nsrs:th47f48-9870-4169-b758-9732e1ff40f3:affinity-or-anti-affinity-group.affinity-group-id2"
+        expected_result = [
+            {"affinity_group_id": "TASK-" + affinity_group_txt1},
+            {"affinity_group_id": "TASK-" + affinity_group_txt2},
+        ]
+        expected_extra_dict = {"depends_on": [affinity_group_txt1, affinity_group_txt2]}
+        result = self.ns._prepare_vdu_affinity_group_list(
+            target_vdu, extra_dict, ns_preffix
+        )
+        self.assertDictEqual(extra_dict, expected_extra_dict)
+        self.assertEqual(result, expected_result)
+
+    def test_prepare_vdu_affinity_group_list_no_affinity_group(self):
+        """There is not any affinity-group."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+        extra_dict = {"depends_on": []}
+        ns_preffix = "nsrs:th47f48-9870-4169-b758-9732e1ff40f3"
+        result = self.ns._prepare_vdu_affinity_group_list(
+            target_vdu, extra_dict, ns_preffix
+        )
+        self.assertDictEqual(extra_dict, {"depends_on": []})
+        self.assertEqual(result, [])
+
+    @patch("osm_ng_ro.ns.Ns._sort_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._partially_locate_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_ssh_keys")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_root_volumes")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_volumes")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_root_disk_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_ordinary_disks_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_affinity_group_list")
+    def test_process_vdu_params_with_inst_vol_list(
+        self,
+        mock_prepare_vdu_affinity_group_list,
+        mock_add_persistent_ordinary_disks_to_disk_list,
+        mock_add_persistent_root_disk_to_disk_list,
+        mock_find_persistent_volumes,
+        mock_find_persistent_root_volumes,
+        mock_prepare_vdu_ssh_keys,
+        mock_prepare_vdu_cloud_init,
+        mock_prepare_vdu_interfaces,
+        mock_locate_vdu_interfaces,
+        mock_sort_vdu_interfaces,
+    ):
+        """Instantiation volume list is empty."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+
+        target_vdu["interfaces"] = interfaces_wth_all_positions
+
+        vdu_instantiation_vol_list = [
+            {
+                "vim-volume-id": vim_volume_id,
+                "name": "persistent-volume2",
+            }
+        ]
+        target_vdu["additionalParams"] = {
+            "OSM": {"vdu_volumes": vdu_instantiation_vol_list}
+        }
+        mock_prepare_vdu_cloud_init.return_value = {}
+        mock_prepare_vdu_affinity_group_list.return_value = []
+        persistent_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        mock_find_persistent_root_volumes.return_value = persistent_root_disk
+
+        new_kwargs = deepcopy(kwargs)
+        new_kwargs.update(
+            {
+                "vnfr_id": vnfr_id,
+                "nsr_id": nsr_id,
+                "tasks_by_target_record_id": {},
+                "logger": "logger",
+            }
+        )
+        expected_extra_dict_copy = deepcopy(expected_extra_dict)
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        db.get_one.return_value = vnfd
+        result = Ns._process_vdu_params(
+            target_vdu, indata, vim_info=None, target_record_id=None, **new_kwargs
+        )
+        mock_sort_vdu_interfaces.assert_called_once_with(target_vdu)
+        mock_locate_vdu_interfaces.assert_not_called()
+        mock_prepare_vdu_cloud_init.assert_called_once()
+        mock_add_persistent_root_disk_to_disk_list.assert_not_called()
+        mock_add_persistent_ordinary_disks_to_disk_list.assert_not_called()
+        mock_prepare_vdu_interfaces.assert_called_once_with(
+            target_vdu,
+            expected_extra_dict_copy,
+            ns_preffix,
+            vnf_preffix,
+            "logger",
+            {},
+            [],
+        )
+        self.assertDictEqual(result, expected_extra_dict_copy)
+        mock_prepare_vdu_ssh_keys.assert_called_once_with(target_vdu, None, {})
+        mock_prepare_vdu_affinity_group_list.assert_called_once()
+        mock_find_persistent_volumes.assert_called_once_with(
+            persistent_root_disk, target_vdu, vdu_instantiation_vol_list, []
+        )
+
+    @patch("osm_ng_ro.ns.Ns._sort_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._partially_locate_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_ssh_keys")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_root_volumes")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_volumes")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_root_disk_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_ordinary_disks_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_affinity_group_list")
+    def test_process_vdu_params_wth_affinity_groups(
+        self,
+        mock_prepare_vdu_affinity_group_list,
+        mock_add_persistent_ordinary_disks_to_disk_list,
+        mock_add_persistent_root_disk_to_disk_list,
+        mock_find_persistent_volumes,
+        mock_find_persistent_root_volumes,
+        mock_prepare_vdu_ssh_keys,
+        mock_prepare_vdu_cloud_init,
+        mock_prepare_vdu_interfaces,
+        mock_locate_vdu_interfaces,
+        mock_sort_vdu_interfaces,
+    ):
+        """There is cloud-config."""
+        target_vdu = deepcopy(target_vdu_wthout_persistent_storage)
+
+        self.maxDiff = None
+        target_vdu["interfaces"] = interfaces_wth_all_positions
+        mock_prepare_vdu_cloud_init.return_value = {}
+        mock_prepare_vdu_affinity_group_list.return_value = [
+            "affinity_group_1",
+            "affinity_group_2",
+        ]
+
+        new_kwargs = deepcopy(kwargs)
+        new_kwargs.update(
+            {
+                "vnfr_id": vnfr_id,
+                "nsr_id": nsr_id,
+                "tasks_by_target_record_id": {},
+                "logger": "logger",
+            }
+        )
+        expected_extra_dict3 = deepcopy(expected_extra_dict2)
+        expected_extra_dict3["params"]["affinity_group_list"] = [
+            "affinity_group_1",
+            "affinity_group_2",
+        ]
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        db.get_one.return_value = vnfd
+        result = Ns._process_vdu_params(
+            target_vdu, indata, vim_info=None, target_record_id=None, **new_kwargs
+        )
+        self.assertDictEqual(result, expected_extra_dict3)
+        mock_sort_vdu_interfaces.assert_called_once_with(target_vdu)
+        mock_locate_vdu_interfaces.assert_not_called()
+        mock_prepare_vdu_cloud_init.assert_called_once()
+        mock_add_persistent_root_disk_to_disk_list.assert_called_once()
+        mock_add_persistent_ordinary_disks_to_disk_list.assert_called_once()
+        mock_prepare_vdu_interfaces.assert_called_once_with(
+            target_vdu,
+            expected_extra_dict3,
+            ns_preffix,
+            vnf_preffix,
+            "logger",
+            {},
+            [],
+        )
+
+        mock_prepare_vdu_ssh_keys.assert_called_once_with(target_vdu, None, {})
+        mock_prepare_vdu_affinity_group_list.assert_called_once()
+        mock_find_persistent_volumes.assert_not_called()
+
+    @patch("osm_ng_ro.ns.Ns._sort_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._partially_locate_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_ssh_keys")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_root_volumes")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_volumes")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_root_disk_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_ordinary_disks_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_affinity_group_list")
+    def test_process_vdu_params_wth_cloud_config(
+        self,
+        mock_prepare_vdu_affinity_group_list,
+        mock_add_persistent_ordinary_disks_to_disk_list,
+        mock_add_persistent_root_disk_to_disk_list,
+        mock_find_persistent_volumes,
+        mock_find_persistent_root_volumes,
+        mock_prepare_vdu_ssh_keys,
+        mock_prepare_vdu_cloud_init,
+        mock_prepare_vdu_interfaces,
+        mock_locate_vdu_interfaces,
+        mock_sort_vdu_interfaces,
+    ):
+        """There is cloud-config."""
+        target_vdu = deepcopy(target_vdu_wthout_persistent_storage)
+
+        self.maxDiff = None
+        target_vdu["interfaces"] = interfaces_wth_all_positions
+        mock_prepare_vdu_cloud_init.return_value = {
+            "user-data": user_data,
+            "boot-data-drive": "vda",
+        }
+        mock_prepare_vdu_affinity_group_list.return_value = []
+
+        new_kwargs = deepcopy(kwargs)
+        new_kwargs.update(
+            {
+                "vnfr_id": vnfr_id,
+                "nsr_id": nsr_id,
+                "tasks_by_target_record_id": {},
+                "logger": "logger",
+            }
+        )
+        expected_extra_dict3 = deepcopy(expected_extra_dict2)
+        expected_extra_dict3["params"]["cloud_config"] = {
+            "user-data": user_data,
+            "boot-data-drive": "vda",
+        }
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        db.get_one.return_value = vnfd
+        result = Ns._process_vdu_params(
+            target_vdu, indata, vim_info=None, target_record_id=None, **new_kwargs
+        )
+        mock_sort_vdu_interfaces.assert_called_once_with(target_vdu)
+        mock_locate_vdu_interfaces.assert_not_called()
+        mock_prepare_vdu_cloud_init.assert_called_once()
+        mock_add_persistent_root_disk_to_disk_list.assert_called_once()
+        mock_add_persistent_ordinary_disks_to_disk_list.assert_called_once()
+        mock_prepare_vdu_interfaces.assert_called_once_with(
+            target_vdu,
+            expected_extra_dict3,
+            ns_preffix,
+            vnf_preffix,
+            "logger",
+            {},
+            [],
+        )
+        self.assertDictEqual(result, expected_extra_dict3)
+        mock_prepare_vdu_ssh_keys.assert_called_once_with(
+            target_vdu, None, {"user-data": user_data, "boot-data-drive": "vda"}
+        )
+        mock_prepare_vdu_affinity_group_list.assert_called_once()
+        mock_find_persistent_volumes.assert_not_called()
+
+    @patch("osm_ng_ro.ns.Ns._sort_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._partially_locate_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_ssh_keys")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_root_volumes")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_volumes")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_root_disk_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_ordinary_disks_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_affinity_group_list")
+    def test_process_vdu_params_wthout_persistent_storage(
+        self,
+        mock_prepare_vdu_affinity_group_list,
+        mock_add_persistent_ordinary_disks_to_disk_list,
+        mock_add_persistent_root_disk_to_disk_list,
+        mock_find_persistent_volumes,
+        mock_find_persistent_root_volumes,
+        mock_prepare_vdu_ssh_keys,
+        mock_prepare_vdu_cloud_init,
+        mock_prepare_vdu_interfaces,
+        mock_locate_vdu_interfaces,
+        mock_sort_vdu_interfaces,
+    ):
+        """There is not any persistent storage."""
+        target_vdu = deepcopy(target_vdu_wthout_persistent_storage)
+
+        self.maxDiff = None
+        target_vdu["interfaces"] = interfaces_wth_all_positions
+        mock_prepare_vdu_cloud_init.return_value = {}
+        mock_prepare_vdu_affinity_group_list.return_value = []
+
+        new_kwargs = deepcopy(kwargs)
+        new_kwargs.update(
+            {
+                "vnfr_id": vnfr_id,
+                "nsr_id": nsr_id,
+                "tasks_by_target_record_id": {},
+                "logger": "logger",
+            }
+        )
+        expected_extra_dict_copy = deepcopy(expected_extra_dict2)
+        vnfd = deepcopy(vnfd_wthout_persistent_storage)
+        db.get_one.return_value = vnfd
+        result = Ns._process_vdu_params(
+            target_vdu, indata, vim_info=None, target_record_id=None, **new_kwargs
+        )
+        mock_sort_vdu_interfaces.assert_called_once_with(target_vdu)
+        mock_locate_vdu_interfaces.assert_not_called()
+        mock_prepare_vdu_cloud_init.assert_called_once()
+        mock_add_persistent_root_disk_to_disk_list.assert_called_once()
+        mock_add_persistent_ordinary_disks_to_disk_list.assert_called_once()
+        mock_prepare_vdu_interfaces.assert_called_once_with(
+            target_vdu,
+            expected_extra_dict_copy,
+            ns_preffix,
+            vnf_preffix,
+            "logger",
+            {},
+            [],
+        )
+        self.assertDictEqual(result, expected_extra_dict_copy)
+        mock_prepare_vdu_ssh_keys.assert_called_once_with(target_vdu, None, {})
+        mock_prepare_vdu_affinity_group_list.assert_called_once()
+        mock_find_persistent_volumes.assert_not_called()
+
+    @patch("osm_ng_ro.ns.Ns._sort_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._partially_locate_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_ssh_keys")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_root_volumes")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_volumes")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_root_disk_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_ordinary_disks_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_affinity_group_list")
+    def test_process_vdu_params_interfaces_partially_located(
+        self,
+        mock_prepare_vdu_affinity_group_list,
+        mock_add_persistent_ordinary_disks_to_disk_list,
+        mock_add_persistent_root_disk_to_disk_list,
+        mock_find_persistent_volumes,
+        mock_find_persistent_root_volumes,
+        mock_prepare_vdu_ssh_keys,
+        mock_prepare_vdu_cloud_init,
+        mock_prepare_vdu_interfaces,
+        mock_locate_vdu_interfaces,
+        mock_sort_vdu_interfaces,
+    ):
+        """Some interfaces have position."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+
+        self.maxDiff = None
+        target_vdu["interfaces"] = [
+            {
+                "name": "vdu-eth1",
+                "ns-vld-id": "net1",
+            },
+            {"name": "vdu-eth2", "ns-vld-id": "net2", "position": 2},
+            {
+                "name": "vdu-eth3",
+                "ns-vld-id": "mgmtnet",
+            },
+        ]
+        mock_prepare_vdu_cloud_init.return_value = {}
+        mock_prepare_vdu_affinity_group_list.return_value = []
+        persistent_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        mock_find_persistent_root_volumes.return_value = persistent_root_disk
+
+        new_kwargs = deepcopy(kwargs)
+        new_kwargs.update(
+            {
+                "vnfr_id": vnfr_id,
+                "nsr_id": nsr_id,
+                "tasks_by_target_record_id": {},
+                "logger": "logger",
+            }
+        )
+
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        db.get_one.return_value = vnfd
+        result = Ns._process_vdu_params(
+            target_vdu, indata, vim_info=None, target_record_id=None, **new_kwargs
+        )
+        expected_extra_dict_copy = deepcopy(expected_extra_dict)
+        mock_sort_vdu_interfaces.assert_not_called()
+        mock_locate_vdu_interfaces.assert_called_once_with(target_vdu)
+        mock_prepare_vdu_cloud_init.assert_called_once()
+        mock_add_persistent_root_disk_to_disk_list.assert_called_once()
+        mock_add_persistent_ordinary_disks_to_disk_list.assert_called_once()
+        mock_prepare_vdu_interfaces.assert_called_once_with(
+            target_vdu,
+            expected_extra_dict_copy,
+            ns_preffix,
+            vnf_preffix,
+            "logger",
+            {},
+            [],
+        )
+        self.assertDictEqual(result, expected_extra_dict_copy)
+        mock_prepare_vdu_ssh_keys.assert_called_once_with(target_vdu, None, {})
+        mock_prepare_vdu_affinity_group_list.assert_called_once()
+        mock_find_persistent_volumes.assert_not_called()
+        mock_find_persistent_root_volumes.assert_not_called()
+
+    @patch("osm_ng_ro.ns.Ns._sort_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._partially_locate_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_ssh_keys")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_root_volumes")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_volumes")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_root_disk_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_ordinary_disks_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_affinity_group_list")
+    def test_process_vdu_params_no_interface_position(
+        self,
+        mock_prepare_vdu_affinity_group_list,
+        mock_add_persistent_ordinary_disks_to_disk_list,
+        mock_add_persistent_root_disk_to_disk_list,
+        mock_find_persistent_volumes,
+        mock_find_persistent_root_volumes,
+        mock_prepare_vdu_ssh_keys,
+        mock_prepare_vdu_cloud_init,
+        mock_prepare_vdu_interfaces,
+        mock_locate_vdu_interfaces,
+        mock_sort_vdu_interfaces,
+    ):
+        """Interfaces do not have position."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+
+        self.maxDiff = None
+        target_vdu["interfaces"] = interfaces_wthout_positions
+        mock_prepare_vdu_cloud_init.return_value = {}
+        mock_prepare_vdu_affinity_group_list.return_value = []
+        persistent_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        mock_find_persistent_root_volumes.return_value = persistent_root_disk
+        new_kwargs = deepcopy(kwargs)
+        new_kwargs.update(
+            {
+                "vnfr_id": vnfr_id,
+                "nsr_id": nsr_id,
+                "tasks_by_target_record_id": {},
+                "logger": "logger",
+            }
+        )
+
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        db.get_one.return_value = vnfd
+        result = Ns._process_vdu_params(
+            target_vdu, indata, vim_info=None, target_record_id=None, **new_kwargs
+        )
+        expected_extra_dict_copy = deepcopy(expected_extra_dict)
+        mock_sort_vdu_interfaces.assert_not_called()
+        mock_locate_vdu_interfaces.assert_called_once_with(target_vdu)
+        mock_prepare_vdu_cloud_init.assert_called_once()
+        mock_add_persistent_root_disk_to_disk_list.assert_called_once()
+        mock_add_persistent_ordinary_disks_to_disk_list.assert_called_once()
+        mock_prepare_vdu_interfaces.assert_called_once_with(
+            target_vdu,
+            expected_extra_dict_copy,
+            ns_preffix,
+            vnf_preffix,
+            "logger",
+            {},
+            [],
+        )
+        self.assertDictEqual(result, expected_extra_dict_copy)
+        mock_prepare_vdu_ssh_keys.assert_called_once_with(target_vdu, None, {})
+        mock_prepare_vdu_affinity_group_list.assert_called_once()
+        mock_find_persistent_volumes.assert_not_called()
+        mock_find_persistent_root_volumes.assert_not_called()
+
+    @patch("osm_ng_ro.ns.Ns._sort_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._partially_locate_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_ssh_keys")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_root_volumes")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_volumes")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_root_disk_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_ordinary_disks_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_affinity_group_list")
+    def test_process_vdu_params_prepare_vdu_interfaces_raises_exception(
+        self,
+        mock_prepare_vdu_affinity_group_list,
+        mock_add_persistent_ordinary_disks_to_disk_list,
+        mock_add_persistent_root_disk_to_disk_list,
+        mock_find_persistent_volumes,
+        mock_find_persistent_root_volumes,
+        mock_prepare_vdu_ssh_keys,
+        mock_prepare_vdu_cloud_init,
+        mock_prepare_vdu_interfaces,
+        mock_locate_vdu_interfaces,
+        mock_sort_vdu_interfaces,
+    ):
+        """Prepare vdu interfaces method raises exception."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+
+        self.maxDiff = None
+        target_vdu["interfaces"] = interfaces_wthout_positions
+        mock_prepare_vdu_cloud_init.return_value = {}
+        mock_prepare_vdu_affinity_group_list.return_value = []
+        persistent_root_disk = {
+            "persistent-root-volume": {
+                "image_id": "ubuntu20.04",
+                "size": "10",
+            }
+        }
+        mock_find_persistent_root_volumes.return_value = persistent_root_disk
+        new_kwargs = deepcopy(kwargs)
+        new_kwargs.update(
+            {
+                "vnfr_id": vnfr_id,
+                "nsr_id": nsr_id,
+                "tasks_by_target_record_id": {},
+                "logger": "logger",
+            }
+        )
+        mock_prepare_vdu_interfaces.side_effect = TypeError
+
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        db.get_one.return_value = vnfd
+        with self.assertRaises(Exception) as err:
+            Ns._process_vdu_params(
+                target_vdu, indata, vim_info=None, target_record_id=None, **new_kwargs
+            )
+            self.assertEqual(type(err), TypeError)
+        mock_sort_vdu_interfaces.assert_not_called()
+        mock_locate_vdu_interfaces.assert_called_once_with(target_vdu)
+        mock_prepare_vdu_cloud_init.assert_not_called()
+        mock_add_persistent_root_disk_to_disk_list.assert_not_called()
+        mock_add_persistent_ordinary_disks_to_disk_list.assert_not_called()
+        mock_prepare_vdu_interfaces.assert_called_once()
+        mock_prepare_vdu_ssh_keys.assert_not_called()
+        mock_prepare_vdu_affinity_group_list.assert_not_called()
+        mock_find_persistent_volumes.assert_not_called()
+        mock_find_persistent_root_volumes.assert_not_called()
+
+    @patch("osm_ng_ro.ns.Ns._sort_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._partially_locate_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_ssh_keys")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_root_volumes")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_volumes")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_root_disk_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_ordinary_disks_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_affinity_group_list")
+    def test_process_vdu_params_add_persistent_root_disk_raises_exception(
+        self,
+        mock_prepare_vdu_affinity_group_list,
+        mock_add_persistent_ordinary_disks_to_disk_list,
+        mock_add_persistent_root_disk_to_disk_list,
+        mock_find_persistent_volumes,
+        mock_find_persistent_root_volumes,
+        mock_prepare_vdu_ssh_keys,
+        mock_prepare_vdu_cloud_init,
+        mock_prepare_vdu_interfaces,
+        mock_locate_vdu_interfaces,
+        mock_sort_vdu_interfaces,
+    ):
+        """Add persistent root disk method raises exception."""
+        target_vdu = deepcopy(target_vdu_wth_persistent_storage)
+
+        self.maxDiff = None
+        target_vdu["interfaces"] = interfaces_wthout_positions
+        mock_prepare_vdu_cloud_init.return_value = {}
+        mock_prepare_vdu_affinity_group_list.return_value = []
+        mock_add_persistent_root_disk_to_disk_list.side_effect = KeyError
+        new_kwargs = deepcopy(kwargs)
+        new_kwargs.update(
+            {
+                "vnfr_id": vnfr_id,
+                "nsr_id": nsr_id,
+                "tasks_by_target_record_id": {},
+                "logger": "logger",
+            }
+        )
+
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        db.get_one.return_value = vnfd
+        with self.assertRaises(Exception) as err:
+            Ns._process_vdu_params(
+                target_vdu, indata, vim_info=None, target_record_id=None, **new_kwargs
+            )
+            self.assertEqual(type(err), KeyError)
+        mock_sort_vdu_interfaces.assert_not_called()
+        mock_locate_vdu_interfaces.assert_called_once_with(target_vdu)
+        mock_prepare_vdu_cloud_init.assert_called_once()
+        mock_add_persistent_root_disk_to_disk_list.assert_called_once()
+        mock_add_persistent_ordinary_disks_to_disk_list.assert_not_called()
+        mock_prepare_vdu_interfaces.assert_called_once_with(
+            target_vdu,
+            {
+                "depends_on": [
+                    f"{ns_preffix}:image.0",
+                    f"{ns_preffix}:flavor.0",
+                ]
+            },
+            ns_preffix,
+            vnf_preffix,
+            "logger",
+            {},
+            [],
+        )
+
+        mock_prepare_vdu_ssh_keys.assert_called_once_with(target_vdu, None, {})
+        mock_prepare_vdu_affinity_group_list.assert_not_called()
+        mock_find_persistent_volumes.assert_not_called()
+        mock_find_persistent_root_volumes.assert_not_called()
+
+    def test_select_persistent_root_disk(self):
+        vdu = deepcopy(target_vdu_wth_persistent_storage)
+        vdu["virtual-storage-desc"] = [
+            "persistent-root-volume",
+            "persistent-volume2",
+            "ephemeral-volume",
+        ]
+        vsd = deepcopy(vnfd_wth_persistent_storage)["virtual-storage-desc"][1]
+        expected_result = vsd
+        result = Ns._select_persistent_root_disk(vsd, vdu)
+        self.assertEqual(result, expected_result)
+
+    def test_select_persistent_root_disk_first_vsd_is_different(self):
+        """VDU first virtual-storage-desc is different than vsd id."""
+        vdu = deepcopy(target_vdu_wth_persistent_storage)
+        vdu["virtual-storage-desc"] = [
+            "persistent-volume2",
+            "persistent-root-volume",
+            "ephemeral-volume",
+        ]
+        vsd = deepcopy(vnfd_wth_persistent_storage)["virtual-storage-desc"][1]
+        expected_result = None
+        result = Ns._select_persistent_root_disk(vsd, vdu)
+        self.assertEqual(result, expected_result)
+
+    def test_select_persistent_root_disk_vsd_is_not_persistent(self):
+        """vsd type is not persistent."""
+        vdu = deepcopy(target_vdu_wth_persistent_storage)
+        vdu["virtual-storage-desc"] = [
+            "persistent-volume2",
+            "persistent-root-volume",
+            "ephemeral-volume",
+        ]
+        vsd = deepcopy(vnfd_wth_persistent_storage)["virtual-storage-desc"][1]
+        vsd["type-of-storage"] = "etsi-nfv-descriptors:ephemeral-storage"
+        expected_result = None
+        result = Ns._select_persistent_root_disk(vsd, vdu)
+        self.assertEqual(result, expected_result)
+
+    def test_select_persistent_root_disk_vsd_does_not_have_size(self):
+        """vsd size is None."""
+        vdu = deepcopy(target_vdu_wth_persistent_storage)
+        vdu["virtual-storage-desc"] = [
+            "persistent-volume2",
+            "persistent-root-volume",
+            "ephemeral-volume",
+        ]
+        vsd = deepcopy(vnfd_wth_persistent_storage)["virtual-storage-desc"][1]
+        vsd["size-of-storage"] = None
+        expected_result = None
+        result = Ns._select_persistent_root_disk(vsd, vdu)
+        self.assertEqual(result, expected_result)
+
+    def test_select_persistent_root_disk_vdu_wthout_vsd(self):
+        """VDU does not have virtual-storage-desc."""
+        vdu = deepcopy(target_vdu_wth_persistent_storage)
+        vsd = deepcopy(vnfd_wth_persistent_storage)["virtual-storage-desc"][1]
+        expected_result = None
+        result = Ns._select_persistent_root_disk(vsd, vdu)
+        self.assertEqual(result, expected_result)
+
+    def test_select_persistent_root_disk_invalid_vsd_type(self):
+        """vsd is list, expected to be a dict."""
+        vdu = deepcopy(target_vdu_wth_persistent_storage)
+        vsd = deepcopy(vnfd_wth_persistent_storage)["virtual-storage-desc"]
+        with self.assertRaises(AttributeError):
+            Ns._select_persistent_root_disk(vsd, vdu)

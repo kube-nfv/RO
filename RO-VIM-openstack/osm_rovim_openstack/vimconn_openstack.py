@@ -2679,76 +2679,156 @@ class vimconnector(vimconn.VimConnector):
         ) as e:
             self._format_exception(e)
 
-    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
-        """Removes a VM instance from VIM. Returns the old identifier"""
-        # print "osconnector: Getting VM from VIM"
+    def _delete_ports_by_id_wth_neutron(self, k_id: str) -> None:
+        """Neutron delete ports by id.
+        Args:
+            k_id    (str):      Port id in the VIM
+        """
+        try:
+            port_dict = self.neutron.list_ports()
+            existing_ports = [port["id"] for port in port_dict["ports"] if port_dict]
+
+            if k_id in existing_ports:
+                self.neutron.delete_port(k_id)
+
+        except Exception as e:
+            self.logger.error("Error deleting port: {}: {}".format(type(e).__name__, e))
+
+    def _delete_volumes_by_id_wth_cinder(
+        self, k: str, k_id: str, volumes_to_hold: list, created_items: dict
+    ) -> bool:
+        """Cinder delete volume by id.
+        Args:
+            k   (str):                      Full item name in created_items
+            k_id    (str):                  ID of floating ip in VIM
+            volumes_to_hold (list):          Volumes not to delete
+            created_items   (dict):         All created items belongs to VM
+        """
+        try:
+            if k_id in volumes_to_hold:
+                return
+
+            if self.cinder.volumes.get(k_id).status != "available":
+                return True
+
+            else:
+                self.cinder.volumes.delete(k_id)
+                created_items[k] = None
+
+        except Exception as e:
+            self.logger.error(
+                "Error deleting volume: {}: {}".format(type(e).__name__, e)
+            )
+
+    def _delete_floating_ip_by_id(self, k: str, k_id: str, created_items: dict) -> None:
+        """Neutron delete floating ip by id.
+        Args:
+            k   (str):                      Full item name in created_items
+            k_id    (str):                  ID of floating ip in VIM
+            created_items   (dict):         All created items belongs to VM
+        """
+        try:
+            self.neutron.delete_floatingip(k_id)
+            created_items[k] = None
+
+        except Exception as e:
+            self.logger.error(
+                "Error deleting floating ip: {}: {}".format(type(e).__name__, e)
+            )
+
+    @staticmethod
+    def _get_item_name_id(k: str) -> Tuple[str, str]:
+        k_item, _, k_id = k.partition(":")
+        return k_item, k_id
+
+    def _delete_vm_ports_attached_to_network(self, created_items: dict) -> None:
+        """Delete VM ports attached to the networks before deleting virtual machine.
+        Args:
+            created_items   (dict):     All created items belongs to VM
+        """
+
+        for k, v in created_items.items():
+            if not v:  # skip already deleted
+                continue
+
+            try:
+                k_item, k_id = self._get_item_name_id(k)
+                if k_item == "port":
+                    self._delete_ports_by_id_wth_neutron(k_id)
+
+            except Exception as e:
+                self.logger.error(
+                    "Error deleting port: {}: {}".format(type(e).__name__, e)
+                )
+
+    def _delete_created_items(
+        self, created_items: dict, volumes_to_hold: list, keep_waiting: bool
+    ) -> bool:
+        """Delete Volumes and floating ip if they exist in created_items."""
+        for k, v in created_items.items():
+            if not v:  # skip already deleted
+                continue
+
+            try:
+                k_item, k_id = self._get_item_name_id(k)
+
+                if k_item == "volume":
+                    unavailable_vol = self._delete_volumes_by_id_wth_cinder(
+                        k, k_id, volumes_to_hold, created_items
+                    )
+
+                    if unavailable_vol:
+                        keep_waiting = True
+
+                elif k_item == "floating_ip":
+                    self._delete_floating_ip_by_id(k, k_id, created_items)
+
+            except Exception as e:
+                self.logger.error("Error deleting {}: {}".format(k, e))
+
+        return keep_waiting
+
+    def delete_vminstance(
+        self, vm_id: str, created_items: dict = None, volumes_to_hold: list = None
+    ) -> None:
+        """Removes a VM instance from VIM. Returns the old identifier.
+        Args:
+            vm_id   (str):              Identifier of VM instance
+            created_items   (dict):     All created items belongs to VM
+            volumes_to_hold (list):     Volumes_to_hold
+        """
         if created_items is None:
             created_items = {}
+        if volumes_to_hold is None:
+            volumes_to_hold = []
 
         try:
             self._reload_connection()
-            # delete VM ports attached to this networks before the virtual machine
-            for k, v in created_items.items():
-                if not v:  # skip already deleted
-                    continue
 
-                try:
-                    k_item, _, k_id = k.partition(":")
-                    if k_item == "port":
-                        port_dict = self.neutron.list_ports()
-                        existing_ports = [
-                            port["id"] for port in port_dict["ports"] if port_dict
-                        ]
-                        if k_id in existing_ports:
-                            self.neutron.delete_port(k_id)
-                except Exception as e:
-                    self.logger.error(
-                        "Error deleting port: {}: {}".format(type(e).__name__, e)
-                    )
-
-            # #commented because detaching the volumes makes the servers.delete not work properly ?!?
-            # #dettach volumes attached
-            # server = self.nova.servers.get(vm_id)
-            # volumes_attached_dict = server._info["os-extended-volumes:volumes_attached"]   #volume["id"]
-            # #for volume in volumes_attached_dict:
-            # #    self.cinder.volumes.detach(volume["id"])
+            # Delete VM ports attached to the networks before the virtual machine
+            if created_items:
+                self._delete_vm_ports_attached_to_network(created_items)
 
             if vm_id:
                 self.nova.servers.delete(vm_id)
 
-            # delete volumes. Although having detached, they should have in active status before deleting
-            # we ensure in this loop
+            # Although having detached, volumes should have in active status before deleting.
+            # We ensure in this loop
             keep_waiting = True
             elapsed_time = 0
 
             while keep_waiting and elapsed_time < volume_timeout:
                 keep_waiting = False
 
-                for k, v in created_items.items():
-                    if not v:  # skip already deleted
-                        continue
-
-                    try:
-                        k_item, _, k_id = k.partition(":")
-                        if k_item == "volume":
-                            if self.cinder.volumes.get(k_id).status != "available":
-                                keep_waiting = True
-                            else:
-                                if k_id not in volumes_to_hold:
-                                    self.cinder.volumes.delete(k_id)
-                                    created_items[k] = None
-                        elif k_item == "floating_ip":  # floating ip
-                            self.neutron.delete_floatingip(k_id)
-                            created_items[k] = None
-
-                    except Exception as e:
-                        self.logger.error("Error deleting {}: {}".format(k, e))
+                # Delete volumes and floating IP.
+                keep_waiting = self._delete_created_items(
+                    created_items, volumes_to_hold, keep_waiting
+                )
 
                 if keep_waiting:
                     time.sleep(1)
                     elapsed_time += 1
 
-            return None
         except (
             nvExceptions.NotFound,
             ksExceptions.ClientException,
