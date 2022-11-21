@@ -31,8 +31,13 @@ import unittest
 import mock
 from mock import MagicMock, patch
 from neutronclient.v2_0.client import Client
+from novaclient import exceptions as nvExceptions
 from osm_ro_plugin import vimconn
-from osm_ro_plugin.vimconn import VimConnConnectionException, VimConnException
+from osm_ro_plugin.vimconn import (
+    VimConnConnectionException,
+    VimConnException,
+    VimConnNotFoundException,
+)
 from osm_rovim_openstack.vimconn_openstack import vimconnector
 
 __author__ = "Igor D.C."
@@ -66,6 +71,12 @@ ip_addr1 = "20.3.4.5"
 volume_id = "ac408b73-b9cc-4a6a-a270-82cc4811bd4a"
 volume_id2 = "o4e0e83-b9uu-4akk-a234-89cc4811bd4a"
 volume_id3 = "44e0e83-t9uu-4akk-a234-p9cc4811bd4a"
+virtual_mac_id = "64e0e83-t9uu-4akk-a234-p9cc4811bd4a"
+created_items_all_true = {
+    f"floating_ip:{floating_network_vim_id}": True,
+    f"volume:{volume_id}": True,
+    f"port:{port_id}": True,
+}
 
 
 class TestSfcOperations(unittest.TestCase):
@@ -1131,6 +1142,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.config["keypair"] = "my_keypair"
         self.vimconn.security_groups_id = "12345"
         self.vimconn.nova.api_version.get_string.return_value = "2.32"
+        self.vimconn.logger = CopyingMock()
 
     @patch.object(vimconnector, "_get_ids_from_name")
     def test_prepare_port_dict_security_security_groups_exists_in_config(
@@ -4478,6 +4490,996 @@ class TestNewVmInstance(unittest.TestCase):
         mock_update_port_security.assert_not_called()
         mock_prepare_external_network.assert_not_called()
         mock_delete_vm_instance.assert_called_once_with(None, {})
+
+    @patch.object(vimconnector, "_delete_ports_by_id_wth_neutron")
+    def test_delete_vm_ports_attached_to_network_empty_created_items(
+        self, mock_delete_ports_by_id_wth_neutron
+    ):
+        """Created_items is emtpty."""
+        created_items = {}
+        self.vimconn._delete_vm_ports_attached_to_network(created_items)
+        self.vimconn.neutron.list_ports.assert_not_called()
+        self.vimconn.neutron.delete_port.assert_not_called()
+        mock_delete_ports_by_id_wth_neutron.assert_not_called()
+
+    @patch.object(vimconnector, "_delete_ports_by_id_wth_neutron")
+    def test_delete_vm_ports_attached_to_network(
+        self, mock_delete_ports_by_id_wth_neutron
+    ):
+        created_items = {
+            "floating_ip:308b73-t9cc-1a6a-a270-12cc4811bd4a": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": True,
+        }
+        self.vimconn._delete_vm_ports_attached_to_network(created_items)
+        mock_delete_ports_by_id_wth_neutron.assert_called_once_with(f"{port_id}")
+        self.vimconn.logger.error.assert_not_called()
+
+    @patch.object(vimconnector, "_delete_ports_by_id_wth_neutron")
+    def test_delete_vm_ports_attached_to_network_wthout_port(
+        self, mock_delete_ports_by_id_wth_neutron
+    ):
+        """Created_items does not have port."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+        }
+        self.vimconn._delete_vm_ports_attached_to_network(created_items)
+        mock_delete_ports_by_id_wth_neutron.assert_not_called()
+        self.vimconn.logger.error.assert_not_called()
+
+    @patch.object(vimconnector, "_delete_ports_by_id_wth_neutron")
+    def test_delete_vm_ports_attached_to_network_delete_port_raise_vimconnexception(
+        self, mock_delete_ports_by_id_wth_neutron
+    ):
+        """_delete_ports_by_id_wth_neutron raises vimconnexception."""
+        created_items = deepcopy(created_items_all_true)
+        mock_delete_ports_by_id_wth_neutron.side_effect = VimConnException(
+            "Can not delete port"
+        )
+        self.vimconn._delete_vm_ports_attached_to_network(created_items)
+        mock_delete_ports_by_id_wth_neutron.assert_called_once_with(f"{port_id}")
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting port: VimConnException: Can not delete port"
+        )
+
+    @patch.object(vimconnector, "_delete_ports_by_id_wth_neutron")
+    def test_delete_vm_ports_attached_to_network_delete_port_raise_nvexception(
+        self, mock_delete_ports_by_id_wth_neutron
+    ):
+        """_delete_ports_by_id_wth_neutron raises nvExceptions.ClientException."""
+        created_items = deepcopy(created_items_all_true)
+        mock_delete_ports_by_id_wth_neutron.side_effect = nvExceptions.ClientException(
+            "Connection aborted."
+        )
+        self.vimconn._delete_vm_ports_attached_to_network(created_items)
+        mock_delete_ports_by_id_wth_neutron.assert_called_once_with(f"{port_id}")
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting port: ClientException: Unknown Error (HTTP Connection aborted.)"
+        )
+
+    @patch.object(vimconnector, "_delete_ports_by_id_wth_neutron")
+    def test_delete_vm_ports_attached_to_network_delete_port_invalid_port_item(
+        self, mock_delete_ports_by_id_wth_neutron
+    ):
+        """port item is invalid."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}:": True,
+        }
+        mock_delete_ports_by_id_wth_neutron.side_effect = VimConnException(
+            "Port is not valid."
+        )
+        self.vimconn._delete_vm_ports_attached_to_network(created_items)
+        mock_delete_ports_by_id_wth_neutron.assert_called_once_with(f"{port_id}:")
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting port: VimConnException: Port is not valid."
+        )
+
+    @patch.object(vimconnector, "_delete_ports_by_id_wth_neutron")
+    def test_delete_vm_ports_attached_to_network_delete_port_already_deleted(
+        self, mock_delete_ports_by_id_wth_neutron
+    ):
+        """port is already deleted."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": None,
+            f"port:{port_id}": None,
+        }
+        self.vimconn._delete_vm_ports_attached_to_network(created_items)
+        mock_delete_ports_by_id_wth_neutron.assert_not_called()
+        self.vimconn.logger.error.assert_not_called()
+
+    def test_delete_floating_ip_by_id(self):
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"port:{port_id}": True,
+        }
+        expected_created_items = {
+            f"floating_ip:{floating_network_vim_id}": None,
+            f"port:{port_id}": True,
+        }
+        k_id = floating_network_vim_id
+        k = f"floating_ip:{floating_network_vim_id}"
+        self.vimconn._delete_floating_ip_by_id(k, k_id, created_items)
+        self.vimconn.neutron.delete_floatingip.assert_called_once_with(k_id)
+        self.assertEqual(created_items, expected_created_items)
+
+    def test_delete_floating_ip_by_id_floating_ip_already_deleted(self):
+        """floating ip is already deleted."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": None,
+            f"port:{port_id}": True,
+        }
+        k_id = floating_network_vim_id
+        k = f"floating_ip:{floating_network_vim_id}"
+        self.vimconn._delete_floating_ip_by_id(k, k_id, created_items)
+        self.vimconn.neutron.delete_floatingip.assert_called_once_with(k_id)
+        self.assertEqual(
+            created_items,
+            {
+                f"floating_ip:{floating_network_vim_id}": None,
+                f"port:{port_id}": True,
+            },
+        )
+
+    def test_delete_floating_ip_by_id_floating_ip_raises_nvexception(self):
+        """netron delete floating ip raises nvExceptions.ClientException."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"port:{port_id}": True,
+        }
+        k_id = floating_network_vim_id
+        k = f"floating_ip:{floating_network_vim_id}"
+        self.vimconn.neutron.delete_floatingip.side_effect = (
+            nvExceptions.ClientException("Client exception occured.")
+        )
+        self.vimconn._delete_floating_ip_by_id(k, k_id, created_items)
+        self.vimconn.neutron.delete_floatingip.assert_called_once_with(k_id)
+        self.assertEqual(
+            created_items,
+            {
+                f"floating_ip:{floating_network_vim_id}": True,
+                f"port:{port_id}": True,
+            },
+        )
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting floating ip: ClientException: Unknown Error (HTTP Client exception occured.)"
+        )
+
+    def test_delete_floating_ip_by_id_floating_ip_raises_vimconnexception(self):
+        """netron delete floating ip raises VimConnNotFoundException."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"port:{port_id}": True,
+        }
+        k_id = floating_network_vim_id
+        k = f"floating_ip:{floating_network_vim_id}"
+        self.vimconn.neutron.delete_floatingip.side_effect = VimConnNotFoundException(
+            "Port id could not found."
+        )
+        self.vimconn._delete_floating_ip_by_id(k, k_id, created_items)
+        self.vimconn.neutron.delete_floatingip.assert_called_once_with(k_id)
+        self.assertEqual(
+            created_items,
+            {
+                f"floating_ip:{floating_network_vim_id}": True,
+                f"port:{port_id}": True,
+            },
+        )
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting floating ip: VimConnNotFoundException: Port id could not found."
+        )
+
+    def test_delete_floating_ip_by_id_floating_ip_invalid_k_item(self):
+        """invalid floating ip item."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"port:{port_id}": True,
+        }
+        expected_created_items = {
+            f"floating_ip:{floating_network_vim_id}::": None,
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"port:{port_id}": True,
+        }
+        k_id = floating_network_vim_id
+        k = f"floating_ip:{floating_network_vim_id}::"
+        self.vimconn._delete_floating_ip_by_id(k, k_id, created_items)
+        self.vimconn.neutron.delete_floatingip.assert_called_once_with(k_id)
+        self.assertEqual(created_items, expected_created_items)
+
+    def test_delete_volumes_by_id_with_cinder_volume_status_available(self):
+        """volume status is available."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        expected_created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": None,
+            f"port:{port_id}": None,
+        }
+        volumes_to_hold = []
+        k = f"volume:{volume_id}"
+        k_id = volume_id
+        self.vimconn.cinder.volumes.get.return_value.status = "available"
+        result = self.vimconn._delete_volumes_by_id_wth_cinder(
+            k, k_id, volumes_to_hold, created_items
+        )
+        self.assertEqual(result, None)
+        self.vimconn.cinder.volumes.get.assert_called_once_with(k_id)
+        self.vimconn.cinder.volumes.delete.assert_called_once_with(k_id)
+        self.vimconn.logger.error.assert_not_called()
+        self.assertEqual(created_items, expected_created_items)
+
+    def test_delete_volumes_by_id_with_cinder_volume_already_deleted(self):
+        """volume is already deleted."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": None,
+            f"port:{port_id}": None,
+        }
+        expected_created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": None,
+            f"port:{port_id}": None,
+        }
+        volumes_to_hold = []
+        k = f"volume:{volume_id}"
+        k_id = volume_id
+        self.vimconn.cinder.volumes.get.return_value.status = "available"
+        result = self.vimconn._delete_volumes_by_id_wth_cinder(
+            k, k_id, volumes_to_hold, created_items
+        )
+        self.assertEqual(result, None)
+        self.vimconn.cinder.volumes.get.assert_called_once_with(k_id)
+        self.vimconn.cinder.volumes.delete.assert_called_once_with(k_id)
+        self.vimconn.logger.error.assert_not_called()
+        self.assertEqual(created_items, expected_created_items)
+
+    def test_delete_volumes_by_id_with_cinder_get_volume_raise_exception(self):
+        """cinder get volume raises exception."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        expected_created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        volumes_to_hold = []
+        k = f"volume:{volume_id}"
+        k_id = volume_id
+        self.vimconn.cinder.volumes.get.side_effect = Exception(
+            "Can not get volume status."
+        )
+        result = self.vimconn._delete_volumes_by_id_wth_cinder(
+            k, k_id, volumes_to_hold, created_items
+        )
+        self.assertEqual(result, None)
+        self.vimconn.cinder.volumes.get.assert_called_once_with(k_id)
+        self.vimconn.cinder.volumes.delete.assert_not_called()
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting volume: Exception: Can not get volume status."
+        )
+        self.assertEqual(created_items, expected_created_items)
+
+    def test_delete_volumes_by_id_with_cinder_delete_volume_raise_exception(self):
+        """cinder delete volume raises exception."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        expected_created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        volumes_to_hold = []
+        k = f"volume:{volume_id}"
+        k_id = volume_id
+        self.vimconn.cinder.volumes.get.return_value.status = "available"
+        self.vimconn.cinder.volumes.delete.side_effect = nvExceptions.ClientException(
+            "Connection aborted."
+        )
+        result = self.vimconn._delete_volumes_by_id_wth_cinder(
+            k, k_id, volumes_to_hold, created_items
+        )
+        self.assertEqual(result, None)
+        self.vimconn.cinder.volumes.get.assert_called_once_with(k_id)
+        self.vimconn.cinder.volumes.delete.assert_called_once_with(k_id)
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting volume: ClientException: Unknown Error (HTTP Connection aborted.)"
+        )
+        self.assertEqual(created_items, expected_created_items)
+
+    def test_delete_volumes_by_id_with_cinder_volume_to_be_hold(self):
+        """volume_to_hold has item."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        expected_created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        volumes_to_hold = [volume_id]
+        k = f"volume:{volume_id}"
+        k_id = volume_id
+        result = self.vimconn._delete_volumes_by_id_wth_cinder(
+            k, k_id, volumes_to_hold, created_items
+        )
+        self.assertEqual(result, None)
+        self.vimconn.cinder.volumes.get.assert_not_called()
+        self.vimconn.cinder.volumes.delete.assert_not_called()
+        self.vimconn.logger.error.assert_not_called()
+        self.assertEqual(created_items, expected_created_items)
+
+    def test_delete_volumes_by_id_with_cinder_volume_status_not_available(self):
+        """volume status is not available."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        expected_created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id2}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        volumes_to_hold = []
+        k = f"volume:{volume_id}"
+        k_id = volume_id
+        self.vimconn.cinder.volumes.get.return_value.status = "unavailable"
+        result = self.vimconn._delete_volumes_by_id_wth_cinder(
+            k, k_id, volumes_to_hold, created_items
+        )
+        self.assertEqual(result, True)
+        self.vimconn.cinder.volumes.get.assert_called_once_with(k_id)
+        self.vimconn.cinder.volumes.delete.assert_not_called()
+        self.vimconn.logger.error.assert_not_called()
+        self.assertEqual(created_items, expected_created_items)
+
+    def test_delete_ports_by_id_by_neutron(self):
+        """neutron delete ports."""
+        k_id = port_id
+        self.vimconn.neutron.list_ports.return_value = {
+            "ports": [{"id": port_id}, {"id": port2_id}]
+        }
+
+        self.vimconn._delete_ports_by_id_wth_neutron(k_id)
+        self.vimconn.neutron.list_ports.assert_called_once()
+        self.vimconn.neutron.delete_port.assert_called_once_with(k_id)
+        self.vimconn.logger.error.assert_not_called()
+
+    def test_delete_ports_by_id_by_neutron_id_not_in_port_list(self):
+        """port id not in the port list."""
+        k_id = volume_id
+        self.vimconn.neutron.list_ports.return_value = {
+            "ports": [{"id": port_id}, {"id": port2_id}]
+        }
+
+        self.vimconn._delete_ports_by_id_wth_neutron(k_id)
+        self.vimconn.neutron.list_ports.assert_called_once()
+        self.vimconn.neutron.delete_port.assert_not_called()
+        self.vimconn.logger.error.assert_not_called()
+
+    def test_delete_ports_by_id_by_neutron_list_port_raise_exception(self):
+        """neutron list port raises exception."""
+        k_id = port_id
+        self.vimconn.neutron.list_ports.side_effect = nvExceptions.ClientException(
+            "Connection aborted."
+        )
+        self.vimconn._delete_ports_by_id_wth_neutron(k_id)
+        self.vimconn.neutron.list_ports.assert_called_once()
+        self.vimconn.neutron.delete_port.assert_not_called()
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting port: ClientException: Unknown Error (HTTP Connection aborted.)"
+        )
+
+    def test_delete_ports_by_id_by_neutron_delete_port_raise_exception(self):
+        """neutron delete port raises exception."""
+        k_id = port_id
+        self.vimconn.neutron.list_ports.return_value = {
+            "ports": [{"id": port_id}, {"id": port2_id}]
+        }
+        self.vimconn.neutron.delete_port.side_effect = nvExceptions.ClientException(
+            "Connection aborted."
+        )
+        self.vimconn._delete_ports_by_id_wth_neutron(k_id)
+        self.vimconn.neutron.list_ports.assert_called_once()
+        self.vimconn.neutron.delete_port.assert_called_once_with(k_id)
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting port: ClientException: Unknown Error (HTTP Connection aborted.)"
+        )
+
+    def test_get_item_name_id(self):
+        """Get name and id successfully."""
+        k = f"some:{port_id}"
+        result = self.vimconn._get_item_name_id(k)
+        self.assertEqual(result, ("some", f"{port_id}"))
+
+    def test_get_item_name_id_wthout_semicolon(self):
+        """Does not have seperator."""
+        k = f"some{port_id}"
+        result = self.vimconn._get_item_name_id(k)
+        self.assertEqual(result, (f"some{port_id}", ""))
+
+    def test_get_item_name_id_empty_string(self):
+        """Empty string."""
+        k = ""
+        result = self.vimconn._get_item_name_id(k)
+        self.assertEqual(result, ("", ""))
+
+    def test_get_item_name_id_k_is_none(self):
+        """item is None."""
+        k = None
+        with self.assertRaises(AttributeError):
+            self.vimconn._get_item_name_id(k)
+
+    @patch.object(vimconnector, "_get_item_name_id")
+    @patch.object(vimconnector, "_delete_volumes_by_id_wth_cinder")
+    @patch.object(vimconnector, "_delete_floating_ip_by_id")
+    def test_delete_created_items(
+        self,
+        mock_delete_floating_ip_by_id,
+        mock_delete_volumes_by_id_wth_cinder,
+        mock_get_item_name_id,
+    ):
+        """Created items has floating ip and volume."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        mock_get_item_name_id.side_effect = [
+            ("floating_ip", f"{floating_network_vim_id}"),
+            ("volume", f"{volume_id}"),
+        ]
+        mock_delete_volumes_by_id_wth_cinder.return_value = True
+        volumes_to_hold = []
+        keep_waiting = False
+        result = self.vimconn._delete_created_items(
+            created_items, volumes_to_hold, keep_waiting
+        )
+        self.assertEqual(result, True)
+        self.assertEqual(mock_get_item_name_id.call_count, 2)
+        mock_delete_volumes_by_id_wth_cinder.assert_called_once_with(
+            f"volume:{volume_id}", f"{volume_id}", [], created_items
+        )
+        mock_delete_floating_ip_by_id.assert_called_once_with(
+            f"floating_ip:{floating_network_vim_id}",
+            f"{floating_network_vim_id}",
+            created_items,
+        )
+        self.vimconn.logger.error.assert_not_called()
+
+    @patch.object(vimconnector, "_get_item_name_id")
+    @patch.object(vimconnector, "_delete_volumes_by_id_wth_cinder")
+    @patch.object(vimconnector, "_delete_floating_ip_by_id")
+    def test_delete_created_items_wth_volumes_to_hold(
+        self,
+        mock_delete_floating_ip_by_id,
+        mock_delete_volumes_by_id_wth_cinder,
+        mock_get_item_name_id,
+    ):
+        """Created items has floating ip and volume and volumes_to_hold has items."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        mock_get_item_name_id.side_effect = [
+            ("floating_ip", f"{floating_network_vim_id}"),
+            ("volume", f"{volume_id}"),
+        ]
+        mock_delete_volumes_by_id_wth_cinder.return_value = True
+        volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
+        keep_waiting = False
+        result = self.vimconn._delete_created_items(
+            created_items, volumes_to_hold, keep_waiting
+        )
+        self.assertEqual(result, True)
+        self.assertEqual(mock_get_item_name_id.call_count, 2)
+        mock_delete_volumes_by_id_wth_cinder.assert_called_once_with(
+            f"volume:{volume_id}", f"{volume_id}", volumes_to_hold, created_items
+        )
+        mock_delete_floating_ip_by_id.assert_called_once_with(
+            f"floating_ip:{floating_network_vim_id}",
+            f"{floating_network_vim_id}",
+            created_items,
+        )
+        self.vimconn.logger.error.assert_not_called()
+
+    @patch.object(vimconnector, "_get_item_name_id")
+    @patch.object(vimconnector, "_delete_volumes_by_id_wth_cinder")
+    @patch.object(vimconnector, "_delete_floating_ip_by_id")
+    def test_delete_created_items_wth_keep_waiting_true(
+        self,
+        mock_delete_floating_ip_by_id,
+        mock_delete_volumes_by_id_wth_cinder,
+        mock_get_item_name_id,
+    ):
+        """Keep waiting initial value is True."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        mock_get_item_name_id.side_effect = [
+            ("floating_ip", f"{floating_network_vim_id}"),
+            ("volume", f"{volume_id}"),
+        ]
+        mock_delete_volumes_by_id_wth_cinder.return_value = False
+        volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
+        keep_waiting = True
+        result = self.vimconn._delete_created_items(
+            created_items, volumes_to_hold, keep_waiting
+        )
+        self.assertEqual(result, True)
+        self.assertEqual(mock_get_item_name_id.call_count, 2)
+        mock_delete_volumes_by_id_wth_cinder.assert_called_once_with(
+            f"volume:{volume_id}", f"{volume_id}", volumes_to_hold, created_items
+        )
+        mock_delete_floating_ip_by_id.assert_called_once_with(
+            f"floating_ip:{floating_network_vim_id}",
+            f"{floating_network_vim_id}",
+            created_items,
+        )
+        self.vimconn.logger.error.assert_not_called()
+
+    @patch.object(vimconnector, "_get_item_name_id")
+    @patch.object(vimconnector, "_delete_volumes_by_id_wth_cinder")
+    @patch.object(vimconnector, "_delete_floating_ip_by_id")
+    def test_delete_created_items_delete_vol_raises(
+        self,
+        mock_delete_floating_ip_by_id,
+        mock_delete_volumes_by_id_wth_cinder,
+        mock_get_item_name_id,
+    ):
+        """Delete volume raises exception."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        mock_get_item_name_id.side_effect = [
+            ("floating_ip", f"{floating_network_vim_id}"),
+            ("volume", f"{volume_id}"),
+        ]
+        mock_delete_volumes_by_id_wth_cinder.side_effect = ConnectionError(
+            "Connection failed."
+        )
+        volumes_to_hold = []
+        keep_waiting = False
+        result = self.vimconn._delete_created_items(
+            created_items, volumes_to_hold, keep_waiting
+        )
+        self.assertEqual(result, False)
+        self.assertEqual(mock_get_item_name_id.call_count, 2)
+        mock_delete_volumes_by_id_wth_cinder.assert_called_once_with(
+            f"volume:{volume_id}", f"{volume_id}", [], created_items
+        )
+        mock_delete_floating_ip_by_id.assert_called_once_with(
+            f"floating_ip:{floating_network_vim_id}",
+            f"{floating_network_vim_id}",
+            created_items,
+        )
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting volume:ac408b73-b9cc-4a6a-a270-82cc4811bd4a: Connection failed."
+        )
+
+    @patch.object(vimconnector, "_get_item_name_id")
+    @patch.object(vimconnector, "_delete_volumes_by_id_wth_cinder")
+    @patch.object(vimconnector, "_delete_floating_ip_by_id")
+    def test_delete_created_items_delete_fip_raises(
+        self,
+        mock_delete_floating_ip_by_id,
+        mock_delete_volumes_by_id_wth_cinder,
+        mock_get_item_name_id,
+    ):
+        """Delete floating ip raises exception."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        mock_get_item_name_id.side_effect = [
+            ("floating_ip", f"{floating_network_vim_id}"),
+            ("volume", f"{volume_id}"),
+        ]
+        mock_delete_volumes_by_id_wth_cinder.return_value = False
+        mock_delete_floating_ip_by_id.side_effect = ConnectionError(
+            "Connection failed."
+        )
+        volumes_to_hold = []
+        keep_waiting = True
+        result = self.vimconn._delete_created_items(
+            created_items, volumes_to_hold, keep_waiting
+        )
+        self.assertEqual(result, True)
+        self.assertEqual(mock_get_item_name_id.call_count, 2)
+        mock_delete_volumes_by_id_wth_cinder.assert_called_once_with(
+            f"volume:{volume_id}", f"{volume_id}", [], created_items
+        )
+        mock_delete_floating_ip_by_id.assert_called_once_with(
+            f"floating_ip:{floating_network_vim_id}",
+            f"{floating_network_vim_id}",
+            created_items,
+        )
+        self.vimconn.logger.error.assert_called_once_with(
+            "Error deleting floating_ip:108b73-e9cc-5a6a-t270-82cc4811bd4a: Connection failed."
+        )
+
+    @patch.object(vimconnector, "_get_item_name_id")
+    @patch.object(vimconnector, "_delete_volumes_by_id_wth_cinder")
+    @patch.object(vimconnector, "_delete_floating_ip_by_id")
+    def test_delete_created_items_get_item_name_raises(
+        self,
+        mock_delete_floating_ip_by_id,
+        mock_delete_volumes_by_id_wth_cinder,
+        mock_get_item_name_id,
+    ):
+        """Get item, name raises exception."""
+        created_items = {
+            3: True,
+            f"volume{volume_id}": True,
+            f"port:{port_id}": None,
+        }
+        mock_get_item_name_id.side_effect = [
+            TypeError("Invalid Type"),
+            AttributeError("Invalid attribute"),
+        ]
+        volumes_to_hold = []
+        keep_waiting = False
+        result = self.vimconn._delete_created_items(
+            created_items, volumes_to_hold, keep_waiting
+        )
+        self.assertEqual(result, False)
+        self.assertEqual(mock_get_item_name_id.call_count, 2)
+        mock_delete_volumes_by_id_wth_cinder.assert_not_called()
+        mock_delete_floating_ip_by_id.assert_not_called()
+        _call_logger = self.vimconn.logger.error.call_args_list
+        self.assertEqual(_call_logger[0][0], ("Error deleting 3: Invalid Type",))
+        self.assertEqual(
+            _call_logger[1][0],
+            (f"Error deleting volume{volume_id}: Invalid attribute",),
+        )
+
+    @patch.object(vimconnector, "_get_item_name_id")
+    @patch.object(vimconnector, "_delete_volumes_by_id_wth_cinder")
+    @patch.object(vimconnector, "_delete_floating_ip_by_id")
+    def test_delete_created_items_no_fip_wth_port(
+        self,
+        mock_delete_floating_ip_by_id,
+        mock_delete_volumes_by_id_wth_cinder,
+        mock_get_item_name_id,
+    ):
+        """Created items has port, does not have floating ip."""
+        created_items = {
+            f"volume:{volume_id}": True,
+            f"port:{port_id}": True,
+        }
+        mock_get_item_name_id.side_effect = [
+            ("volume", f"{volume_id}"),
+            ("port", f"{port_id}"),
+        ]
+        mock_delete_volumes_by_id_wth_cinder.return_value = False
+        volumes_to_hold = []
+        keep_waiting = False
+        result = self.vimconn._delete_created_items(
+            created_items, volumes_to_hold, keep_waiting
+        )
+        self.assertEqual(result, False)
+        self.assertEqual(mock_get_item_name_id.call_count, 2)
+        mock_delete_volumes_by_id_wth_cinder.assert_called_once_with(
+            f"volume:{volume_id}", f"{volume_id}", [], created_items
+        )
+        mock_delete_floating_ip_by_id.assert_not_called()
+        self.vimconn.logger.error.assert_not_called()
+
+    @patch.object(vimconnector, "_get_item_name_id")
+    @patch.object(vimconnector, "_delete_volumes_by_id_wth_cinder")
+    @patch.object(vimconnector, "_delete_floating_ip_by_id")
+    def test_delete_created_items_no_volume(
+        self,
+        mock_delete_floating_ip_by_id,
+        mock_delete_volumes_by_id_wth_cinder,
+        mock_get_item_name_id,
+    ):
+        """Created items does not have volume."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": True,
+            f"port:{port_id}": None,
+        }
+        mock_get_item_name_id.side_effect = [
+            ("floating_ip", f"{floating_network_vim_id}")
+        ]
+        volumes_to_hold = []
+        keep_waiting = False
+        result = self.vimconn._delete_created_items(
+            created_items, volumes_to_hold, keep_waiting
+        )
+        self.assertEqual(result, False)
+        self.assertEqual(mock_get_item_name_id.call_count, 1)
+        mock_delete_volumes_by_id_wth_cinder.assert_not_called()
+        mock_delete_floating_ip_by_id.assert_called_once_with(
+            f"floating_ip:{floating_network_vim_id}",
+            f"{floating_network_vim_id}",
+            created_items,
+        )
+        self.vimconn.logger.error.assert_not_called()
+
+    @patch.object(vimconnector, "_get_item_name_id")
+    @patch.object(vimconnector, "_delete_volumes_by_id_wth_cinder")
+    @patch.object(vimconnector, "_delete_floating_ip_by_id")
+    def test_delete_created_items_already_deleted(
+        self,
+        mock_delete_floating_ip_by_id,
+        mock_delete_volumes_by_id_wth_cinder,
+        mock_get_item_name_id,
+    ):
+        """All created items are alerady deleted."""
+        created_items = {
+            f"floating_ip:{floating_network_vim_id}": None,
+            f"volume:{volume_id}": None,
+            f"port:{port_id}": None,
+        }
+        volumes_to_hold = []
+        keep_waiting = False
+        result = self.vimconn._delete_created_items(
+            created_items, volumes_to_hold, keep_waiting
+        )
+        self.assertEqual(result, False)
+        mock_get_item_name_id.assert_not_called()
+        mock_delete_volumes_by_id_wth_cinder.assert_not_called()
+        mock_delete_floating_ip_by_id.assert_not_called()
+        self.vimconn.logger.error.assert_not_called()
+
+    @patch("time.sleep")
+    @patch.object(vimconnector, "_format_exception")
+    @patch.object(vimconnector, "_reload_connection")
+    @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
+    @patch.object(vimconnector, "_delete_created_items")
+    def test_delete_vminstance_successfully(
+        self,
+        mock_delete_created_items,
+        mock_delete_vm_ports_attached_to_network,
+        mock_reload_connection,
+        mock_format_exception,
+        mock_sleep,
+    ):
+        vm_id = f"{virtual_mac_id}"
+        created_items = deepcopy(created_items_all_true)
+        volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
+        mock_delete_created_items.return_value = False
+        self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
+        mock_reload_connection.assert_called_once()
+        mock_delete_vm_ports_attached_to_network.assert_called_once_with(created_items)
+        self.vimconn.nova.servers.delete.assert_called_once_with(vm_id)
+        mock_delete_created_items.assert_called_once_with(
+            created_items, volumes_to_hold, False
+        )
+        mock_sleep.assert_not_called()
+        mock_format_exception.assert_not_called()
+
+    @patch("time.sleep")
+    @patch.object(vimconnector, "_format_exception")
+    @patch.object(vimconnector, "_reload_connection")
+    @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
+    @patch.object(vimconnector, "_delete_created_items")
+    def test_delete_vminstance_delete_created_items_raises(
+        self,
+        mock_delete_created_items,
+        mock_delete_vm_ports_attached_to_network,
+        mock_reload_connection,
+        mock_format_exception,
+        mock_sleep,
+    ):
+        """Delete creted items raises exception."""
+        vm_id = f"{virtual_mac_id}"
+        created_items = deepcopy(created_items_all_true)
+        mock_sleep = MagicMock()
+        volumes_to_hold = []
+        err = ConnectionError("ClientException occured.")
+        mock_delete_created_items.side_effect = err
+        with self.assertRaises(ConnectionError) as err:
+            self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
+            self.assertEqual(str(err), "ClientException occured.")
+        mock_reload_connection.assert_called_once()
+        mock_delete_vm_ports_attached_to_network.assert_called_once_with(created_items)
+        self.vimconn.nova.servers.delete.assert_called_once_with(vm_id)
+        mock_delete_created_items.assert_called_once()
+        mock_sleep.assert_not_called()
+
+    @patch("time.sleep")
+    @patch.object(vimconnector, "_format_exception")
+    @patch.object(vimconnector, "_reload_connection")
+    @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
+    @patch.object(vimconnector, "_delete_created_items")
+    def test_delete_vminstance_delete_vm_ports_raises(
+        self,
+        mock_delete_created_items,
+        mock_delete_vm_ports_attached_to_network,
+        mock_reload_connection,
+        mock_format_exception,
+        mock_sleep,
+    ):
+        """Delete vm ports raises exception."""
+        vm_id = f"{virtual_mac_id}"
+        created_items = deepcopy(created_items_all_true)
+        volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
+        err = ConnectionError("ClientException occured.")
+        mock_delete_vm_ports_attached_to_network.side_effect = err
+        mock_delete_created_items.side_effect = err
+        with self.assertRaises(ConnectionError) as err:
+            self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
+            self.assertEqual(str(err), "ClientException occured.")
+        mock_reload_connection.assert_called_once()
+        mock_delete_vm_ports_attached_to_network.assert_called_once_with(created_items)
+        self.vimconn.nova.servers.delete.assert_not_called()
+        mock_delete_created_items.assert_not_called()
+        mock_sleep.assert_not_called()
+
+    @patch("time.sleep")
+    @patch.object(vimconnector, "_format_exception")
+    @patch.object(vimconnector, "_reload_connection")
+    @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
+    @patch.object(vimconnector, "_delete_created_items")
+    def test_delete_vminstance_nova_server_delete_raises(
+        self,
+        mock_delete_created_items,
+        mock_delete_vm_ports_attached_to_network,
+        mock_reload_connection,
+        mock_format_exception,
+        mock_sleep,
+    ):
+        """Nova server delete raises exception."""
+        vm_id = f"{virtual_mac_id}"
+        created_items = deepcopy(created_items_all_true)
+        volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
+        err = VimConnConnectionException("ClientException occured.")
+        self.vimconn.nova.servers.delete.side_effect = err
+        mock_delete_created_items.side_effect = err
+        with self.assertRaises(VimConnConnectionException) as err:
+            self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
+            self.assertEqual(str(err), "ClientException occured.")
+        mock_reload_connection.assert_called_once()
+        mock_delete_vm_ports_attached_to_network.assert_called_once_with(created_items)
+        self.vimconn.nova.servers.delete.assert_called_once_with(vm_id)
+        mock_delete_created_items.assert_not_called()
+        mock_sleep.assert_not_called()
+
+    @patch("time.sleep")
+    @patch.object(vimconnector, "_format_exception")
+    @patch.object(vimconnector, "_reload_connection")
+    @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
+    @patch.object(vimconnector, "_delete_created_items")
+    def test_delete_vminstance_reload_connection_raises(
+        self,
+        mock_delete_created_items,
+        mock_delete_vm_ports_attached_to_network,
+        mock_reload_connection,
+        mock_format_exception,
+        mock_sleep,
+    ):
+        """Reload connection raises exception."""
+        vm_id = f"{virtual_mac_id}"
+        created_items = deepcopy(created_items_all_true)
+        mock_sleep = MagicMock()
+        volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
+        err = ConnectionError("ClientException occured.")
+        mock_delete_created_items.return_value = False
+        mock_reload_connection.side_effect = err
+        with self.assertRaises(ConnectionError) as err:
+            self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
+            self.assertEqual(str(err), "ClientException occured.")
+        mock_reload_connection.assert_called_once()
+        mock_delete_vm_ports_attached_to_network.assert_not_called()
+        self.vimconn.nova.servers.delete.assert_not_called()
+        mock_delete_created_items.assert_not_called()
+        mock_sleep.assert_not_called()
+
+    @patch("time.sleep")
+    @patch.object(vimconnector, "_format_exception")
+    @patch.object(vimconnector, "_reload_connection")
+    @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
+    @patch.object(vimconnector, "_delete_created_items")
+    def test_delete_vminstance_created_item_vol_to_hold_are_none(
+        self,
+        mock_delete_created_items,
+        mock_delete_vm_ports_attached_to_network,
+        mock_reload_connection,
+        mock_format_exception,
+        mock_sleep,
+    ):
+        """created_items and volumes_to_hold are None."""
+        vm_id = f"{virtual_mac_id}"
+        created_items = None
+        volumes_to_hold = None
+        mock_delete_created_items.return_value = False
+        self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
+        mock_reload_connection.assert_called_once()
+        mock_delete_vm_ports_attached_to_network.assert_not_called()
+        self.vimconn.nova.servers.delete.assert_called_once_with(vm_id)
+        mock_delete_created_items.assert_called_once_with({}, [], False)
+        mock_sleep.assert_not_called()
+        mock_format_exception.assert_not_called()
+
+    @patch("time.sleep")
+    @patch.object(vimconnector, "_format_exception")
+    @patch.object(vimconnector, "_reload_connection")
+    @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
+    @patch.object(vimconnector, "_delete_created_items")
+    def test_delete_vminstance_vm_id_is_none(
+        self,
+        mock_delete_created_items,
+        mock_delete_vm_ports_attached_to_network,
+        mock_reload_connection,
+        mock_format_exception,
+        mock_sleep,
+    ):
+        """vm_id is None."""
+        vm_id = None
+        created_items = deepcopy(created_items_all_true)
+        volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
+        mock_delete_created_items.side_effect = [True, True, False]
+        self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
+        mock_reload_connection.assert_called_once()
+        mock_delete_vm_ports_attached_to_network.assert_called_once_with(created_items)
+        self.vimconn.nova.servers.delete.assert_not_called()
+        self.assertEqual(mock_delete_created_items.call_count, 3)
+        self.assertEqual(mock_sleep.call_count, 2)
+        mock_format_exception.assert_not_called()
+
+    @patch("time.sleep")
+    @patch.object(vimconnector, "_format_exception")
+    @patch.object(vimconnector, "_reload_connection")
+    @patch.object(vimconnector, "_delete_vm_ports_attached_to_network")
+    @patch.object(vimconnector, "_delete_created_items")
+    def test_delete_vminstance_delete_created_items_return_true(
+        self,
+        mock_delete_created_items,
+        mock_delete_vm_ports_attached_to_network,
+        mock_reload_connection,
+        mock_format_exception,
+        mock_sleep,
+    ):
+        """Delete created items always return True."""
+        vm_id = None
+        created_items = deepcopy(created_items_all_true)
+        volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
+        mock_delete_created_items.side_effect = [True] * 1800
+        self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
+        mock_reload_connection.assert_called_once()
+        mock_delete_vm_ports_attached_to_network.assert_called_once_with(created_items)
+        self.vimconn.nova.servers.delete.assert_not_called()
+        self.assertEqual(mock_delete_created_items.call_count, 1800)
+        self.assertEqual(mock_sleep.call_count, 1800)
+        mock_format_exception.assert_not_called()
 
 
 if __name__ == "__main__":

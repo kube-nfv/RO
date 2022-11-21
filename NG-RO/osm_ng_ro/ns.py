@@ -23,7 +23,7 @@ from random import choice as random_choice
 from threading import Lock
 from time import time
 from traceback import format_exc as traceback_format_exc
-from typing import Any, Dict, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 from uuid import uuid4
 
 from cryptography.hazmat.backends import default_backend as crypto_default_backend
@@ -976,24 +976,25 @@ class Ns(object):
     @staticmethod
     def find_persistent_root_volumes(
         vnfd: dict,
-        target_vdu: str,
+        target_vdu: dict,
         vdu_instantiation_volumes_list: list,
         disk_list: list,
-    ) -> (list, dict):
+    ) -> Dict[str, any]:
         """Find the persistent root volumes and add them to the disk_list
-        by parsing the instantiation parameters
+        by parsing the instantiation parameters.
 
         Args:
-            vnfd:   VNFD
-            target_vdu: processed VDU
-            vdu_instantiation_volumes_list: instantiation parameters for the each VDU as a list
-            disk_list:  to be filled up
+            vnfd    (dict):                                 VNF descriptor
+            target_vdu      (dict):                         processed VDU
+            vdu_instantiation_volumes_list  (list):         instantiation parameters for the each VDU as a list
+            disk_list   (list):                             to be filled up
 
         Returns:
-            disk_list:  filled VDU list which is used for VDU creation
+            persistent_root_disk    (dict):                 Details of persistent root disk
 
         """
         persistent_root_disk = {}
+        # There can be only one root disk, when we find it, it will return the result
 
         for vdu, vsd in product(
             vnfd.get("vdu", ()), vnfd.get("virtual-storage-desc", ())
@@ -1021,8 +1022,7 @@ class Ns(object):
 
                             disk_list.append(persistent_root_disk[vsd["id"]])
 
-                            # There can be only one root disk, when we find it, it will return the result
-                            return disk_list, persistent_root_disk
+                            return persistent_root_disk
 
                     else:
 
@@ -1033,28 +1033,24 @@ class Ns(object):
                             }
 
                             disk_list.append(persistent_root_disk[vsd["id"]])
-                            return disk_list, persistent_root_disk
 
-        return disk_list, persistent_root_disk
+                            return persistent_root_disk
 
     @staticmethod
     def find_persistent_volumes(
         persistent_root_disk: dict,
-        target_vdu: str,
+        target_vdu: dict,
         vdu_instantiation_volumes_list: list,
         disk_list: list,
-    ) -> list:
+    ) -> None:
         """Find the ordinary persistent volumes and add them to the disk_list
-        by parsing the instantiation parameters
+        by parsing the instantiation parameters.
 
         Args:
             persistent_root_disk:   persistent root disk dictionary
             target_vdu: processed VDU
             vdu_instantiation_volumes_list: instantiation parameters for the each VDU as a list
             disk_list:  to be filled up
-
-        Returns:
-            disk_list:  filled VDU list which is used for VDU creation
 
         """
         # Find the ordinary volumes which are not added to the persistent_root_disk
@@ -1080,7 +1076,400 @@ class Ns(object):
                         }
                         disk_list.append(persistent_disk[disk["id"]])
 
-        return disk_list
+    @staticmethod
+    def _sort_vdu_interfaces(target_vdu: dict) -> None:
+        """Sort the interfaces according to position number.
+
+        Args:
+            target_vdu  (dict):     Details of VDU to be created
+
+        """
+        # If the position info is provided for all the interfaces, it will be sorted
+        # according to position number ascendingly.
+        sorted_interfaces = sorted(
+            target_vdu["interfaces"],
+            key=lambda x: (x.get("position") is None, x.get("position")),
+        )
+        target_vdu["interfaces"] = sorted_interfaces
+
+    @staticmethod
+    def _partially_locate_vdu_interfaces(target_vdu: dict) -> None:
+        """Only place the interfaces which has specific position.
+
+        Args:
+            target_vdu  (dict):     Details of VDU to be created
+
+        """
+        # If the position info is provided for some interfaces but not all of them, the interfaces
+        # which has specific position numbers will be placed and others' positions will not be taken care.
+        if any(
+            i.get("position") + 1
+            for i in target_vdu["interfaces"]
+            if i.get("position") is not None
+        ):
+            n = len(target_vdu["interfaces"])
+            sorted_interfaces = [-1] * n
+            k, m = 0, 0
+
+            while k < n:
+                if target_vdu["interfaces"][k].get("position") is not None:
+                    if any(i.get("position") == 0 for i in target_vdu["interfaces"]):
+                        idx = target_vdu["interfaces"][k]["position"] + 1
+                    else:
+                        idx = target_vdu["interfaces"][k]["position"]
+                    sorted_interfaces[idx - 1] = target_vdu["interfaces"][k]
+                k += 1
+
+            while m < n:
+                if target_vdu["interfaces"][m].get("position") is None:
+                    idy = sorted_interfaces.index(-1)
+                    sorted_interfaces[idy] = target_vdu["interfaces"][m]
+                m += 1
+
+            target_vdu["interfaces"] = sorted_interfaces
+
+    @staticmethod
+    def _prepare_vdu_cloud_init(
+        target_vdu: dict, vdu2cloud_init: dict, db: object, fs: object
+    ) -> Dict:
+        """Fill cloud_config dict with cloud init details.
+
+        Args:
+            target_vdu  (dict):         Details of VDU to be created
+            vdu2cloud_init  (dict):     Cloud init dict
+            db  (object):               DB object
+            fs  (object):               FS object
+
+        Returns:
+            cloud_config (dict):        Cloud config details of VDU
+
+        """
+        # cloud config
+        cloud_config = {}
+
+        if target_vdu.get("cloud-init"):
+            if target_vdu["cloud-init"] not in vdu2cloud_init:
+                vdu2cloud_init[target_vdu["cloud-init"]] = Ns._get_cloud_init(
+                    db=db,
+                    fs=fs,
+                    location=target_vdu["cloud-init"],
+                )
+
+            cloud_content_ = vdu2cloud_init[target_vdu["cloud-init"]]
+            cloud_config["user-data"] = Ns._parse_jinja2(
+                cloud_init_content=cloud_content_,
+                params=target_vdu.get("additionalParams"),
+                context=target_vdu["cloud-init"],
+            )
+
+        if target_vdu.get("boot-data-drive"):
+            cloud_config["boot-data-drive"] = target_vdu.get("boot-data-drive")
+
+        return cloud_config
+
+    @staticmethod
+    def _check_vld_information_of_interfaces(
+        interface: dict, ns_preffix: str, vnf_preffix: str
+    ) -> Optional[str]:
+        """Prepare the net_text by the virtual link information for vnf and ns level.
+        Args:
+            interface   (dict):         Interface details
+            ns_preffix  (str):          Prefix of NS
+            vnf_preffix (str):          Prefix of VNF
+
+        Returns:
+            net_text    (str):          information of net
+
+        """
+        net_text = ""
+        if interface.get("ns-vld-id"):
+            net_text = ns_preffix + ":vld." + interface["ns-vld-id"]
+        elif interface.get("vnf-vld-id"):
+            net_text = vnf_preffix + ":vld." + interface["vnf-vld-id"]
+
+        return net_text
+
+    @staticmethod
+    def _prepare_interface_port_security(interface: dict) -> None:
+        """
+
+        Args:
+            interface   (dict):     Interface details
+
+        """
+        if "port-security-enabled" in interface:
+            interface["port_security"] = interface.pop("port-security-enabled")
+
+        if "port-security-disable-strategy" in interface:
+            interface["port_security_disable_strategy"] = interface.pop(
+                "port-security-disable-strategy"
+            )
+
+    @staticmethod
+    def _create_net_item_of_interface(interface: dict, net_text: str) -> dict:
+        """Prepare net item including name, port security, floating ip etc.
+
+        Args:
+            interface   (dict):         Interface details
+            net_text    (str):          information of net
+
+        Returns:
+            net_item    (dict):         Dict including net details
+
+        """
+
+        net_item = {
+            x: v
+            for x, v in interface.items()
+            if x
+            in (
+                "name",
+                "vpci",
+                "port_security",
+                "port_security_disable_strategy",
+                "floating_ip",
+            )
+        }
+        net_item["net_id"] = "TASK-" + net_text
+        net_item["type"] = "virtual"
+
+        return net_item
+
+    @staticmethod
+    def _prepare_type_of_interface(
+        interface: dict, tasks_by_target_record_id: dict, net_text: str, net_item: dict
+    ) -> None:
+        """Fill the net item type by interface type such as SR-IOV, OM-MGMT, bridge etc.
+
+        Args:
+            interface   (dict):                     Interface details
+            tasks_by_target_record_id   (dict):     Task details
+            net_text    (str):                      information of net
+            net_item    (dict):                     Dict including net details
+
+        """
+        # TODO mac_address: used for  SR-IOV ifaces #TODO for other types
+        # TODO floating_ip: True/False (or it can be None)
+
+        if interface.get("type") in ("SR-IOV", "PCI-PASSTHROUGH"):
+            # Mark the net create task as type data
+            if deep_get(
+                tasks_by_target_record_id,
+                net_text,
+                "extra_dict",
+                "params",
+                "net_type",
+            ):
+                tasks_by_target_record_id[net_text]["extra_dict"]["params"][
+                    "net_type"
+                ] = "data"
+
+            net_item["use"] = "data"
+            net_item["model"] = interface["type"]
+            net_item["type"] = interface["type"]
+
+        elif (
+            interface.get("type") == "OM-MGMT"
+            or interface.get("mgmt-interface")
+            or interface.get("mgmt-vnf")
+        ):
+            net_item["use"] = "mgmt"
+
+        else:
+            # If interface.get("type") in ("VIRTIO", "E1000", "PARAVIRT"):
+            net_item["use"] = "bridge"
+            net_item["model"] = interface.get("type")
+
+    @staticmethod
+    def _prepare_vdu_interfaces(
+        target_vdu: dict,
+        extra_dict: dict,
+        ns_preffix: str,
+        vnf_preffix: str,
+        logger: object,
+        tasks_by_target_record_id: dict,
+        net_list: list,
+    ) -> None:
+        """Prepare the net_item and add net_list, add mgmt interface to extra_dict.
+
+        Args:
+            target_vdu  (dict):                             VDU to be created
+            extra_dict  (dict):                             Dictionary to be filled
+            ns_preffix  (str):                              NS prefix as string
+            vnf_preffix (str):                              VNF prefix as string
+            logger  (object):                               Logger Object
+            tasks_by_target_record_id  (dict):              Task details
+            net_list    (list):                             Net list of VDU
+        """
+        for iface_index, interface in enumerate(target_vdu["interfaces"]):
+
+            net_text = Ns._check_vld_information_of_interfaces(
+                interface, ns_preffix, vnf_preffix
+            )
+            if not net_text:
+                # Interface not connected to any vld
+                logger.error(
+                    "Interface {} from vdu {} not connected to any vld".format(
+                        iface_index, target_vdu["vdu-name"]
+                    )
+                )
+                continue
+
+            extra_dict["depends_on"].append(net_text)
+
+            Ns._prepare_interface_port_security(interface)
+
+            net_item = Ns._create_net_item_of_interface(interface, net_text)
+
+            Ns._prepare_type_of_interface(
+                interface, tasks_by_target_record_id, net_text, net_item
+            )
+
+            if interface.get("ip-address"):
+                net_item["ip_address"] = interface["ip-address"]
+
+            if interface.get("mac-address"):
+                net_item["mac_address"] = interface["mac-address"]
+
+            net_list.append(net_item)
+
+            if interface.get("mgmt-vnf"):
+                extra_dict["mgmt_vnf_interface"] = iface_index
+            elif interface.get("mgmt-interface"):
+                extra_dict["mgmt_vdu_interface"] = iface_index
+
+    @staticmethod
+    def _prepare_vdu_ssh_keys(
+        target_vdu: dict, ro_nsr_public_key: dict, cloud_config: dict
+    ) -> None:
+        """Add ssh keys to cloud config.
+
+        Args:
+           target_vdu  (dict):                 Details of VDU to be created
+           ro_nsr_public_key   (dict):          RO NSR public Key
+           cloud_config  (dict):               Cloud config details
+
+        """
+        ssh_keys = []
+
+        if target_vdu.get("ssh-keys"):
+            ssh_keys += target_vdu.get("ssh-keys")
+
+        if target_vdu.get("ssh-access-required"):
+            ssh_keys.append(ro_nsr_public_key)
+
+        if ssh_keys:
+            cloud_config["key-pairs"] = ssh_keys
+
+    @staticmethod
+    def _select_persistent_root_disk(vsd: dict, vdu: dict) -> dict:
+        """Selects the persistent root disk if exists.
+        Args:
+            vsd (dict):             Virtual storage descriptors in VNFD
+            vdu (dict):             VNF descriptor
+
+        Returns:
+            root_disk   (dict):     Selected persistent root disk
+        """
+        if vsd.get("id") == vdu.get("virtual-storage-desc", [[]])[0]:
+            root_disk = vsd
+            if root_disk.get(
+                "type-of-storage"
+            ) == "persistent-storage:persistent-storage" and root_disk.get(
+                "size-of-storage"
+            ):
+                return root_disk
+
+    @staticmethod
+    def _add_persistent_root_disk_to_disk_list(
+        vnfd: dict, target_vdu: dict, persistent_root_disk: dict, disk_list: list
+    ) -> None:
+        """Find the persistent root disk and add to disk list.
+
+        Args:
+            vnfd  (dict):                           VNF descriptor
+            target_vdu  (dict):                     Details of VDU to be created
+            persistent_root_disk    (dict):         Details of persistent root disk
+            disk_list   (list):                     Disks of VDU
+
+        """
+        for vdu in vnfd.get("vdu", ()):
+            if vdu["name"] == target_vdu["vdu-name"]:
+                for vsd in vnfd.get("virtual-storage-desc", ()):
+                    root_disk = Ns._select_persistent_root_disk(vsd, vdu)
+
+                    if not root_disk:
+                        continue
+
+                    persistent_root_disk[vsd["id"]] = {
+                        "image_id": vdu.get("sw-image-desc"),
+                        "size": root_disk["size-of-storage"],
+                    }
+
+                    disk_list.append(persistent_root_disk[vsd["id"]])
+                    break
+
+    @staticmethod
+    def _add_persistent_ordinary_disks_to_disk_list(
+        target_vdu: dict,
+        persistent_root_disk: dict,
+        persistent_ordinary_disk: dict,
+        disk_list: list,
+    ) -> None:
+        """Fill the disk list by adding persistent ordinary disks.
+
+        Args:
+            target_vdu  (dict):                     Details of VDU to be created
+            persistent_root_disk    (dict):         Details of persistent root disk
+            persistent_ordinary_disk    (dict):     Details of persistent ordinary disk
+            disk_list   (list):                     Disks of VDU
+
+        """
+        if target_vdu.get("virtual-storages"):
+            for disk in target_vdu["virtual-storages"]:
+                if (
+                    disk.get("type-of-storage")
+                    == "persistent-storage:persistent-storage"
+                    and disk["id"] not in persistent_root_disk.keys()
+                ):
+                    persistent_ordinary_disk[disk["id"]] = {
+                        "size": disk["size-of-storage"],
+                    }
+                    disk_list.append(persistent_ordinary_disk[disk["id"]])
+
+    @staticmethod
+    def _prepare_vdu_affinity_group_list(
+        target_vdu: dict, extra_dict: dict, ns_preffix: str
+    ) -> List[Dict[str, any]]:
+        """Process affinity group details to prepare affinity group list.
+
+        Args:
+            target_vdu  (dict):     Details of VDU to be created
+            extra_dict  (dict):     Dictionary to be filled
+            ns_preffix  (str):      Prefix as string
+
+        Returns:
+
+            affinity_group_list (list):     Affinity group details
+
+        """
+        affinity_group_list = []
+
+        if target_vdu.get("affinity-or-anti-affinity-group-id"):
+            for affinity_group_id in target_vdu["affinity-or-anti-affinity-group-id"]:
+                affinity_group = {}
+                affinity_group_text = (
+                    ns_preffix + ":affinity-or-anti-affinity-group." + affinity_group_id
+                )
+
+                if not isinstance(extra_dict.get("depends_on"), list):
+                    raise NsException("Invalid extra_dict format.")
+
+                extra_dict["depends_on"].append(affinity_group_text)
+                affinity_group["affinity_group_id"] = "TASK-" + affinity_group_text
+                affinity_group_list.append(affinity_group)
+
+        return affinity_group_list
 
     @staticmethod
     def _process_vdu_params(
@@ -1118,163 +1507,45 @@ class Ns(object):
         extra_dict = {"depends_on": [image_text, flavor_text]}
         net_list = []
 
-        # If the position info is provided for all the interfaces, it will be sorted
-        # according to position number ascendingly.
-        if all(
-            i.get("position") + 1
-            for i in target_vdu["interfaces"]
-            if i.get("position") is not None
-        ):
-            sorted_interfaces = sorted(
-                target_vdu["interfaces"],
-                key=lambda x: (x.get("position") is None, x.get("position")),
-            )
-            target_vdu["interfaces"] = sorted_interfaces
-
-        # If the position info is provided for some interfaces but not all of them, the interfaces
-        # which has specific position numbers will be placed and others' positions will not be taken care.
-        else:
-            if any(
-                i.get("position") + 1
-                for i in target_vdu["interfaces"]
-                if i.get("position") is not None
-            ):
-                n = len(target_vdu["interfaces"])
-                sorted_interfaces = [-1] * n
-                k, m = 0, 0
-                while k < n:
-                    if target_vdu["interfaces"][k].get("position"):
-                        idx = target_vdu["interfaces"][k]["position"]
-                        sorted_interfaces[idx - 1] = target_vdu["interfaces"][k]
-                    k += 1
-                while m < n:
-                    if not target_vdu["interfaces"][m].get("position"):
-                        idy = sorted_interfaces.index(-1)
-                        sorted_interfaces[idy] = target_vdu["interfaces"][m]
-                    m += 1
-
-                target_vdu["interfaces"] = sorted_interfaces
-
-        # If the position info is not provided for the interfaces, interfaces will be attached
-        # according to the order in the VNFD.
-        for iface_index, interface in enumerate(target_vdu["interfaces"]):
-            if interface.get("ns-vld-id"):
-                net_text = ns_preffix + ":vld." + interface["ns-vld-id"]
-            elif interface.get("vnf-vld-id"):
-                net_text = vnf_preffix + ":vld." + interface["vnf-vld-id"]
-            else:
-                logger.error(
-                    "Interface {} from vdu {} not connected to any vld".format(
-                        iface_index, target_vdu["vdu-name"]
-                    )
-                )
-
-                continue  # interface not connected to any vld
-
-            extra_dict["depends_on"].append(net_text)
-
-            if "port-security-enabled" in interface:
-                interface["port_security"] = interface.pop("port-security-enabled")
-
-            if "port-security-disable-strategy" in interface:
-                interface["port_security_disable_strategy"] = interface.pop(
-                    "port-security-disable-strategy"
-                )
-
-            net_item = {
-                x: v
-                for x, v in interface.items()
-                if x
-                in (
-                    "name",
-                    "vpci",
-                    "port_security",
-                    "port_security_disable_strategy",
-                    "floating_ip",
-                )
-            }
-            net_item["net_id"] = "TASK-" + net_text
-            net_item["type"] = "virtual"
-
-            # TODO mac_address: used for  SR-IOV ifaces #TODO for other types
-            # TODO floating_ip: True/False (or it can be None)
-            if interface.get("type") in ("SR-IOV", "PCI-PASSTHROUGH"):
-                # mark the net create task as type data
-                if deep_get(
-                    tasks_by_target_record_id,
-                    net_text,
-                    "extra_dict",
-                    "params",
-                    "net_type",
-                ):
-                    tasks_by_target_record_id[net_text]["extra_dict"]["params"][
-                        "net_type"
-                    ] = "data"
-
-                net_item["use"] = "data"
-                net_item["model"] = interface["type"]
-                net_item["type"] = interface["type"]
-            elif (
-                interface.get("type") == "OM-MGMT"
-                or interface.get("mgmt-interface")
-                or interface.get("mgmt-vnf")
-            ):
-                net_item["use"] = "mgmt"
-            else:
-                # if interface.get("type") in ("VIRTIO", "E1000", "PARAVIRT"):
-                net_item["use"] = "bridge"
-                net_item["model"] = interface.get("type")
-
-            if interface.get("ip-address"):
-                net_item["ip_address"] = interface["ip-address"]
-
-            if interface.get("mac-address"):
-                net_item["mac_address"] = interface["mac-address"]
-
-            net_list.append(net_item)
-
-            if interface.get("mgmt-vnf"):
-                extra_dict["mgmt_vnf_interface"] = iface_index
-            elif interface.get("mgmt-interface"):
-                extra_dict["mgmt_vdu_interface"] = iface_index
-
-        # cloud config
-        cloud_config = {}
-
-        if target_vdu.get("cloud-init"):
-            if target_vdu["cloud-init"] not in vdu2cloud_init:
-                vdu2cloud_init[target_vdu["cloud-init"]] = Ns._get_cloud_init(
-                    db=db,
-                    fs=fs,
-                    location=target_vdu["cloud-init"],
-                )
-
-            cloud_content_ = vdu2cloud_init[target_vdu["cloud-init"]]
-            cloud_config["user-data"] = Ns._parse_jinja2(
-                cloud_init_content=cloud_content_,
-                params=target_vdu.get("additionalParams"),
-                context=target_vdu["cloud-init"],
-            )
-
-        if target_vdu.get("boot-data-drive"):
-            cloud_config["boot-data-drive"] = target_vdu.get("boot-data-drive")
-
-        ssh_keys = []
-
-        if target_vdu.get("ssh-keys"):
-            ssh_keys += target_vdu.get("ssh-keys")
-
-        if target_vdu.get("ssh-access-required"):
-            ssh_keys.append(ro_nsr_public_key)
-
-        if ssh_keys:
-            cloud_config["key-pairs"] = ssh_keys
-
         persistent_root_disk = {}
+        persistent_ordinary_disk = {}
         vdu_instantiation_volumes_list = []
         disk_list = []
         vnfd_id = vnfr["vnfd-id"]
         vnfd = db.get_one("vnfds", {"_id": vnfd_id})
+
+        # If the position info is provided for all the interfaces, it will be sorted
+        # according to position number ascendingly.
+        if all(
+            True if i.get("position") is not None else False
+            for i in target_vdu["interfaces"]
+        ):
+
+            Ns._sort_vdu_interfaces(target_vdu)
+
+        # If the position info is provided for some interfaces but not all of them, the interfaces
+        # which has specific position numbers will be placed and others' positions will not be taken care.
+        else:
+
+            Ns._partially_locate_vdu_interfaces(target_vdu)
+
+        # If the position info is not provided for the interfaces, interfaces will be attached
+        # according to the order in the VNFD.
+        Ns._prepare_vdu_interfaces(
+            target_vdu,
+            extra_dict,
+            ns_preffix,
+            vnf_preffix,
+            logger,
+            tasks_by_target_record_id,
+            net_list,
+        )
+
+        # cloud config
+        cloud_config = Ns._prepare_vdu_cloud_init(target_vdu, vdu2cloud_init, db, fs)
+
+        # Prepare VDU ssh keys
+        Ns._prepare_vdu_ssh_keys(target_vdu, ro_nsr_public_key, cloud_config)
 
         if target_vdu.get("additionalParams"):
             vdu_instantiation_volumes_list = (
@@ -1284,13 +1555,13 @@ class Ns(object):
         if vdu_instantiation_volumes_list:
 
             # Find the root volumes and add to the disk_list
-            (disk_list, persistent_root_disk,) = Ns.find_persistent_root_volumes(
+            persistent_root_disk = Ns.find_persistent_root_volumes(
                 vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
             )
 
             # Find the ordinary volumes which are not added to the persistent_root_disk
             # and put them to the disk list
-            disk_list = Ns.find_persistent_volumes(
+            Ns.find_persistent_volumes(
                 persistent_root_disk,
                 target_vdu,
                 vdu_instantiation_volumes_list,
@@ -1298,45 +1569,19 @@ class Ns(object):
             )
 
         else:
+            # Vdu_instantiation_volumes_list is empty
+            # First get add the persistent root disks to disk_list
+            Ns._add_persistent_root_disk_to_disk_list(
+                vnfd, target_vdu, persistent_root_disk, disk_list
+            )
+            # Add the persistent non-root disks to disk_list
+            Ns._add_persistent_ordinary_disks_to_disk_list(
+                target_vdu, persistent_root_disk, persistent_ordinary_disk, disk_list
+            )
 
-            # vdu_instantiation_volumes_list is empty
-            for vdu in vnfd.get("vdu", ()):
-                if vdu["name"] == target_vdu["vdu-name"]:
-                    for vsd in vnfd.get("virtual-storage-desc", ()):
-                        if vsd.get("id") == vdu.get("virtual-storage-desc", [[]])[0]:
-                            root_disk = vsd
-                            if root_disk.get(
-                                "type-of-storage"
-                            ) == "persistent-storage:persistent-storage" and root_disk.get(
-                                "size-of-storage"
-                            ):
-                                persistent_root_disk[vsd["id"]] = {
-                                    "image_id": vdu.get("sw-image-desc"),
-                                    "size": root_disk["size-of-storage"],
-                                }
-                                disk_list.append(persistent_root_disk[vsd["id"]])
-
-            if target_vdu.get("virtual-storages"):
-                for disk in target_vdu["virtual-storages"]:
-                    if (
-                        disk.get("type-of-storage")
-                        == "persistent-storage:persistent-storage"
-                        and disk["id"] not in persistent_root_disk.keys()
-                    ):
-                        disk_list.append({"size": disk["size-of-storage"]})
-
-        affinity_group_list = []
-
-        if target_vdu.get("affinity-or-anti-affinity-group-id"):
-            affinity_group = {}
-            for affinity_group_id in target_vdu["affinity-or-anti-affinity-group-id"]:
-                affinity_group_text = (
-                    ns_preffix + ":affinity-or-anti-affinity-group." + affinity_group_id
-                )
-
-                extra_dict["depends_on"].append(affinity_group_text)
-                affinity_group["affinity_group_id"] = "TASK-" + affinity_group_text
-                affinity_group_list.append(affinity_group)
+        affinity_group_list = Ns._prepare_vdu_affinity_group_list(
+            target_vdu, extra_dict, ns_preffix
+        )
 
         extra_dict["params"] = {
             "name": "{}-{}-{}-{}".format(
