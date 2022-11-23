@@ -197,9 +197,6 @@ class UnderlayApi:
             "virtual-network"
         )
 
-    def get_virtual_networks(self):
-        return self.get_all_by_type("virtual-networks")
-
     def get_virtual_network(self, network_id):
         return self.get_by_uuid("virtual-network", network_id)
 
@@ -238,9 +235,6 @@ class UnderlayApi:
 
     def get_vpgs(self):
         return self.get_all_by_type(self.controller_url, "virtual-port-groups")
-
-    def get_vpg(self, vpg_id):
-        return self.get_by_uuid(self.controller_url, "virtual-port-group", vpg_id)
 
     def get_vpg_by_name(self, vpg_name):
         fq_name = ["default-global-system-config", self.fabric, vpg_name]
@@ -304,11 +298,6 @@ class UnderlayApi:
 
         return vmi_info.get("virtual-machine-interface").get("uuid"), vmi_info.get(
             "virtual-machine-interface"
-        )
-
-    def get_vmi(self, vmi_uuid):
-        return self.get_by_uuid(
-            self.controller_url, "virtual-machine-interface", vmi_uuid
         )
 
     def delete_vmi(self, uuid):

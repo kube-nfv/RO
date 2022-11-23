@@ -3320,60 +3320,6 @@ class vimconnector(vimconn.VimConnector):
                     )
                 )
 
-    # NOT USED FUNCTIONS
-
-    def new_external_port(self, port_data):
-        """Adds a external port to VIM
-        Returns the port identifier"""
-        # TODO openstack if needed
-        return (
-            -vimconn.HTTP_Internal_Server_Error,
-            "osconnector.new_external_port() not implemented",
-        )
-
-    def connect_port_network(self, port_id, network_id, admin=False):
-        """Connects a external port to a network
-        Returns status code of the VIM response"""
-        # TODO openstack if needed
-        return (
-            -vimconn.HTTP_Internal_Server_Error,
-            "osconnector.connect_port_network() not implemented",
-        )
-
-    def new_user(self, user_name, user_passwd, tenant_id=None):
-        """Adds a new user to openstack VIM
-        Returns the user identifier"""
-        self.logger.debug("osconnector: Adding a new user to VIM")
-
-        try:
-            self._reload_connection()
-            user = self.keystone.users.create(
-                user_name, password=user_passwd, default_project=tenant_id
-            )
-            # self.keystone.tenants.add_user(self.k_creds["username"], #role)
-
-            return user.id
-        except ksExceptions.ConnectionError as e:
-            error_value = -vimconn.HTTP_Bad_Request
-            error_text = (
-                type(e).__name__
-                + ": "
-                + (str(e) if len(e.args) == 0 else str(e.args[0]))
-            )
-        except ksExceptions.ClientException as e:  # TODO remove
-            error_value = -vimconn.HTTP_Bad_Request
-            error_text = (
-                type(e).__name__
-                + ": "
-                + (str(e) if len(e.args) == 0 else str(e.args[0]))
-            )
-
-        # TODO insert exception vimconn.HTTP_Unauthorized
-        # if reaching here is because an exception
-        self.logger.debug("new_user " + error_text)
-
-        return error_value, error_text
-
     def delete_user(self, user_id):
         """Delete a user from openstack VIM
         Returns the user identifier"""

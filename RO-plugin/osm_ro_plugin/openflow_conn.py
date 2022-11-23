@@ -286,9 +286,9 @@ class SdnConnectorOpenFlow(SdnConnectorBase):
         rules_to_delete = created_items.get("installed_rules_ids") or []
         new_installed_rules_ids = []
         error_list = []
+        step = "Checking ports and network type compatibility"
 
         try:
-            step = "Checking ports and network type compatibility"
             if ifaces_nb < 2:
                 pass
             elif net_type == "ELINE":

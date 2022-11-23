@@ -228,9 +228,11 @@ class DynpacConnector(SdnConnectorBase):
 
         for connection_point in connection_points:
             endpoint_id = connection_point.get(self.__SERVICE_ENDPOINT_PARAM)
-            port = filter(
-                lambda x: x.get(self.__WAN_SERVICE_ENDPOINT_PARAM) == endpoint_id,
-                port_mapping,
+            port = list(
+                filter(
+                    lambda x: x.get(self.__WAN_SERVICE_ENDPOINT_PARAM) == endpoint_id,
+                    port_mapping,
+                )
             )[0]
             port_info = port.get(self.__WAN_MAPPING_INFO_PARAM)
             selected_ports.append(port_info)
