@@ -2258,14 +2258,13 @@ class vimconnector(vimconn.VimConnector):
         return self.neutron.show_floatingip(free_floating_ip)
 
     def _get_free_floating_ip(
-        self, server: object, floating_network: dict, created_items: dict
+        self, server: object, floating_network: dict
     ) -> Optional[str]:
         """Get the free floating IP address.
 
         Args:
             server  (object):               Server Object
             floating_network    (dict):     Floating network details
-            created_items   (dict):         All created items belongs to new VM instance
 
         Returns:
             free_floating_ip    (str):      Free floating ip addr
@@ -2277,9 +2276,7 @@ class vimconnector(vimconn.VimConnector):
         # Randomize
         random.shuffle(floating_ips)
 
-        return self._find_floating_ip(
-            server, floating_ips, floating_network, created_items
-        )
+        return self._find_floating_ip(server, floating_ips, floating_network)
 
     def _prepare_external_network_for_vminstance(
         self,
@@ -2308,7 +2305,7 @@ class vimconnector(vimconn.VimConnector):
                 # several times
                 while not assigned:
                     free_floating_ip = self._get_free_floating_ip(
-                        server, floating_network, created_items
+                        server, floating_network
                     )
 
                     if not free_floating_ip:
