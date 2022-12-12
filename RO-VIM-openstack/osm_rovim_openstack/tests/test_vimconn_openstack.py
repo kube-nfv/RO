@@ -3304,7 +3304,6 @@ class TestNewVmInstance(unittest.TestCase):
     def test_get_free_floating_ip(self, mock_find_floating_ip, mock_shuffle):
         """Get free floating ip successfully."""
         floating_network = {"floating_ip": "308b73-t9cc-1a6a-a270-12cc4811bd4a"}
-        created_items = {}
         floating_ips = [
             {
                 "port_id": "608b73-r9cc-5a6a-a270-82cc4811bd4a",
@@ -3325,13 +3324,11 @@ class TestNewVmInstance(unittest.TestCase):
         mock_find_floating_ip.return_value = "508b73-o9cc-5a6a-a270-72cc4811bd8"
         expected_result = "508b73-o9cc-5a6a-a270-72cc4811bd8"
 
-        result = self.vimconn._get_free_floating_ip(
-            self.server, floating_network, created_items
-        )
+        result = self.vimconn._get_free_floating_ip(self.server, floating_network)
         self.assertEqual(result, expected_result)
         mock_shuffle.assert_called_once_with(floating_ips)
         mock_find_floating_ip.assert_called_once_with(
-            self.server, floating_ips, floating_network, created_items
+            self.server, floating_ips, floating_network
         )
 
     @patch("random.shuffle")
@@ -3341,15 +3338,12 @@ class TestNewVmInstance(unittest.TestCase):
     ):
         """Neutron list floating IPs raises exception."""
         floating_network = {"floating_ip": "308b73-t9cc-1a6a-a270-12cc4811bd4a"}
-        created_items = {}
         self.vimconn.neutron = CopyingMock()
         self.vimconn.neutron.list_floatingips.side_effect = Exception(
             "Floating ips could not be listed."
         )
         with self.assertRaises(Exception) as err:
-            result = self.vimconn._get_free_floating_ip(
-                self.server, floating_network, created_items
-            )
+            result = self.vimconn._get_free_floating_ip(self.server, floating_network)
             self.assertEqual(result, None)
             self.assertEqual(str(err.exception), "Floating ips could not be listed.")
         mock_shuffle.assert_not_called()
@@ -3362,7 +3356,6 @@ class TestNewVmInstance(unittest.TestCase):
     ):
         """_find_floating_ip method raises exception."""
         floating_network = {"floating_ip": "308b73-t9cc-1a6a-a270-12cc4811bd4a"}
-        created_items = {}
         floating_ips = [
             {
                 "port_id": "608b73-r9cc-5a6a-a270-82cc4811bd4a",
@@ -3386,14 +3379,12 @@ class TestNewVmInstance(unittest.TestCase):
         )
 
         with self.assertRaises(Exception) as err:
-            result = self.vimconn._get_free_floating_ip(
-                self.server, floating_network, created_items
-            )
+            result = self.vimconn._get_free_floating_ip(self.server, floating_network)
             self.assertEqual(result, None)
             self.assertEqual(str(err.exception), "Free floating ip could not be found.")
         mock_shuffle.assert_called_once_with(floating_ips)
         mock_find_floating_ip.assert_called_once_with(
-            self.server, floating_ips, floating_network, created_items
+            self.server, floating_ips, floating_network
         )
 
     @patch.object(vimconnector, "_create_floating_ip")
@@ -3435,7 +3426,6 @@ class TestNewVmInstance(unittest.TestCase):
                 "floating_ip": "y08b73-o9cc-1a6a-a270-12cc4811bd4u",
                 "vim_id": "608b73-r9cc-5a6a-a270-82cc4811bd4a",
             },
-            created_items,
         )
         self.vimconn.neutron.show_floatingip.assert_called_once_with(
             "y08b73-o9cc-1a6a-a270-12cc4811bd4u"
@@ -3489,7 +3479,6 @@ class TestNewVmInstance(unittest.TestCase):
                 "floating_ip": "y08b73-o9cc-1a6a-a270-12cc4811bd4u",
                 "vim_id": "608b73-r9cc-5a6a-a270-82cc4811bd4a",
             },
-            created_items,
         )
         self.vimconn.neutron.show_floatingip.assert_called_with(None)
         mock_sleep.assert_not_called()
@@ -3545,7 +3534,6 @@ class TestNewVmInstance(unittest.TestCase):
                 "vim_id": "608b73-r9cc-5a6a-a270-82cc4811bd4a",
                 "exit_on_floating_ip_error": False,
             },
-            created_items,
         )
         self.vimconn.neutron.show_floatingip.assert_not_called()
         mock_sleep.assert_not_called()
@@ -3600,7 +3588,6 @@ class TestNewVmInstance(unittest.TestCase):
                 "vim_id": "608b73-r9cc-5a6a-a270-82cc4811bd4a",
                 "exit_on_floating_ip_error": True,
             },
-            created_items,
         )
         self.vimconn.neutron.show_floatingip.assert_not_called()
         mock_sleep.assert_not_called()
@@ -3656,7 +3643,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3664,7 +3650,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3672,7 +3657,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(self.vimconn.neutron.show_floatingip.call_count, 3)
@@ -3735,7 +3719,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3743,7 +3726,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3751,7 +3733,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3759,7 +3740,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
 
@@ -3813,7 +3793,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3821,7 +3800,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3829,7 +3807,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3837,7 +3814,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
 
@@ -3894,7 +3870,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3902,7 +3877,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3910,7 +3884,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
 
@@ -3976,7 +3949,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3984,7 +3956,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
         self.assertEqual(
@@ -3992,7 +3963,6 @@ class TestNewVmInstance(unittest.TestCase):
             (
                 self.server,
                 floating_network,
-                created_items,
             ),
         )
 
