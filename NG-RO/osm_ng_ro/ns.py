@@ -920,7 +920,7 @@ class Ns(object):
                     "id": vim_info.get("vim_network_id"),
                 },
             }
-        elif target_vld.get("mgmt-network"):
+        elif target_vld.get("mgmt-network") and not vim_info.get("provider_network"):
             extra_dict["find_params"] = {
                 "mgmt": True,
                 "name": target_vld["id"],
