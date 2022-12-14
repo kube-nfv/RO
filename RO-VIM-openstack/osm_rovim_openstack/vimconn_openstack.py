@@ -754,7 +754,7 @@ class vimconnector(vimconn.VimConnector):
             self._reload_connection()
             network_dict = {"name": net_name, "admin_state_up": True}
 
-            if net_type in ("data", "ptp"):
+            if net_type in ("data", "ptp") or provider_network_profile:
                 provider_physical_network = None
 
                 if provider_network_profile and provider_network_profile.get(
