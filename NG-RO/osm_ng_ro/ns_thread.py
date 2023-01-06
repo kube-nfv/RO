@@ -30,7 +30,6 @@ import logging
 from os import makedirs
 from os import path
 import queue
-from shutil import rmtree
 import threading
 import time
 import traceback
@@ -749,8 +748,10 @@ class VimInteractionFlavor(VimInteractionBase):
                 try:
                     flavor_data = task["find_params"]["flavor_data"]
                     vim_flavor_id = target_vim.get_flavor_id_from_data(flavor_data)
-                except vimconn.VimConnNotFoundException:
-                    self.logger.warning("VimConnNotFoundException occured.")
+                except vimconn.VimConnNotFoundException as flavor_not_found_msg:
+                    self.logger.warning(
+                        f"VimConnNotFoundException occured: {flavor_not_found_msg}"
+                    )
 
             if not vim_flavor_id and task.get("params"):
                 # CREATE
@@ -1658,10 +1659,6 @@ class NsWorker(threading.Thread):
                 self.vim_targets.remove(target_id)
 
             self.logger.info("Unloaded {}".format(target_id))
-            rmtree("{}:{}".format(target_id, self.worker_index))
-        except FileNotFoundError:
-            # This is raised by rmtree if folder does not exist.
-            self.logger.exception("FileNotFoundError occured while unloading VIM.")
         except Exception as e:
             self.logger.error("Cannot unload {}: {}".format(target_id, e))
 

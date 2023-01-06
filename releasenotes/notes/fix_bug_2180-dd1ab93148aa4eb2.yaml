@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#######################################################################################
 # Copyright ETSI Contributors and Others.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,16 +13,10 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-##
-import logging
-
-from pkg_resources import get_distribution
-
-version = "8.0.1.post0"
-version_date = "2020-06-29"
-
-# Obtain installed package version. Ignore if error, e.g. pkg_resources not installed
-try:
-    version = get_distribution("osm_ng_ro").version
-except Exception as error:
-    logging.warning(f"{error} occured while getting the ro version")
+#######################################################################################
+---
+fixes:
+  - |
+    This fixes the bug 2180.EPA will set only the parameters that are explicitly
+    defined in the vnfd descriptor.Numa policy supports for multiple nodes with numa 
+    cpus.
