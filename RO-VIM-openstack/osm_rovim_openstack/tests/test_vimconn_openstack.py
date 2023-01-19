@@ -32,6 +32,7 @@ import mock
 from mock import MagicMock, patch
 from neutronclient.v2_0.client import Client
 from novaclient import exceptions as nvExceptions
+from novaclient.exceptions import ClientException, Conflict
 from osm_ro_plugin import vimconn
 from osm_ro_plugin.vimconn import (
     VimConnConnectionException,
@@ -76,6 +77,34 @@ created_items_all_true = {
     f"floating_ip:{floating_network_vim_id}": True,
     f"volume:{volume_id}": True,
     f"port:{port_id}": True,
+}
+
+
+# Variables used in TestNewFlavor Class
+flavor_id = "075d2482-5edb-43e3-91b3-234e65b6268a"
+name1 = "sample-flavor"
+extended = (
+    {
+        "cpu-quota": {"limit": 3},
+        "mem-quota": {"limit": 1},
+        "mempage-size": "LARGE",
+        "cpu-pinning-policy": "DEDICATED",
+        "mem-policy": "STRICT",
+    },
+)
+flavor_data = {
+    "name": name1,
+    "ram": 3,
+    "vcpus": 8,
+    "disk": 50,
+    "extended": extended,
+}
+
+flavor_data2 = {
+    "name": name1,
+    "ram": 3,
+    "vcpus": 8,
+    "disk": 50,
 }
 
 
@@ -3071,7 +3100,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn._neutron_create_float_ip(param, created_items)
         self.assertEqual(created_items, expected_created_items)
 
-    def test_neutron_create_float_ip_exception_occured(self):
+    def test_neutron_create_float_ip_exception_occurred(self):
         """Floating ip could not be created."""
         param = {
             "floatingip": {
@@ -3082,14 +3111,14 @@ class TestNewVmInstance(unittest.TestCase):
         created_items = {}
         self.vimconn.neutron = CopyingMock()
         self.vimconn.neutron.create_floatingip.side_effect = Exception(
-            "Neutron floating ip create exception occured."
+            "Neutron floating ip create exception occurred."
         )
         with self.assertRaises(VimConnException) as err:
             self.vimconn._neutron_create_float_ip(param, created_items)
         self.assertEqual(created_items, {})
         self.assertEqual(
             str(err.exception),
-            "Exception: Cannot create new floating_ip Neutron floating ip create exception occured.",
+            "Exception: Cannot create new floating_ip Neutron floating ip create exception occurred.",
         )
 
     @patch.object(vimconnector, "_neutron_create_float_ip")
@@ -4770,7 +4799,7 @@ class TestNewVmInstance(unittest.TestCase):
         k_id = floating_network_vim_id
         k = f"floating_ip:{floating_network_vim_id}"
         self.vimconn.neutron.delete_floatingip.side_effect = (
-            nvExceptions.ClientException("Client exception occured.")
+            nvExceptions.ClientException("Client exception occurred.")
         )
         self.vimconn._delete_floating_ip_by_id(k, k_id, created_items)
         self.vimconn.neutron.delete_floatingip.assert_called_once_with(k_id)
@@ -4782,7 +4811,7 @@ class TestNewVmInstance(unittest.TestCase):
             },
         )
         self.vimconn.logger.error.assert_called_once_with(
-            "Error deleting floating ip: ClientException: Unknown Error (HTTP Client exception occured.)"
+            "Error deleting floating ip: ClientException: Unknown Error (HTTP Client exception occurred.)"
         )
 
     def test_delete_floating_ip_by_id_floating_ip_raises_vimconnexception(self):
@@ -5530,11 +5559,11 @@ class TestNewVmInstance(unittest.TestCase):
         mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         mock_sleep = MagicMock()
         volumes_to_hold = []
-        err = ConnectionError("ClientException occured.")
+        err = ConnectionError("ClientException occurred.")
         mock_delete_created_items.side_effect = err
         with self.assertRaises(ConnectionError) as err:
             self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
-            self.assertEqual(str(err), "ClientException occured.")
+            self.assertEqual(str(err), "ClientException occurred.")
         mock_reload_connection.assert_called_once()
         mock_delete_vm_ports_attached_to_network.assert_called_once_with(created_items)
         self.vimconn.nova.servers.delete.assert_called_once_with(vm_id)
@@ -5564,12 +5593,12 @@ class TestNewVmInstance(unittest.TestCase):
         created_items = deepcopy(created_items_all_true)
         mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
-        err = ConnectionError("ClientException occured.")
+        err = ConnectionError("ClientException occurred.")
         mock_delete_vm_ports_attached_to_network.side_effect = err
         mock_delete_created_items.side_effect = err
         with self.assertRaises(ConnectionError) as err:
             self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
-            self.assertEqual(str(err), "ClientException occured.")
+            self.assertEqual(str(err), "ClientException occurred.")
         mock_reload_connection.assert_called_once()
         mock_delete_vm_ports_attached_to_network.assert_called_once_with(created_items)
         self.vimconn.nova.servers.delete.assert_not_called()
@@ -5599,12 +5628,12 @@ class TestNewVmInstance(unittest.TestCase):
         created_items = deepcopy(created_items_all_true)
         mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
-        err = VimConnConnectionException("ClientException occured.")
+        err = VimConnConnectionException("ClientException occurred.")
         self.vimconn.nova.servers.delete.side_effect = err
         mock_delete_created_items.side_effect = err
         with self.assertRaises(VimConnConnectionException) as err:
             self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
-            self.assertEqual(str(err), "ClientException occured.")
+            self.assertEqual(str(err), "ClientException occurred.")
         mock_reload_connection.assert_called_once()
         mock_delete_vm_ports_attached_to_network.assert_called_once_with(created_items)
         self.vimconn.nova.servers.delete.assert_called_once_with(vm_id)
@@ -5635,12 +5664,12 @@ class TestNewVmInstance(unittest.TestCase):
         mock_extract_items_wth_keep_flag_from_created_items.return_value = created_items
         mock_sleep = MagicMock()
         volumes_to_hold = [f"{volume_id}", f"{volume_id2}"]
-        err = ConnectionError("ClientException occured.")
+        err = ConnectionError("ClientException occurred.")
         mock_delete_created_items.return_value = False
         mock_reload_connection.side_effect = err
         with self.assertRaises(ConnectionError) as err:
             self.vimconn.delete_vminstance(vm_id, created_items, volumes_to_hold)
-            self.assertEqual(str(err), "ClientException occured.")
+            self.assertEqual(str(err), "ClientException occurred.")
         mock_reload_connection.assert_called_once()
         mock_delete_vm_ports_attached_to_network.assert_not_called()
         self.vimconn.nova.servers.delete.assert_not_called()
@@ -5887,6 +5916,1922 @@ class TestNewVmInstance(unittest.TestCase):
         created_items = [{f"port{port_id}": True}, {f"volume{volume_id2}keep": True}]
         with self.assertRaises(AttributeError):
             self.vimconn._extract_items_wth_keep_flag_from_created_items(created_items)
+
+
+class TestNewFlavor(unittest.TestCase):
+    @patch("logging.getLogger", autospec=True)
+    def setUp(self, mock_logger):
+        # We are disabling the logging of exception not to print them to console.
+        mock_logger = logging.getLogger()
+        mock_logger.disabled = True
+        self.vimconn = vimconnector(
+            "123",
+            "openstackvim",
+            "456",
+            "789",
+            "http://dummy.url",
+            None,
+            "user",
+            "pass",
+        )
+        self.vimconn.nova = CopyingMock(autospec=True)
+        self.flavor1 = CopyingMock(autospec=True, name="sample-flavor")
+        self.flavor2 = CopyingMock(autospec=True, name="other-flavor")
+        self.new_flavor = CopyingMock(autospec=True, name="new_flavor")
+        self.new_flavor.id = "075d2482-5edb-43e3-91b3-234e65b6268a"
+        self.vimconn.nova.flavors.create.return_value = self.new_flavor
+
+    @staticmethod
+    def check_if_assert_not_called(mocks: list):
+        for mocking in mocks:
+            mocking.assert_not_called()
+
+    @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "process_numa_paired_threads",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_numa_cores", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_threads", new_callable=CopyingMock())
+    def test_process_numa_parameters_of_flavor_id_memory_vcpu_in_numa_type_vio(
+        self,
+        mock_process_numa_threads,
+        mock_process_numa_cores,
+        mock_process_numa_paired_threads,
+        mock_process_numa_vcpu,
+        mock_process_numa_memory,
+    ):
+        """Process numa parameters, id, memory, vcpu exist, vim type is VIO,
+        paired-threads, cores, threads do not exist in numa.
+        """
+        numas = [
+            {"id": 0, "memory": 1, "vcpu": [1, 3]},
+            {"id": 1, "memory": 2, "vcpu": [2]},
+        ]
+        vcpus = 3
+        extra_specs = {}
+        expected_extra_specs = {
+            "hw:numa_nodes": "2",
+            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+            "vmware:latency_sensitivity_level": "high",
+            "hw:cpu_sockets": "2",
+        }
+        self.vimconn.vim_type = "VIO"
+        result = self.vimconn._process_numa_parameters_of_flavor(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.assertEqual(mock_process_numa_memory.call_count, 2)
+        self.assertEqual(mock_process_numa_vcpu.call_count, 2)
+        _call_mock_process_numa_memory = mock_process_numa_memory.call_args_list
+        self.assertEqual(
+            _call_mock_process_numa_memory[0].args,
+            (
+                {"id": 0, "memory": 1, "vcpu": [1, 3]},
+                0,
+                {
+                    "hw:numa_nodes": "2",
+                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+                    "vmware:latency_sensitivity_level": "high",
+                },
+            ),
+        )
+        self.assertEqual(
+            _call_mock_process_numa_memory[1].args,
+            (
+                {"id": 1, "memory": 2, "vcpu": [2]},
+                1,
+                {
+                    "hw:cpu_sockets": "2",
+                    "hw:numa_nodes": "2",
+                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+                    "vmware:latency_sensitivity_level": "high",
+                },
+            ),
+        )
+        _call_mock_process_numa_vcpu = mock_process_numa_vcpu.call_args_list
+        self.assertEqual(
+            _call_mock_process_numa_vcpu[0].args,
+            (
+                {"id": 0, "memory": 1, "vcpu": [1, 3]},
+                0,
+                {
+                    "hw:numa_nodes": "2",
+                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+                    "vmware:latency_sensitivity_level": "high",
+                },
+            ),
+        )
+        self.assertEqual(
+            _call_mock_process_numa_vcpu[1].args,
+            (
+                {"id": 1, "memory": 2, "vcpu": [2]},
+                1,
+                {
+                    "hw:cpu_sockets": "2",
+                    "hw:numa_nodes": "2",
+                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+                    "vmware:latency_sensitivity_level": "high",
+                },
+            ),
+        )
+        self.assertDictEqual(extra_specs, expected_extra_specs)
+        self.check_if_assert_not_called(
+            [
+                mock_process_numa_threads,
+                mock_process_numa_cores,
+                mock_process_numa_paired_threads,
+            ]
+        )
+
+    @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "process_numa_paired_threads",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_numa_cores", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_threads", new_callable=CopyingMock())
+    def test_process_numa_parameters_of_flavor_id_memory_vcpu_in_numa_type_openstack(
+        self,
+        mock_process_numa_threads,
+        mock_process_numa_cores,
+        mock_process_numa_paired_threads,
+        mock_process_numa_vcpu,
+        mock_process_numa_memory,
+    ):
+        """Process numa parameters, id, memory, vcpu exist, vim type is openstack,
+        paired-threads, cores, threads do not exist in numa.
+        """
+        numas = [
+            {"id": 0, "memory": 1, "vcpu": [1, 3]},
+            {"id": 1, "memory": 2, "vcpu": [2]},
+        ]
+        vcpus = 3
+        extra_specs = {}
+        expected_extra_specs = {
+            "hw:numa_nodes": "2",
+            "hw:cpu_sockets": "2",
+        }
+        self.vimconn.vim_type = "openstack"
+        result = self.vimconn._process_numa_parameters_of_flavor(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.assertEqual(mock_process_numa_memory.call_count, 2)
+        self.assertEqual(mock_process_numa_vcpu.call_count, 2)
+        _call_mock_process_numa_memory = mock_process_numa_memory.call_args_list
+        self.assertEqual(
+            _call_mock_process_numa_memory[0].args,
+            (
+                {"id": 0, "memory": 1, "vcpu": [1, 3]},
+                0,
+                {"hw:numa_nodes": "2"},
+            ),
+        )
+        self.assertEqual(
+            _call_mock_process_numa_memory[1].args,
+            (
+                {"id": 1, "memory": 2, "vcpu": [2]},
+                1,
+                {"hw:cpu_sockets": "2", "hw:numa_nodes": "2"},
+            ),
+        )
+        _call_mock_process_numa_vcpu = mock_process_numa_vcpu.call_args_list
+        self.assertEqual(
+            _call_mock_process_numa_vcpu[0].args,
+            (
+                {"id": 0, "memory": 1, "vcpu": [1, 3]},
+                0,
+                {"hw:numa_nodes": "2"},
+            ),
+        )
+        self.assertEqual(
+            _call_mock_process_numa_vcpu[1].args,
+            (
+                {"id": 1, "memory": 2, "vcpu": [2]},
+                1,
+                {"hw:cpu_sockets": "2", "hw:numa_nodes": "2"},
+            ),
+        )
+        self.assertDictEqual(extra_specs, expected_extra_specs)
+        self.check_if_assert_not_called(
+            [
+                mock_process_numa_threads,
+                mock_process_numa_cores,
+                mock_process_numa_paired_threads,
+            ]
+        )
+
+    @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "process_numa_paired_threads",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_numa_cores", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_threads", new_callable=CopyingMock())
+    def test_process_numa_parameters_of_flavor_id_paired_threads_in_numa_type_openstack_extra_spec_not_empty(
+        self,
+        mock_process_numa_threads,
+        mock_process_numa_cores,
+        mock_process_numa_paired_threads,
+        mock_process_numa_vcpu,
+        mock_process_numa_memory,
+    ):
+        """Process numa parameters, id, paired-threads exist, vim type is openstack.
+        vcpus calculation according to paired-threads in numa, there is extra_spec.
+        ."""
+        numas = [{"id": 0, "paired-threads": 3}, {"id": 1, "paired-threads": 3}]
+        extra_specs = {"some-key": "some-value"}
+        expected_extra_specs = {
+            "hw:numa_nodes": "2",
+            "hw:cpu_sockets": "2",
+            "some-key": "some-value",
+        }
+        self.vimconn.vim_type = "openstack"
+        vcpus = 6
+        mock_process_numa_paired_threads.side_effect = [6, 6]
+        result = self.vimconn._process_numa_parameters_of_flavor(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.check_if_assert_not_called(
+            [mock_process_numa_threads, mock_process_numa_cores]
+        )
+        self.assertEqual(mock_process_numa_memory.call_count, 2)
+        self.assertEqual(mock_process_numa_vcpu.call_count, 2)
+        self.assertEqual(mock_process_numa_paired_threads.call_count, 2)
+        _call_mock_process_numa_paired_threads = (
+            mock_process_numa_paired_threads.call_args_list
+        )
+        self.assertEqual(
+            _call_mock_process_numa_paired_threads[0].args,
+            (
+                {"id": 0, "paired-threads": 3},
+                {"hw:cpu_sockets": "2", "hw:numa_nodes": "2", "some-key": "some-value"},
+            ),
+        )
+        self.assertEqual(
+            _call_mock_process_numa_paired_threads[1].args,
+            (
+                {"id": 1, "paired-threads": 3},
+                {"hw:cpu_sockets": "2", "hw:numa_nodes": "2", "some-key": "some-value"},
+            ),
+        )
+        self.assertDictEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "process_numa_paired_threads",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_numa_cores", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_threads", new_callable=CopyingMock())
+    def test_process_numa_parameters_of_flavor_id_paired_threads_in_numa_type_vio_extra_spec_not_empty(
+        self,
+        mock_process_numa_threads,
+        mock_process_numa_cores,
+        mock_process_numa_paired_threads,
+        mock_process_numa_vcpu,
+        mock_process_numa_memory,
+    ):
+        """Process numa parameters, id, paired-threads exist, vim type is VIO.
+        vcpus calculation according to paired-threads in numa, there is extra_spec.
+        """
+        numas = [{"id": 0, "paired-threads": 3}, {"id": 1, "paired-threads": 3}]
+        extra_specs = {"some-key": "some-value"}
+        expected_extra_specs = {
+            "hw:numa_nodes": "2",
+            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+            "vmware:latency_sensitivity_level": "high",
+            "hw:cpu_sockets": "2",
+            "some-key": "some-value",
+        }
+        self.vimconn.vim_type = "VIO"
+        vcpus = 6
+        mock_process_numa_paired_threads.side_effect = [6, 6]
+        result = self.vimconn._process_numa_parameters_of_flavor(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.check_if_assert_not_called(
+            [mock_process_numa_threads, mock_process_numa_cores]
+        )
+        self.assertEqual(mock_process_numa_paired_threads.call_count, 2)
+        self.assertEqual(mock_process_numa_memory.call_count, 2)
+        self.assertEqual(mock_process_numa_vcpu.call_count, 2)
+        _call_mock_process_numa_paired_threads = (
+            mock_process_numa_paired_threads.call_args_list
+        )
+        self.assertEqual(
+            _call_mock_process_numa_paired_threads[0].args,
+            (
+                {"id": 0, "paired-threads": 3},
+                {
+                    "hw:cpu_sockets": "2",
+                    "hw:numa_nodes": "2",
+                    "some-key": "some-value",
+                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+                    "vmware:latency_sensitivity_level": "high",
+                },
+            ),
+        )
+        self.assertEqual(
+            _call_mock_process_numa_paired_threads[1].args,
+            (
+                {"id": 1, "paired-threads": 3},
+                {
+                    "hw:cpu_sockets": "2",
+                    "hw:numa_nodes": "2",
+                    "some-key": "some-value",
+                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+                    "vmware:latency_sensitivity_level": "high",
+                },
+            ),
+        )
+        self.assertDictEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "process_numa_paired_threads",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_numa_cores", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_threads", new_callable=CopyingMock())
+    def test_process_numa_parameters_of_flavor_id_cores_in_numa_type_openstack(
+        self,
+        mock_process_numa_threads,
+        mock_process_numa_cores,
+        mock_process_numa_paired_threads,
+        mock_process_numa_vcpu,
+        mock_process_numa_memory,
+    ):
+        """Process numa parameters, id, cores exist, vim type is openstack.
+        vcpus calculation according to cores in numa.
+        """
+        numas = [{"id": 0, "cores": 1}, {"id": 1, "cores": 2}]
+        extra_specs = {}
+        expected_extra_specs = {"hw:numa_nodes": "2", "hw:cpu_sockets": "2"}
+        self.vimconn.vim_type = "openstack"
+        vcpus = 2
+        mock_process_numa_cores.side_effect = [1, 2]
+        result = self.vimconn._process_numa_parameters_of_flavor(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.check_if_assert_not_called(
+            [mock_process_numa_threads, mock_process_numa_paired_threads]
+        )
+        self.assertEqual(mock_process_numa_cores.call_count, 2)
+        self.assertEqual(mock_process_numa_memory.call_count, 2)
+        self.assertEqual(mock_process_numa_vcpu.call_count, 2)
+        _call_mock_process_numa_cores = mock_process_numa_cores.call_args_list
+        self.assertEqual(
+            _call_mock_process_numa_cores[0].args,
+            ({"id": 0, "cores": 1}, {"hw:cpu_sockets": "2", "hw:numa_nodes": "2"}),
+        )
+        self.assertEqual(
+            _call_mock_process_numa_cores[1].args,
+            ({"id": 1, "cores": 2}, {"hw:cpu_sockets": "2", "hw:numa_nodes": "2"}),
+        )
+        self.assertDictEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "process_numa_paired_threads",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_numa_cores", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_threads", new_callable=CopyingMock())
+    def test_process_numa_parameters_of_flavor_id_cores_in_numa_type_vio(
+        self,
+        mock_process_numa_threads,
+        mock_process_numa_cores,
+        mock_process_numa_paired_threads,
+        mock_process_numa_vcpu,
+        mock_process_numa_memory,
+    ):
+        """Process numa parameters, id, cores exist, vim type is VIO.
+        vcpus calculation according to cores in numa.
+        """
+        numas = [{"id": 0, "cores": 1}, {"id": 1, "cores": 2}]
+        extra_specs = {}
+        expected_extra_specs = {
+            "hw:numa_nodes": "2",
+            "hw:cpu_sockets": "2",
+            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+            "vmware:latency_sensitivity_level": "high",
+        }
+        self.vimconn.vim_type = "VIO"
+        vcpus = 2
+        mock_process_numa_cores.side_effect = [1, 2]
+        result = self.vimconn._process_numa_parameters_of_flavor(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.check_if_assert_not_called(
+            [mock_process_numa_threads, mock_process_numa_paired_threads]
+        )
+        self.assertEqual(mock_process_numa_memory.call_count, 2)
+        self.assertEqual(mock_process_numa_vcpu.call_count, 2)
+        self.assertEqual(mock_process_numa_cores.call_count, 2)
+        _call_mock_process_numa_cores = mock_process_numa_cores.call_args_list
+        self.assertEqual(
+            _call_mock_process_numa_cores[0].args,
+            ({"id": 0, "cores": 1}, expected_extra_specs),
+        )
+        self.assertEqual(
+            _call_mock_process_numa_cores[1].args,
+            ({"id": 1, "cores": 2}, expected_extra_specs),
+        )
+        self.assertDictEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "process_numa_paired_threads",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_numa_cores", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_threads", new_callable=CopyingMock())
+    def test_process_numa_parameters_of_flavor_without_numa_id_with_threads_type_vio(
+        self,
+        mock_process_numa_threads,
+        mock_process_numa_cores,
+        mock_process_numa_paired_threads,
+        mock_process_numa_vcpu,
+        mock_process_numa_memory,
+    ):
+        """Process numa parameters, memory, vcpu, thread exist, vim type is VIO,
+        vcpus calculation according threads in numa, there are not numa ids.
+        """
+        numas = [
+            {"memory": 1, "vcpu": [1, 3], "threads": 3},
+            {"memory": 2, "vcpu": [2]},
+        ]
+        extra_specs = {}
+        expected_extra_specs = {
+            "hw:numa_nodes": "2",
+            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+            "vmware:latency_sensitivity_level": "high",
+            "hw:cpu_sockets": "2",
+        }
+        self.vimconn.vim_type = "VIO"
+        vcpus = 3
+        mock_process_numa_threads.return_value = vcpus
+        result = self.vimconn._process_numa_parameters_of_flavor(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.check_if_assert_not_called(
+            [
+                mock_process_numa_memory,
+                mock_process_numa_vcpu,
+                mock_process_numa_cores,
+                mock_process_numa_paired_threads,
+            ]
+        )
+        self.assertEqual(mock_process_numa_threads.call_count, 1)
+        _call_mock_process_numa_threads = mock_process_numa_threads.call_args_list
+        self.assertEqual(
+            _call_mock_process_numa_threads[0].args,
+            (
+                {"memory": 1, "vcpu": [1, 3], "threads": 3},
+                expected_extra_specs,
+            ),
+        )
+        self.assertDictEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "process_numa_paired_threads",
+        new_callable=CopyingMock(autospec=True),
+    )
+    @patch.object(vimconnector, "process_numa_cores", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_threads", new_callable=CopyingMock())
+    def test_process_numa_parameters_of_flavor_without_numa_id_with_threads_type_openstack(
+        self,
+        mock_process_numa_threads,
+        mock_process_numa_cores,
+        mock_process_numa_paired_threads,
+        mock_process_numa_vcpu,
+        mock_process_numa_memory,
+    ):
+        """Process numa parameters, memory, vcpu, thread exist, vim type is openstack,
+        vcpus calculation according threads in numa, there are not numa ids.
+        """
+        numas = [
+            {"memory": 1, "vcpu": [1, 3], "threads": 3},
+            {"memory": 2, "vcpu": [2]},
+        ]
+        extra_specs = {}
+        expected_extra_specs = {
+            "hw:numa_nodes": "2",
+            "hw:cpu_sockets": "2",
+        }
+        self.vimconn.vim_type = "openstack"
+        vcpus = 3
+        mock_process_numa_threads.return_value = vcpus
+        result = self.vimconn._process_numa_parameters_of_flavor(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.check_if_assert_not_called(
+            [
+                mock_process_numa_memory,
+                mock_process_numa_vcpu,
+                mock_process_numa_cores,
+                mock_process_numa_paired_threads,
+            ]
+        )
+        self.assertEqual(mock_process_numa_threads.call_count, 1)
+        _call_mock_process_numa_threads = mock_process_numa_threads.call_args_list
+        self.assertEqual(
+            _call_mock_process_numa_threads[0].args,
+            (
+                {"memory": 1, "vcpu": [1, 3], "threads": 3},
+                expected_extra_specs,
+            ),
+        )
+        self.assertDictEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "process_numa_paired_threads",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_numa_cores", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_threads", new_callable=CopyingMock())
+    def test_process_numa_parameters_of_flavor_empty_numas_list_type_vio(
+        self,
+        mock_process_numa_threads,
+        mock_process_numa_cores,
+        mock_process_numa_paired_threads,
+        mock_process_numa_vcpu,
+        mock_process_numa_memory,
+    ):
+        """Numa list is empty, vim type is VIO."""
+        numas = []
+        extra_specs = {}
+        expected_extra_specs = {
+            "hw:numa_nodes": "0",
+            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+            "vmware:latency_sensitivity_level": "high",
+        }
+        self.vimconn.vim_type = "VIO"
+        vcpus = 4
+        mock_process_numa_threads.return_value = None
+        result = self.vimconn._process_numa_parameters_of_flavor(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.check_if_assert_not_called(
+            [
+                mock_process_numa_memory,
+                mock_process_numa_vcpu,
+                mock_process_numa_cores,
+                mock_process_numa_paired_threads,
+                mock_process_numa_threads,
+            ]
+        )
+        self.assertDictEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "process_numa_paired_threads",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_numa_cores", new_callable=CopyingMock())
+    @patch.object(vimconnector, "process_numa_threads", new_callable=CopyingMock())
+    def test_process_numa_parameters_of_flavor_empty_numas_list_type_openstack(
+        self,
+        mock_process_numa_threads,
+        mock_process_numa_cores,
+        mock_process_numa_paired_threads,
+        mock_process_numa_vcpu,
+        mock_process_numa_memory,
+    ):
+        """Numa list is empty, vim type is openstack."""
+        numas = []
+        extra_specs = {}
+        expected_extra_specs = {"hw:numa_nodes": "0"}
+        self.vimconn.vim_type = "openstack"
+        vcpus = 5
+        mock_process_numa_threads.return_value = None
+        result = self.vimconn._process_numa_parameters_of_flavor(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.check_if_assert_not_called(
+            [
+                mock_process_numa_memory,
+                mock_process_numa_vcpu,
+                mock_process_numa_cores,
+                mock_process_numa_paired_threads,
+                mock_process_numa_threads,
+            ]
+        )
+        self.assertDictEqual(extra_specs, expected_extra_specs)
+
+    def test_process_numa_memory_empty_extra_spec(self):
+        numa = {"memory": 2, "vcpu": [2]}
+        node_id = 2
+        extra_specs = {}
+        expected_extra_spec = {"hw:numa_mem.2": 2048}
+        self.vimconn.process_numa_memory(numa, node_id, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_numa_memory_not_exist(self):
+        numa = {"vcpu": [2]}
+        node_id = 2
+        extra_specs = {"vmware:latency_sensitivity_level": "high"}
+        self.vimconn.process_numa_memory(numa, node_id, extra_specs)
+        self.assertDictEqual(extra_specs, {"vmware:latency_sensitivity_level": "high"})
+
+    def test_process_numa_memory_node_id_is_none(self):
+        numa = {"memory": 2, "vcpu": [2]}
+        node_id = None
+        extra_specs = {}
+        expected_extra_spec = {"hw:numa_mem.None": 2048}
+        self.vimconn.process_numa_memory(numa, node_id, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_numa_memory_node_id_is_int(self):
+        numa = {"memory": 2, "vcpu": [2]}
+        node_id = 0
+        extra_specs = {}
+        expected_extra_spec = {"hw:numa_mem.0": 2048}
+        self.vimconn.process_numa_memory(numa, node_id, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_numa_vcpu_empty_extra_spec(self):
+        numa = {"vcpu": [2]}
+        node_id = 0
+        extra_specs = {}
+        expected_extra_spec = {"hw:numa_cpus.0": "2"}
+        self.vimconn.process_numa_vcpu(numa, node_id, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_numa_vcpu_not_exist(self):
+        numa = {"memory": 2}
+        node_id = 0
+        extra_specs = {"vmware:latency_sensitivity_level": "high"}
+        expected_extra_spec = {"vmware:latency_sensitivity_level": "high"}
+        self.vimconn.process_numa_vcpu(numa, node_id, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_numa_vcpu_empty_node_id(self):
+        numa = {"vcpu": [2]}
+        node_id = ""
+        extra_specs = {}
+        expected_extra_spec = {"hw:numa_cpus.": "2"}
+        self.vimconn.process_numa_vcpu(numa, node_id, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_numa_vcpu_empty_numa_dict(self):
+        numa = {}
+        node_id = 4
+        extra_specs = {}
+        self.vimconn.process_numa_vcpu(numa, node_id, extra_specs)
+        self.assertDictEqual(extra_specs, {})
+
+    def test_process_numa_vcpu_str_node_id(self):
+        numa = {"vcpu": [2]}
+        node_id = "12"
+        extra_specs = {}
+        expected_extra_spec = {"hw:numa_cpus.12": "2"}
+        self.vimconn.process_numa_vcpu(numa, node_id, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_numa_paired_threads_empty_extra_spec(self):
+        numa = {"id": 0, "paired-threads": 3}
+        extra_specs = {}
+        expected_extra_spec = {
+            "hw:cpu_thread_policy": "require",
+            "hw:cpu_policy": "dedicated",
+        }
+        result = self.vimconn.process_numa_paired_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, 6)
+
+    def test_process_numa_paired_threads_empty_numa(self):
+        numa = {}
+        extra_specs = {}
+        result = self.vimconn.process_numa_paired_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, {})
+        self.assertEqual(result, None)
+
+    def test_process_numa_paired_threads_not_exist(self):
+        numa = {"vcpu": [2]}
+        extra_specs = {}
+        result = self.vimconn.process_numa_paired_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, {})
+        self.assertEqual(result, None)
+
+    def test_process_numa_paired_threads_str_thread_num(self):
+        numa = {"id": 0, "paired-threads": "3"}
+        extra_specs = {}
+        expected_extra_spec = {
+            "hw:cpu_thread_policy": "require",
+            "hw:cpu_policy": "dedicated",
+        }
+        result = self.vimconn.process_numa_paired_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, "33")
+
+    def test_process_numa_paired_threads_none_thread_num(self):
+        numa = {"id": 0, "paired-threads": None}
+        extra_specs = {}
+        result = self.vimconn.process_numa_paired_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, {})
+        self.assertEqual(result, None)
+
+    def test_process_numa_cores_empty_extra_spec(self):
+        numa = {"id": 0, "cores": 1}
+        extra_specs = {}
+        expected_extra_spec = {
+            "hw:cpu_policy": "dedicated",
+            "hw:cpu_thread_policy": "isolate",
+        }
+        result = self.vimconn.process_numa_cores(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, 1)
+
+    def test_process_numa_cores_not_exist(self):
+        numa = {"id": 0, "paired-threads": 3}
+        extra_specs = {}
+        result = self.vimconn.process_numa_cores(numa, extra_specs)
+        self.assertDictEqual(extra_specs, {})
+        self.assertEqual(result, None)
+
+    def test_process_numa_cores_empty_numa(self):
+        numa = {}
+        extra_specs = expected_extra_spec = {"some-key": "some-val"}
+        result = self.vimconn.process_numa_cores(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, None)
+
+    def test_process_numa_cores_none_core_num(self):
+        numa = {"memory": 1, "cores": None}
+        extra_specs = {}
+        result = self.vimconn.process_numa_cores(numa, extra_specs)
+        self.assertDictEqual(extra_specs, {})
+        self.assertEqual(result, None)
+
+    def test_process_numa_cores_string_core_num(self):
+        numa = {"id": 0, "cores": "1"}
+        extra_specs = {"some-key": "some-val"}
+        expected_extra_spec = {
+            "hw:cpu_policy": "dedicated",
+            "hw:cpu_thread_policy": "isolate",
+            "some-key": "some-val",
+        }
+        result = self.vimconn.process_numa_cores(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, "1")
+
+    def test_process_numa_cores_float_core_num(self):
+        numa = {"memory": 2, "cores": 10.03}
+        extra_specs = {"some-key": "some-val"}
+        expected_extra_spec = {
+            "hw:cpu_policy": "dedicated",
+            "hw:cpu_thread_policy": "isolate",
+            "some-key": "some-val",
+        }
+        result = self.vimconn.process_numa_cores(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, 10.03)
+
+    def test_process_numa_threads_empty_extra_spec_int_thread_num(self):
+        numa = {"memory": 1, "vcpu": [1, 3], "threads": 3}
+        extra_specs = {}
+        expected_extra_spec = {
+            "hw:cpu_policy": "dedicated",
+            "hw:cpu_thread_policy": "prefer",
+        }
+        result = self.vimconn.process_numa_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, 3)
+
+    def test_process_numa_threads_empty_numa(self):
+        numa = {}
+        extra_specs = {"some-key": "some-val"}
+        expected_extra_spec = {"some-key": "some-val"}
+        result = self.vimconn.process_numa_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, None)
+
+    def test_process_numa_threads_not_exist(self):
+        numa = {"memory": 1}
+        extra_specs = expected_extra_spec = {"some-key": "some-val"}
+        result = self.vimconn.process_numa_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, None)
+
+    def test_process_numa_threads_str_thread_num(self):
+        numa = {"vcpu": [1, 3], "threads": "3"}
+        extra_specs = {}
+        expected_extra_spec = {
+            "hw:cpu_policy": "dedicated",
+            "hw:cpu_thread_policy": "prefer",
+        }
+        result = self.vimconn.process_numa_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, "3")
+
+    def test_process_numa_threads_none_thread_num(self):
+        numa = {"vcpu": [1, 3], "threads": None}
+        extra_specs = {}
+        result = self.vimconn.process_numa_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, {})
+        self.assertEqual(result, None)
+
+    def test_process_numa_threads_float_thread_num(self):
+        numa = {"memory": 1, "vcpu": [1, 3], "threads": 3.3}
+        extra_specs = {"some-key": "some-val"}
+        expected_extra_spec = {
+            "hw:cpu_policy": "dedicated",
+            "hw:cpu_thread_policy": "prefer",
+            "some-key": "some-val",
+        }
+        result = self.vimconn.process_numa_threads(numa, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+        self.assertEqual(result, 3.3)
+
+    def test_change_the_flavor_name_not_existing_name(self):
+        """Flavor name does not exist in Openstack flavor list."""
+        self.flavor1.name = "sample-flavor-3"
+        self.flavor2.name = "other-flavor-4"
+        self.vimconn.nova.flavors.list.return_value = [self.flavor1, self.flavor2]
+        name = "other-flavor-3"
+        name_suffix = 3
+        flavor_data = {"name": "other-flavor"}
+        result = self.vimconn._change_flavor_name(name, name_suffix, flavor_data)
+        self.assertEqual(result, name)
+        self.vimconn.nova.flavors.list.assert_called_once()
+        # Checking whether name_suffix changed or not.
+        self.assertEqual(name_suffix, 3)
+
+    def test_change_the_flavor_name_existing_name(self):
+        """Flavor name exists in Openstack flavor list."""
+        self.flavor1.name = "other-flavor-6"
+        self.flavor2.name = "other-flavor-3"
+        self.vimconn.nova.flavors.list.return_value = [self.flavor1, self.flavor2]
+        name = "other-flavor-3"
+        name_suffix = 5
+        flavor_data = {"name": "other-flavor"}
+        expected_result = "other-flavor-7"
+        result = self.vimconn._change_flavor_name(name, name_suffix, flavor_data)
+        self.assertEqual(result, expected_result)
+        # Checking whether name_suffix changed or not.
+        self.assertEqual(name_suffix, 5)
+        self.vimconn.nova.flavors.list.assert_called_once()
+
+    def test_change_the_flavor_name_flavor_data_does_not_have_name(self):
+        """Flavor data does not have name."""
+        self.flavor1.name = "other-flavor-6"
+        self.flavor2.name = "other-flavor-3"
+        self.vimconn.nova.flavors.list.return_value = [self.flavor1, self.flavor2]
+        name = "other-flavor-3"
+        name_suffix = 5
+        flavor_data = {}
+        with self.assertRaises(KeyError):
+            self.vimconn._change_flavor_name(name, name_suffix, flavor_data)
+        self.vimconn.nova.flavors.list.assert_called_once()
+        # Checking whether name_suffix changed or not.
+        self.assertEqual(name_suffix, 5)
+
+    def test_change_the_flavor_name_invalid_name_suffix(self):
+        """Name suffix is invalid."""
+        self.flavor1.name = "other-flavor-6"
+        self.flavor2.name = "other-flavor-3"
+        self.vimconn.nova.flavors.list.return_value = [self.flavor1, self.flavor2]
+        name = "other-flavor-3"
+        name_suffix = "a"
+        flavor_data = {"name": "other-flavor"}
+        with self.assertRaises(TypeError):
+            self.vimconn._change_flavor_name(name, name_suffix, flavor_data)
+        self.vimconn.nova.flavors.list.assert_called_once()
+        # Checking whether name_suffix changed or not.
+        self.assertEqual(name_suffix, "a")
+
+    def test_change_the_flavor_name_given_name_is_empty(self):
+        """Given name is empty string."""
+        self.flavor1.name = "other-flavor-6"
+        self.flavor2.name = "other-flavor-3"
+        self.vimconn.nova.flavors.list.return_value = [self.flavor1, self.flavor2]
+        name = ""
+        name_suffix = 3
+        flavor_data = {"name": "other-flavor"}
+        result = self.vimconn._change_flavor_name(name, name_suffix, flavor_data)
+        self.assertEqual(result, "")
+        self.vimconn.nova.flavors.list.assert_called_once()
+        # Checking whether name_suffix increased or not.
+        self.assertEqual(name_suffix, 3)
+
+    def test_change_the_flavor_name_given_name_is_none(self):
+        """Given name is None."""
+        self.flavor1.name = "other-flavor-6"
+        self.flavor2.name = "other-flavor-3"
+        self.vimconn.nova.flavors.list.return_value = [self.flavor1, self.flavor2]
+        name = None
+        name_suffix = 6
+        flavor_data = {"name": "other-flavor"}
+        result = self.vimconn._change_flavor_name(name, name_suffix, flavor_data)
+        self.assertEqual(result, None)
+        self.vimconn.nova.flavors.list.assert_called_once()
+        # Checking whether name_suffix increased or not.
+        self.assertEqual(name_suffix, 6)
+
+    def test_change_the_flavor_name_empty_nova_flavor_list(self):
+        """Nova flavor list is empty."""
+        self.vimconn.nova.flavors.list.return_value = []
+        name = "other-flavor-3"
+        name_suffix = 5
+        flavor_data = {"name": "other-flavor"}
+        result = self.vimconn._change_flavor_name(name, name_suffix, flavor_data)
+        self.vimconn.nova.flavors.list.assert_called_once()
+        self.assertEqual(result, name)
+        # Checking whether name_suffix increased or not.
+        self.assertEqual(name_suffix, 5)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_with_numa_cpu_mem_vif_disk_quota(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended has numas, cpu, mem, vif and disk-io quota."""
+        numas = [
+            {"memory": 1, "vcpu": [1, 3], "threads": 3},
+            {"memory": 2, "vcpu": [2]},
+        ]
+        vcpus = 3
+        extended = {
+            "numas": numas,
+            "cpu-quota": {"limit": 3},
+            "mem-quota": {"limit": 1},
+            "vif-quota": {"limit": 10},
+            "disk-io-quota": {"limit": 50},
+            "mempage-size": "LARGE",
+        }
+        extra_specs = {}
+        expected_extra_specs = {
+            "hw:mem_page_size": "large",
+        }
+        mock_process_numa_parameters_of_flavor.return_value = vcpus
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.assertEqual(mock_process_resource_quota.call_count, 4)
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {}, vcpus)
+        self.assertEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_with_numa_wrong_disk_quota(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended has wrong disk quota key."""
+        numas = [
+            {"memory": 1, "threads": 3},
+            {"memory": 2, "vcpu": [2]},
+        ]
+        vcpus = 3
+        extended = {
+            "numas": numas,
+            "disk-quota": {"limit": 50},
+            "mempage-size": "PREFER_LARGE",
+        }
+        extra_specs = {}
+        expected_extra_specs = {
+            "hw:mem_page_size": "any",
+        }
+        mock_process_numa_parameters_of_flavor.return_value = vcpus
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        mock_process_resource_quota.assert_not_called()
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {}, vcpus)
+        self.assertEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_without_numa_cpu_mem_vif_disk_quota(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended has cpu, mem, vif and disk-io quota but not numas."""
+        vcpus = 3
+        extended = {
+            "cpu-quota": {"limit": 3},
+            "mem-quota": {"limit": 1},
+            "vif-quota": {"limit": 10},
+            "disk-io-quota": {"limit": 50},
+            "mempage-size": "SMALL",
+        }
+        extra_specs = {}
+        expected_extra_specs = {
+            "hw:mem_page_size": "small",
+        }
+        mock_process_numa_parameters_of_flavor.return_value = vcpus
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, vcpus)
+        self.assertEqual(mock_process_resource_quota.call_count, 4)
+        mock_process_numa_parameters_of_flavor.assert_not_called()
+        self.assertEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_with_numa_with_cpu_pinning_mem_policy(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended has cpu, mem quota, cpu-pinning and mem-policy."""
+        numas = [
+            {"memory": 1},
+            {"memory": 2, "vcpu": [2]},
+        ]
+        extended = {
+            "numas": numas,
+            "cpu-quota": {"limit": 3},
+            "mem-quota": {"limit": 1},
+            "mempage-size": "LARGE",
+            "cpu-pinning-policy": "DEDICATED",
+            "mem-policy": "STRICT",
+        }
+        extra_specs = {}
+        vcpus = 3
+        expected_extra_specs = {
+            "hw:mem_page_size": "large",
+            "hw:cpu_policy": "dedicated",
+            "hw:numa_mempolicy": "strict",
+        }
+        mock_process_numa_parameters_of_flavor.return_value = 4
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, 4)
+        self.assertEqual(mock_process_resource_quota.call_count, 2)
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {}, vcpus)
+        self.assertEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_without_numa_with_cpu_pinning_mem_policy(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended has cpu, mem quota, cpu-pinning and mem-policy but not numas."""
+        extended = {
+            "cpu-quota": {"limit": 3},
+            "mem-quota": {"limit": 1},
+            "mempage-size": "LARGE",
+            "cpu-pinning-policy": "DEDICATED",
+            "mem-policy": "STRICT",
+        }
+        extra_specs = {}
+        vcpus = 3
+        expected_extra_specs = {
+            "hw:mem_page_size": "large",
+            "hw:cpu_policy": "dedicated",
+            "hw:numa_mempolicy": "strict",
+        }
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, 3)
+        self.assertEqual(mock_process_resource_quota.call_count, 2)
+        mock_process_numa_parameters_of_flavor.assert_not_called()
+        self.assertEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_without_numa_with_wrong_mempage_size(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended has wrong mempage-size without numas."""
+        extended = {
+            "cpu-quota": {"limit": 3},
+            "mem-quota": {"limit": 1},
+            "mempage-size": "SIZE_2GB",
+            "cpu-pinning-policy": "DEDICATED",
+            "mem-policy": "STRICT",
+        }
+        extra_specs = {}
+        vcpus = 6
+        expected_extra_specs = {
+            "hw:cpu_policy": "dedicated",
+            "hw:numa_mempolicy": "strict",
+        }
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, 6)
+        self.assertEqual(mock_process_resource_quota.call_count, 2)
+        mock_process_numa_parameters_of_flavor.assert_not_called()
+        self.assertEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_with_numa_with_wrong_mempage_size(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended has wrong mempage-size with numas."""
+        numas = [
+            {"memory": 1},
+            {"memory": 2, "vcpu": [2]},
+        ]
+        extended = {
+            "numas": numas,
+            "cpu-quota": {"limit": 3},
+            "mem-quota": {"limit": 1},
+            "mempage-size": "SIZE_2GB",
+            "cpu-pinning-policy": "DEDICATED",
+            "mem-policy": "STRICT",
+        }
+        extra_specs = {}
+        mock_process_numa_parameters_of_flavor.return_value = 4
+        vcpus = 1
+        expected_extra_specs = {
+            "hw:cpu_policy": "dedicated",
+            "hw:numa_mempolicy": "strict",
+        }
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, 4)
+        self.assertEqual(mock_process_resource_quota.call_count, 2)
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {}, vcpus)
+        self.assertEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_none_vcpus(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended has cpu, mem quota, cpu-pinning and mem-policy, vcpus is None."""
+        numas = [
+            {"memory": 1},
+            {"memory": 2, "vcpu": [2]},
+        ]
+        extended = {
+            "numas": numas,
+            "cpu-quota": {"limit": 3},
+            "mem-quota": {"limit": 1},
+            "mempage-size": "SIZE_2GB",
+            "cpu-pinning-policy": "DEDICATED",
+            "mem-policy": "STRICT",
+        }
+        mock_process_numa_parameters_of_flavor.return_value = 1
+        extra_specs = {}
+        vcpus = None
+        expected_extra_specs = {
+            "hw:cpu_policy": "dedicated",
+            "hw:numa_mempolicy": "strict",
+        }
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, 1)
+        self.assertEqual(mock_process_resource_quota.call_count, 2)
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {}, vcpus)
+        self.assertEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_none_vcpus_without_numas(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended has cpu, mem quota, cpu-pinning and mem-policy, vcpus is None."""
+        extended = {
+            "cpu-quota": {"limit": 3},
+            "mem-quota": {"limit": 1},
+            "mempage-size": "SIZE_2GB",
+            "cpu-pinning-policy": "DEDICATED",
+            "mem-policy": "STRICT",
+        }
+        extra_specs = {"some-key": "some-val"}
+        vcpus = None
+        expected_extra_specs = {
+            "hw:cpu_policy": "dedicated",
+            "hw:numa_mempolicy": "strict",
+            "some-key": "some-val",
+        }
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, None)
+        self.assertEqual(mock_process_resource_quota.call_count, 2)
+        mock_process_numa_parameters_of_flavor.assert_not_called()
+        self.assertEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_wrong_cpu_pinning_mem_policy_empty_vcpus(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended has wrong cpu-pinning and mem-policy keys."""
+        numas = [
+            {"memory": 1},
+            {"memory": 2, "vcpu": [2]},
+        ]
+        extended = {
+            "numas": numas,
+            "cpu-quota": {"limit": 3},
+            "mem-quota": {"limit": 1},
+            "mempage-size": "SIZE_2GB",
+            "cpu-pinning-pol": "DEDICATED",
+            "mem-pol": "STRICT",
+        }
+        mock_process_numa_parameters_of_flavor.return_value = 1
+        extra_specs = {}
+        vcpus = ""
+        expected_extra_specs = {}
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, 1)
+        self.assertEqual(mock_process_resource_quota.call_count, 2)
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(
+            numas, extra_specs, vcpus
+        )
+        self.assertEqual(extra_specs, expected_extra_specs)
+
+    @patch.object(
+        vimconnector,
+        "_process_numa_parameters_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "process_resource_quota", new_callable=CopyingMock())
+    def test_process_extended_config_of_flavor_empty_extended(
+        self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
+    ):
+        """Process extended config, extended is empty."""
+        extended = {}
+        extra_specs = {}
+        vcpus = 2
+        result = self.vimconn._process_extended_config_of_flavor(
+            extended, extra_specs, vcpus
+        )
+        self.assertEqual(result, 2)
+        self.check_if_assert_not_called(
+            [mock_process_resource_quota, mock_process_numa_parameters_of_flavor]
+        )
+        self.assertEqual(extra_specs, {})
+
+    def test_get_flavor_details_empty_flavor_data(self):
+        flavor_data = {}
+        expected_result = (64, 1, {}, None)
+        result = self.vimconn._get_flavor_details(flavor_data)
+        self.assertEqual(result, expected_result)
+
+    def test_get_flavor_details_flavor_data_has_ram_vcpus_extended(self):
+        flavor_data = {
+            "ram": 32,
+            "vcpus": 3,
+            "extended": {
+                "some-key": "some-val",
+            },
+        }
+        expected_result = (32, 3, {}, {"some-key": "some-val"})
+        result = self.vimconn._get_flavor_details(flavor_data)
+        self.assertEqual(result, expected_result)
+
+    def test_get_flavor_details_flavor_data_is_none(self):
+        flavor_data = None
+        with self.assertRaises(AttributeError):
+            self.vimconn._get_flavor_details(flavor_data)
+
+    def test_get_flavor_details_flavor_data_has_only_extended(self):
+        flavor_data = {
+            "extended": {
+                "some-key": "some-val",
+            }
+        }
+        expected_result = (64, 1, {}, {"some-key": "some-val"})
+        result = self.vimconn._get_flavor_details(flavor_data)
+        self.assertEqual(result, expected_result)
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_with_extended_with_extra_specs(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor with using extended parameters and extra specs."""
+        name_suffix = 0
+        vcpus = 8
+        mock_change_flavor_name.return_value = name1
+        mock_extended_config_of_flavor.return_value = vcpus
+        mock_get_flavor_details.return_value = (
+            3,
+            vcpus,
+            {"some-key": "some-value"},
+            extended,
+        )
+        expected_result = self.new_flavor.id
+        result = self.vimconn.new_flavor(flavor_data)
+        self.assertEqual(result, expected_result)
+        mock_reload_connection.assert_called_once()
+        self.new_flavor.set_keys.assert_called_once()
+        mock_get_flavor_details.assert_called_once_with(flavor_data)
+        mock_change_flavor_name.assert_called_once_with(name1, name_suffix, flavor_data)
+        mock_extended_config_of_flavor.assert_called_once_with(
+            extended, {"some-key": "some-value"}, vcpus
+        )
+        self.vimconn.nova.flavors.create.assert_called_once_with(
+            name=name1, ram=3, vcpus=8, disk=50, ephemeral=0, swap=0, is_public=True
+        )
+        mock_format_exception.assert_not_called()
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_with_extended_without_extra_specs(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor with using extended parameters without extra specs."""
+        name_suffix = 0
+        vcpus = 8
+        mock_change_flavor_name.return_value = name1
+        mock_extended_config_of_flavor.return_value = vcpus
+        mock_get_flavor_details.return_value = (3, vcpus, {}, extended)
+        expected_result = self.new_flavor.id
+        result = self.vimconn.new_flavor(flavor_data)
+        self.assertEqual(result, expected_result)
+        mock_reload_connection.assert_called_once()
+
+        mock_get_flavor_details.assert_called_once_with(flavor_data)
+        mock_change_flavor_name.assert_called_once_with(name1, name_suffix, flavor_data)
+        mock_extended_config_of_flavor.assert_called_once_with(extended, {}, vcpus)
+        self.vimconn.nova.flavors.create.assert_called_once_with(
+            name=name1, ram=3, vcpus=vcpus, disk=50, ephemeral=0, swap=0, is_public=True
+        )
+        self.check_if_assert_not_called(
+            [self.new_flavor.set_keys, mock_format_exception]
+        )
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_change_name_if_used_false_with_extended(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor, change_name_if_used_false, there is extended."""
+        vcpus = 8
+        mock_get_flavor_details.return_value = (3, vcpus, {}, extended)
+        mock_extended_config_of_flavor.return_value = 16
+        expected_result = self.new_flavor.id
+        result = self.vimconn.new_flavor(flavor_data, False)
+        self.assertEqual(result, expected_result)
+        mock_reload_connection.assert_called_once()
+        self.assertEqual(mock_get_flavor_details.call_count, 1)
+        mock_extended_config_of_flavor.assert_called_once_with(extended, {}, vcpus)
+        self.vimconn.nova.flavors.create.assert_called_once_with(
+            name=name1, ram=3, vcpus=16, disk=50, ephemeral=0, swap=0, is_public=True
+        )
+        self.check_if_assert_not_called(
+            [mock_change_flavor_name, mock_format_exception, self.new_flavor.set_keys]
+        )
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_change_name_if_used_true_without_extended(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor without extended parameters."""
+        name_suffix = 0
+        mock_change_flavor_name.return_value = name1
+        expected_result = self.new_flavor.id
+        mock_get_flavor_details.return_value = (3, 8, {}, None)
+        result = self.vimconn.new_flavor(flavor_data2)
+        self.assertEqual(result, expected_result)
+
+        mock_reload_connection.assert_called_once()
+        mock_change_flavor_name.assert_called_once_with(
+            name1, name_suffix, flavor_data2
+        )
+        self.assertEqual(mock_get_flavor_details.call_count, 1)
+
+        self.vimconn.nova.flavors.create.assert_called_once_with(
+            name=name1, ram=3, vcpus=8, disk=50, ephemeral=0, swap=0, is_public=True
+        )
+        self.check_if_assert_not_called(
+            [
+                self.new_flavor.set_keys,
+                mock_extended_config_of_flavor,
+                mock_format_exception,
+            ]
+        )
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_reload_connection_exception(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor, reload connection exception occurred."""
+        error_msg = "Can not connect to client APIs."
+        error = nvExceptions.ClientException(error_msg)
+        mock_change_flavor_name.return_value = name1
+        mock_reload_connection.side_effect = error
+        with self.assertRaises(Exception) as err:
+            self.vimconn.new_flavor(flavor_data2)
+            self.assertEqual(str(err.exception), "Can not connect to client APIs.")
+        self.assertEqual(mock_reload_connection.call_count, 1)
+        call_mock_format_exception = mock_format_exception.call_args
+        self.assertEqual(
+            str(call_mock_format_exception[0][0]), str(ClientException(error_msg))
+        )
+        self.check_if_assert_not_called(
+            [
+                mock_change_flavor_name,
+                mock_get_flavor_details,
+                mock_extended_config_of_flavor,
+                self.vimconn.nova.flavors.create,
+            ]
+        )
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(autospec=True),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_flavor_data_without_name(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor, flavor data does not have name."""
+        flavor_data3 = {
+            "ram": 3,
+            "vcpus": 8,
+            "disk": 50,
+        }
+        error_msg = "name"
+        self.vimconn.new_flavor(flavor_data3)
+        mock_format_exception.assert_called_once()
+        call_mock_format_exception = mock_format_exception.call_args
+        self.assertEqual(
+            str(call_mock_format_exception[0][0]), str(KeyError(error_msg))
+        )
+        self.check_if_assert_not_called(
+            [
+                mock_reload_connection,
+                mock_change_flavor_name,
+                mock_get_flavor_details,
+                mock_extended_config_of_flavor,
+                self.vimconn.nova.flavors.create,
+            ]
+        )
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_change_flavor_name_has_extended_conflict_exception_recovered_in_retry(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor, nvExceptions.Conflict occurred and recovered, there is extended config."""
+        name_suffix = 0
+        error_msg = "Conflict has occurred while creating flavor name."
+        error2 = nvExceptions.Conflict(error_msg)
+        mock_change_flavor_name.side_effect = [error2, "sample-flavor-3"]
+        expected_result = self.new_flavor.id
+        mock_get_flavor_details.return_value = (3, 8, {}, extended)
+        mock_extended_config_of_flavor.return_value = 10
+        result = self.vimconn.new_flavor(flavor_data2)
+        self.assertEqual(result, expected_result)
+        self.assertEqual(mock_reload_connection.call_count, 2)
+
+        mock_change_flavor_name.assert_called_with(name1, name_suffix, flavor_data2)
+        self.assertEqual(mock_change_flavor_name.call_count, 2)
+        self.assertEqual(mock_get_flavor_details.call_count, 1)
+        self.assertEqual(mock_extended_config_of_flavor.call_count, 1)
+        self.vimconn.nova.flavors.create.assert_called_once_with(
+            name="sample-flavor-3",
+            ram=3,
+            vcpus=10,
+            disk=50,
+            ephemeral=0,
+            swap=0,
+            is_public=True,
+        )
+        self.check_if_assert_not_called(
+            [self.new_flavor.set_keys, mock_format_exception]
+        )
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_change_flavor_name_without_extended_conflict_exception_recovered_in_retry(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor, nvExceptions.Conflict occurred and recovered, there is not extended config."""
+        name_suffix = 0
+        error2 = nvExceptions.Conflict(
+            "Conflict has occurred while creating flavor name."
+        )
+        mock_change_flavor_name.side_effect = [error2, "sample-flavor-3"]
+        expected_result = self.new_flavor.id
+        mock_get_flavor_details.return_value = (3, 8, {}, None)
+        result = self.vimconn.new_flavor(flavor_data2)
+
+        self.assertEqual(result, expected_result)
+        self.assertEqual(mock_reload_connection.call_count, 2)
+        mock_change_flavor_name.assert_called_with(name1, name_suffix, flavor_data2)
+        self.assertEqual(mock_change_flavor_name.call_count, 2)
+        self.assertEqual(mock_get_flavor_details.call_count, 1)
+
+        self.vimconn.nova.flavors.create.assert_called_once_with(
+            name="sample-flavor-3",
+            ram=3,
+            vcpus=8,
+            disk=50,
+            ephemeral=0,
+            swap=0,
+            is_public=True,
+        )
+        self.check_if_assert_not_called(
+            [
+                self.new_flavor.set_keys,
+                mock_extended_config_of_flavor,
+                mock_format_exception,
+            ]
+        )
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_change_flavor_name_conflict_exception_change_name_if_used_false(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor, nvExceptions.Conflict occurred,
+        change_name_if_used is false."""
+        change_name_if_used = False
+        error_msg = "Conflict has occurred while creating flavor name."
+        error2 = nvExceptions.Conflict(error_msg)
+        mock_get_flavor_details.return_value = (4, 8, {}, None)
+        self.vimconn.nova.flavors.create.side_effect = error2
+        with self.assertRaises(Exception) as err:
+            self.vimconn.new_flavor(flavor_data2, change_name_if_used)
+            self.assertEqual(str(err.exception), error_msg)
+            self.assertEqual(type(err.exception), nvExceptions.Conflict)
+        self.vimconn.nova.flavors.create.assert_called_with(
+            name="sample-flavor",
+            ram=4,
+            vcpus=8,
+            disk=50,
+            ephemeral=0,
+            swap=0,
+            is_public=True,
+        )
+        self.assertEqual(mock_get_flavor_details.call_count, 3)
+        self.assertEqual(self.vimconn.nova.flavors.create.call_count, 3)
+        self.assertEqual(mock_reload_connection.call_count, 3)
+        self.check_if_assert_not_called(
+            [mock_change_flavor_name, mock_extended_config_of_flavor]
+        )
+        _call_mock_format_exception = mock_format_exception.call_args
+        self.assertEqual(
+            str(_call_mock_format_exception[0][0]), str(Conflict(error_msg))
+        )
+        self.assertEqual(mock_format_exception.call_count, 3)
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_client_exception_occurred_change_name_if_used_true(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor, nvExceptions.ClientException occurred,
+        change_name_if_used is true."""
+        error_msg = "Connection failed."
+        error2 = nvExceptions.ClientException(error_msg)
+        mock_change_flavor_name.side_effect = [
+            "sample-flavor-3",
+            "sample-flavor-4",
+            "sample-flavor-5",
+        ]
+        mock_get_flavor_details.return_value = (3, 8, {}, None)
+        self.vimconn.nova.flavors.create.side_effect = error2
+        with self.assertRaises(Exception) as err:
+            self.vimconn.new_flavor(flavor_data2)
+            self.assertEqual(
+                str(err.exception), "Conflict has occurred while creating flavor name."
+            )
+            self.assertEqual(type(err.exception), nvExceptions.Conflict)
+        self.assertEqual(self.vimconn.nova.flavors.create.call_count, 1)
+        _call_mock_nova_create_flavor = self.vimconn.nova.flavors.create.call_args_list
+        self.assertEqual(
+            _call_mock_nova_create_flavor[0][1],
+            (
+                {
+                    "name": "sample-flavor-3",
+                    "ram": 3,
+                    "vcpus": 8,
+                    "disk": 50,
+                    "ephemeral": 0,
+                    "swap": 0,
+                    "is_public": True,
+                }
+            ),
+        )
+
+        self.assertEqual(mock_reload_connection.call_count, 1)
+        self.assertEqual(mock_get_flavor_details.call_count, 1)
+        _call_mock_change_flavor = mock_change_flavor_name.call_args_list
+        self.assertEqual(
+            _call_mock_change_flavor[0][0],
+            (
+                "sample-flavor",
+                0,
+                {"name": "sample-flavor", "ram": 3, "vcpus": 8, "disk": 50},
+            ),
+        )
+        self.assertEqual(mock_change_flavor_name.call_count, 1)
+        mock_extended_config_of_flavor.assert_not_called()
+        call_mock_format_exception = mock_format_exception.call_args
+        self.assertEqual(
+            str(call_mock_format_exception[0][0]), str(ClientException(error_msg))
+        )
+        self.assertEqual(mock_format_exception.call_count, 1)
+
+    @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
+    @patch.object(
+        vimconnector,
+        "_process_extended_config_of_flavor",
+        new_callable=CopyingMock(),
+    )
+    @patch.object(vimconnector, "_change_flavor_name", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    @patch.object(vimconnector, "_format_exception", new_callable=CopyingMock())
+    def test_new_flavor_change_flavor_name_conflict_exception_occurred_change_name_if_used_true(
+        self,
+        mock_format_exception,
+        mock_reload_connection,
+        mock_change_flavor_name,
+        mock_extended_config_of_flavor,
+        mock_get_flavor_details,
+    ):
+        """Create new flavor, nvExceptions.Conflict occurred,
+        change_name_if_used is true."""
+        error_msg = "Conflict has occurred while creating flavor name."
+        error2 = nvExceptions.Conflict(error_msg)
+        mock_change_flavor_name.side_effect = [
+            "sample-flavor-3",
+            "sample-flavor-4",
+            "sample-flavor-5",
+        ]
+        mock_get_flavor_details.return_value = (3, 8, {}, None)
+        self.vimconn.nova.flavors.create.side_effect = error2
+        with self.assertRaises(Exception) as err:
+            self.vimconn.new_flavor(flavor_data2)
+            self.assertEqual(str(err.exception), error_msg)
+            self.assertEqual(type(err.exception), nvExceptions.Conflict)
+        self.assertEqual(self.vimconn.nova.flavors.create.call_count, 3)
+        _call_mock_nova_create_flavor = self.vimconn.nova.flavors.create.call_args_list
+        self.assertEqual(
+            _call_mock_nova_create_flavor[0][1],
+            (
+                {
+                    "name": "sample-flavor-3",
+                    "ram": 3,
+                    "vcpus": 8,
+                    "disk": 50,
+                    "ephemeral": 0,
+                    "swap": 0,
+                    "is_public": True,
+                }
+            ),
+        )
+        self.assertEqual(
+            _call_mock_nova_create_flavor[1][1],
+            (
+                {
+                    "name": "sample-flavor-4",
+                    "ram": 3,
+                    "vcpus": 8,
+                    "disk": 50,
+                    "ephemeral": 0,
+                    "swap": 0,
+                    "is_public": True,
+                }
+            ),
+        )
+        self.assertEqual(
+            _call_mock_nova_create_flavor[2][1],
+            (
+                {
+                    "name": "sample-flavor-5",
+                    "ram": 3,
+                    "vcpus": 8,
+                    "disk": 50,
+                    "ephemeral": 0,
+                    "swap": 0,
+                    "is_public": True,
+                }
+            ),
+        )
+
+        self.assertEqual(mock_reload_connection.call_count, 3)
+        _call_mock_change_flavor = mock_change_flavor_name.call_args_list
+        self.assertEqual(
+            _call_mock_change_flavor[0][0],
+            (
+                "sample-flavor",
+                0,
+                {"name": "sample-flavor", "ram": 3, "vcpus": 8, "disk": 50},
+            ),
+        )
+        self.assertEqual(
+            _call_mock_change_flavor[1][0],
+            (
+                "sample-flavor-3",
+                0,
+                {"name": "sample-flavor", "ram": 3, "vcpus": 8, "disk": 50},
+            ),
+        )
+        self.assertEqual(
+            _call_mock_change_flavor[2][0],
+            (
+                "sample-flavor-4",
+                0,
+                {"name": "sample-flavor", "ram": 3, "vcpus": 8, "disk": 50},
+            ),
+        )
+        self.assertEqual(mock_change_flavor_name.call_count, 3)
+        mock_extended_config_of_flavor.assert_not_called()
+        call_mock_format_exception = mock_format_exception.call_args
+        self.assertEqual(
+            str(call_mock_format_exception[0][0]), str(Conflict(error_msg))
+        )
+        self.assertEqual(mock_format_exception.call_count, 1)
 
 
 if __name__ == "__main__":

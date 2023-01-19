@@ -38,7 +38,7 @@ from pprint import pformat
 import random
 import re
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from cinderclient import client as cClient
 from glanceclient import client as glClient
@@ -1227,11 +1227,14 @@ class vimconnector(vimconn.VimConnector):
         ) as e:
             self._format_exception(e)
 
-    def process_resource_quota(self, quota, prefix, extra_specs):
-        """
-        :param prefix:
-        :param extra_specs:
-        :return:
+    @staticmethod
+    def process_resource_quota(quota: dict, prefix: str, extra_specs: dict) -> None:
+        """Process resource quota and fill up extra_specs.
+        Args:
+            quota       (dict):         Keeping the quota of resurces
+            prefix      (str)           Prefix
+            extra_specs (dict)          Dict to be filled to be used during flavor creation
+
         """
         if "limit" in quota:
             extra_specs["quota:" + prefix + "_limit"] = quota["limit"]
@@ -1243,11 +1246,253 @@ class vimconnector(vimconn.VimConnector):
             extra_specs["quota:" + prefix + "_shares_level"] = "custom"
             extra_specs["quota:" + prefix + "_shares_share"] = quota["shares"]
 
-    def new_flavor(self, flavor_data, change_name_if_used=True):
-        """Adds a tenant flavor to openstack VIM
-        if change_name_if_used is True, it will change name in case of conflict, because it is not supported name
-         repetition
-        Returns the flavor identifier
+    @staticmethod
+    def process_numa_memory(
+        numa: dict, node_id: Optional[int], extra_specs: dict
+    ) -> None:
+        """Set the memory in extra_specs.
+        Args:
+            numa        (dict):         A dictionary which includes numa information
+            node_id     (int):          ID of numa node
+            extra_specs (dict):         To be filled.
+
+        """
+        if not numa.get("memory"):
+            return
+        memory_mb = numa["memory"] * 1024
+        memory = "hw:numa_mem.{}".format(node_id)
+        extra_specs[memory] = int(memory_mb)
+
+    @staticmethod
+    def process_numa_vcpu(numa: dict, node_id: int, extra_specs: dict) -> None:
+        """Set the cpu in extra_specs.
+        Args:
+            numa        (dict):         A dictionary which includes numa information
+            node_id     (int):          ID of numa node
+            extra_specs (dict):         To be filled.
+
+        """
+        if not numa.get("vcpu"):
+            return
+        vcpu = numa["vcpu"]
+        cpu = "hw:numa_cpus.{}".format(node_id)
+        vcpu = ",".join(map(str, vcpu))
+        extra_specs[cpu] = vcpu
+
+    @staticmethod
+    def process_numa_paired_threads(numa: dict, extra_specs: dict) -> Optional[int]:
+        """Fill up extra_specs if numa has paired-threads.
+        Args:
+            numa        (dict):         A dictionary which includes numa information
+            extra_specs (dict):         To be filled.
+
+        Returns:
+            vcpus       (int)           Number of virtual cpus
+
+        """
+        if not numa.get("paired-threads"):
+            return
+        # cpu_thread_policy "require" implies that compute node must have an STM architecture
+        vcpus = numa["paired-threads"] * 2
+        extra_specs["hw:cpu_thread_policy"] = "require"
+        extra_specs["hw:cpu_policy"] = "dedicated"
+        return vcpus
+
+    @staticmethod
+    def process_numa_cores(numa: dict, extra_specs: dict) -> Optional[int]:
+        """Fill up extra_specs if numa has cores.
+        Args:
+            numa        (dict):         A dictionary which includes numa information
+            extra_specs (dict):         To be filled.
+
+        Returns:
+            vcpus       (int)           Number of virtual cpus
+
+        """
+        # cpu_thread_policy "isolate" implies that the host must not have an SMT
+        # architecture, or a non-SMT architecture will be emulated
+        if not numa.get("cores"):
+            return
+        vcpus = numa["cores"]
+        extra_specs["hw:cpu_thread_policy"] = "isolate"
+        extra_specs["hw:cpu_policy"] = "dedicated"
+        return vcpus
+
+    @staticmethod
+    def process_numa_threads(numa: dict, extra_specs: dict) -> Optional[int]:
+        """Fill up extra_specs if numa has threads.
+        Args:
+            numa        (dict):         A dictionary which includes numa information
+            extra_specs (dict):         To be filled.
+
+        Returns:
+            vcpus       (int)           Number of virtual cpus
+
+        """
+        # cpu_thread_policy "prefer" implies that the host may or may not have an SMT architecture
+        if not numa.get("threads"):
+            return
+        vcpus = numa["threads"]
+        extra_specs["hw:cpu_thread_policy"] = "prefer"
+        extra_specs["hw:cpu_policy"] = "dedicated"
+        return vcpus
+
+    def _process_numa_parameters_of_flavor(
+        self, numas: List, extra_specs: Dict, vcpus: Optional[int]
+    ) -> int:
+        """Process numa parameters and fill up extra_specs.
+
+        Args:
+            numas   (list):             List of dictionary which includes numa information
+            extra_specs (dict):         To be filled.
+            vcpus       (int)      Number of virtual cpus
+
+        Returns:
+            vcpus       (int)           Number of virtual cpus
+
+        """
+        numa_nodes = len(numas)
+        extra_specs["hw:numa_nodes"] = str(numa_nodes)
+
+        if self.vim_type == "VIO":
+            extra_specs["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
+            extra_specs["vmware:latency_sensitivity_level"] = "high"
+
+        for numa in numas:
+            if "id" in numa:
+                node_id = numa["id"]
+                # overwrite ram and vcpus
+                # check if key "memory" is present in numa else use ram value at flavor
+                self.process_numa_memory(numa, node_id, extra_specs)
+                self.process_numa_vcpu(numa, node_id, extra_specs)
+
+            # See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/implemented/virt-driver-cpu-thread-pinning.html
+            extra_specs["hw:cpu_sockets"] = str(numa_nodes)
+
+            if "paired-threads" in numa:
+                vcpus = self.process_numa_paired_threads(numa, extra_specs)
+
+            elif "cores" in numa:
+                vcpus = self.process_numa_cores(numa, extra_specs)
+
+            elif "threads" in numa:
+                vcpus = self.process_numa_threads(numa, extra_specs)
+
+        return vcpus
+
+    def _change_flavor_name(
+        self, name: str, name_suffix: int, flavor_data: dict
+    ) -> str:
+        """Change the flavor name if the name already exists.
+
+        Args:
+            name    (str):          Flavor name to be checked
+            name_suffix (int):      Suffix to be appended to name
+            flavor_data (dict):     Flavor dict
+
+        Returns:
+            name    (str):          New flavor name to be used
+
+        """
+        # Get used names
+        fl = self.nova.flavors.list()
+        fl_names = [f.name for f in fl]
+
+        while name in fl_names:
+            name_suffix += 1
+            name = flavor_data["name"] + "-" + str(name_suffix)
+
+        return name
+
+    def _process_extended_config_of_flavor(
+        self, extended: dict, extra_specs: dict, vcpus: Optional[int]
+    ) -> int:
+        """Process the extended dict to fill up extra_specs.
+        Args:
+
+            extended    (dict):         Keeping the extra specification of flavor
+            extra_specs (dict)          Dict to be filled to be used during flavor creation
+            vcpus       (int)           Number of virtual cpus
+
+        Returns:
+            vcpus       (int)           Number of virtual cpus
+
+        """
+        quotas = {
+            "cpu-quota": "cpu",
+            "mem-quota": "memory",
+            "vif-quota": "vif",
+            "disk-io-quota": "disk_io",
+        }
+
+        page_sizes = {
+            "LARGE": "large",
+            "SMALL": "small",
+            "SIZE_2MB": "2MB",
+            "SIZE_1GB": "1GB",
+            "PREFER_LARGE": "any",
+        }
+
+        policies = {
+            "cpu-pinning-policy": "hw:cpu_policy",
+            "cpu-thread-pinning-policy": "hw:cpu_thread_policy",
+            "mem-policy": "hw:numa_mempolicy",
+        }
+
+        numas = extended.get("numas")
+        if numas:
+            vcpus = self._process_numa_parameters_of_flavor(numas, extra_specs, vcpus)
+
+        for quota, item in quotas.items():
+            if quota in extended.keys():
+                self.process_resource_quota(extended.get(quota), item, extra_specs)
+
+        # Set the mempage size as specified in the descriptor
+        if extended.get("mempage-size"):
+            if extended["mempage-size"] in page_sizes.keys():
+                extra_specs["hw:mem_page_size"] = page_sizes[extended["mempage-size"]]
+            else:
+                # Normally, validations in NBI should not allow to this condition.
+                self.logger.debug(
+                    "Invalid mempage-size %s. Will be ignored",
+                    extended.get("mempage-size"),
+                )
+
+        for policy, hw_policy in policies.items():
+            if extended.get(policy):
+                extra_specs[hw_policy] = extended[policy].lower()
+
+        return vcpus
+
+    @staticmethod
+    def _get_flavor_details(flavor_data: dict) -> Tuple:
+        """Returns the details of flavor
+        Args:
+            flavor_data     (dict):     Dictionary that includes required flavor details
+
+        Returns:
+            ram, vcpus, extra_specs, extended   (tuple):    Main items of required flavor
+
+        """
+        return (
+            flavor_data.get("ram", 64),
+            flavor_data.get("vcpus", 1),
+            {},
+            flavor_data.get("extended"),
+        )
+
+    def new_flavor(self, flavor_data: dict, change_name_if_used: bool = True) -> str:
+        """Adds a tenant flavor to openstack VIM.
+        if change_name_if_used is True, it will change name in case of conflict,
+        because it is not supported name repetition.
+
+        Args:
+            flavor_data (dict):             Flavor details to be processed
+            change_name_if_used (bool):     Change name in case of conflict
+
+        Returns:
+             flavor_id  (str):     flavor identifier
+
         """
         self.logger.debug("Adding flavor '%s'", str(flavor_data))
         retry = 0
@@ -1262,138 +1507,18 @@ class vimconnector(vimconn.VimConnector):
                     self._reload_connection()
 
                     if change_name_if_used:
-                        # get used names
-                        fl_names = []
-                        fl = self.nova.flavors.list()
+                        name = self._change_flavor_name(name, name_suffix, flavor_data)
 
-                        for f in fl:
-                            fl_names.append(f.name)
-
-                        while name in fl_names:
-                            name_suffix += 1
-                            name = flavor_data["name"] + "-" + str(name_suffix)
-
-                    ram = flavor_data.get("ram", 64)
-                    vcpus = flavor_data.get("vcpus", 1)
-                    extra_specs = {}
-
-                    extended = flavor_data.get("extended")
+                    ram, vcpus, extra_specs, extended = self._get_flavor_details(
+                        flavor_data
+                    )
                     if extended:
-                        numas = extended.get("numas")
+                        vcpus = self._process_extended_config_of_flavor(
+                            extended, extra_specs, vcpus
+                        )
 
-                        if numas:
-                            numa_nodes = len(numas)
+                    # Create flavor
 
-                            extra_specs["hw:numa_nodes"] = str(numa_nodes)
-
-                            if self.vim_type == "VIO":
-                                extra_specs[
-                                    "vmware:extra_config"
-                                ] = '{"numa.nodeAffinity":"0"}'
-                                extra_specs["vmware:latency_sensitivity_level"] = "high"
-
-                            for numa in numas:
-                                if "id" in numa:
-                                    node_id = numa["id"]
-
-                                    if "memory" in numa:
-                                        memory_mb = numa["memory"] * 1024
-                                        memory = "hw:numa_mem.{}".format(node_id)
-                                        extra_specs[memory] = int(memory_mb)
-
-                                    if "vcpu" in numa:
-                                        vcpu = numa["vcpu"]
-                                        cpu = "hw:numa_cpus.{}".format(node_id)
-                                        vcpu = ",".join(map(str, vcpu))
-                                        extra_specs[cpu] = vcpu
-
-                                # overwrite ram and vcpus
-                                # check if key "memory" is present in numa else use ram value at flavor
-                                # See for reference: https://specs.openstack.org/openstack/nova-specs/specs/mitaka/
-                                # implemented/virt-driver-cpu-thread-pinning.html
-                                extra_specs["hw:cpu_sockets"] = str(numa_nodes)
-
-                                if "paired-threads" in numa:
-                                    vcpus = numa["paired-threads"] * 2
-                                    # cpu_thread_policy "require" implies that the compute node must have an
-                                    # STM architecture
-                                    extra_specs["hw:cpu_thread_policy"] = "require"
-                                    extra_specs["hw:cpu_policy"] = "dedicated"
-                                elif "cores" in numa:
-                                    vcpus = numa["cores"]
-                                    # cpu_thread_policy "prefer" implies that the host must not have an SMT
-                                    # architecture, or a non-SMT architecture will be emulated
-                                    extra_specs["hw:cpu_thread_policy"] = "isolate"
-                                    extra_specs["hw:cpu_policy"] = "dedicated"
-                                elif "threads" in numa:
-                                    vcpus = numa["threads"]
-                                    # cpu_thread_policy "prefer" implies that the host may or may not have an SMT
-                                    # architecture
-                                    extra_specs["hw:cpu_thread_policy"] = "prefer"
-                                    extra_specs["hw:cpu_policy"] = "dedicated"
-                                # for interface in numa.get("interfaces",() ):
-                                #     if interface["dedicated"]=="yes":
-                                #         raise vimconn.VimConnException("Passthrough interfaces are not supported
-                                #         for the openstack connector", http_code=vimconn.HTTP_Service_Unavailable)
-                                #     #TODO, add the key 'pci_passthrough:alias"="<label at config>:<number ifaces>"'
-                                #      when a way to connect it is available
-                        elif extended.get("cpu-quota"):
-                            self.process_resource_quota(
-                                extended.get("cpu-quota"), "cpu", extra_specs
-                            )
-
-                        if extended.get("mem-quota"):
-                            self.process_resource_quota(
-                                extended.get("mem-quota"), "memory", extra_specs
-                            )
-
-                        if extended.get("vif-quota"):
-                            self.process_resource_quota(
-                                extended.get("vif-quota"), "vif", extra_specs
-                            )
-
-                        if extended.get("disk-io-quota"):
-                            self.process_resource_quota(
-                                extended.get("disk-io-quota"), "disk_io", extra_specs
-                            )
-
-                        # Set the mempage size as specified in the descriptor
-                        if extended.get("mempage-size"):
-                            if extended.get("mempage-size") == "LARGE":
-                                extra_specs["hw:mem_page_size"] = "large"
-                            elif extended.get("mempage-size") == "SMALL":
-                                extra_specs["hw:mem_page_size"] = "small"
-                            elif extended.get("mempage-size") == "SIZE_2MB":
-                                extra_specs["hw:mem_page_size"] = "2MB"
-                            elif extended.get("mempage-size") == "SIZE_1GB":
-                                extra_specs["hw:mem_page_size"] = "1GB"
-                            elif extended.get("mempage-size") == "PREFER_LARGE":
-                                extra_specs["hw:mem_page_size"] = "any"
-                            else:
-                                # The validations in NBI should make reaching here not possible.
-                                # If this message is shown, check validations
-                                self.logger.debug(
-                                    "Invalid mempage-size %s. Will be ignored",
-                                    extended.get("mempage-size"),
-                                )
-                        if extended.get("cpu-pinning-policy"):
-                            extra_specs["hw:cpu_policy"] = extended.get(
-                                "cpu-pinning-policy"
-                            ).lower()
-
-                        # Set the cpu thread pinning policy as specified in the descriptor
-                        if extended.get("cpu-thread-pinning-policy"):
-                            extra_specs["hw:cpu_thread_policy"] = extended.get(
-                                "cpu-thread-pinning-policy"
-                            ).lower()
-
-                        # Set the mem policy as specified in the descriptor
-                        if extended.get("mem-policy"):
-                            extra_specs["hw:numa_mempolicy"] = extended.get(
-                                "mem-policy"
-                            ).lower()
-
-                    # create flavor
                     new_flavor = self.nova.flavors.create(
                         name=name,
                         ram=ram,
@@ -1403,17 +1528,19 @@ class vimconnector(vimconn.VimConnector):
                         swap=flavor_data.get("swap", 0),
                         is_public=flavor_data.get("is_public", True),
                     )
-                    # add metadata
+
+                    # Add metadata
                     if extra_specs:
                         new_flavor.set_keys(extra_specs)
 
                     return new_flavor.id
+
                 except nvExceptions.Conflict as e:
                     if change_name_if_used and retry < max_retries:
                         continue
 
                     self._format_exception(e)
-        # except nvExceptions.BadRequest as e:
+
         except (
             ksExceptions.ClientException,
             nvExceptions.ClientException,
