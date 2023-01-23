@@ -1488,7 +1488,7 @@ class TestNs(unittest.TestCase):
         self.assertDictEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
-    def test__process_guest_epa_cpu_pinning_params_with_threads(self):
+    def test__process_guest_epa_cpu_pinning_params_with_policy_prefer(self):
         expected_numa_result = {"threads": 3}
         expected_epa_vcpu_set_result = True
         guest_epa_quota = {
@@ -1507,8 +1507,46 @@ class TestNs(unittest.TestCase):
         self.assertDictEqual(expected_numa_result, numa_result)
         self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
 
-    def test__process_guest_epa_cpu_pinning_params(self):
+    def test__process_guest_epa_cpu_pinning_params_with_policy_isolate(self):
         expected_numa_result = {"cores": 3}
+        expected_epa_vcpu_set_result = True
+        guest_epa_quota = {
+            "cpu-pinning-policy": "DEDICATED",
+            "cpu-thread-pinning-policy": "ISOLATE",
+        }
+        vcpu_count = 3
+        epa_vcpu_set = False
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_cpu_pinning_params(
+            guest_epa_quota=guest_epa_quota,
+            vcpu_count=vcpu_count,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_cpu_pinning_params_with_policy_require(self):
+        expected_numa_result = {"threads": 3}
+        expected_epa_vcpu_set_result = True
+        guest_epa_quota = {
+            "cpu-pinning-policy": "DEDICATED",
+            "cpu-thread-pinning-policy": "REQUIRE",
+        }
+        vcpu_count = 3
+        epa_vcpu_set = False
+
+        numa_result, epa_vcpu_set_result = Ns._process_guest_epa_cpu_pinning_params(
+            guest_epa_quota=guest_epa_quota,
+            vcpu_count=vcpu_count,
+            epa_vcpu_set=epa_vcpu_set,
+        )
+
+        self.assertDictEqual(expected_numa_result, numa_result)
+        self.assertEqual(expected_epa_vcpu_set_result, epa_vcpu_set_result)
+
+    def test__process_guest_epa_cpu_pinning_params(self):
+        expected_numa_result = {"threads": 3}
         expected_epa_vcpu_set_result = True
         guest_epa_quota = {
             "cpu-pinning-policy": "DEDICATED",
