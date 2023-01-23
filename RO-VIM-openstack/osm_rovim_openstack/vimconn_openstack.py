@@ -1287,16 +1287,17 @@ class vimconnector(vimconn.VimConnector):
             extra_specs (dict):         To be filled.
 
         Returns:
-            vcpus       (int)           Number of virtual cpus
+            threads       (int)           Number of virtual cpus
 
         """
         if not numa.get("paired-threads"):
             return
+
         # cpu_thread_policy "require" implies that compute node must have an STM architecture
-        vcpus = numa["paired-threads"] * 2
+        threads = numa["paired-threads"] * 2
         extra_specs["hw:cpu_thread_policy"] = "require"
         extra_specs["hw:cpu_policy"] = "dedicated"
-        return vcpus
+        return threads
 
     @staticmethod
     def process_numa_cores(numa: dict, extra_specs: dict) -> Optional[int]:
@@ -1306,17 +1307,17 @@ class vimconnector(vimconn.VimConnector):
             extra_specs (dict):         To be filled.
 
         Returns:
-            vcpus       (int)           Number of virtual cpus
+            cores       (int)           Number of virtual cpus
 
         """
         # cpu_thread_policy "isolate" implies that the host must not have an SMT
         # architecture, or a non-SMT architecture will be emulated
         if not numa.get("cores"):
             return
-        vcpus = numa["cores"]
+        cores = numa["cores"]
         extra_specs["hw:cpu_thread_policy"] = "isolate"
         extra_specs["hw:cpu_policy"] = "dedicated"
-        return vcpus
+        return cores
 
     @staticmethod
     def process_numa_threads(numa: dict, extra_specs: dict) -> Optional[int]:
@@ -1326,33 +1327,30 @@ class vimconnector(vimconn.VimConnector):
             extra_specs (dict):         To be filled.
 
         Returns:
-            vcpus       (int)           Number of virtual cpus
+            threads       (int)           Number of virtual cpus
 
         """
         # cpu_thread_policy "prefer" implies that the host may or may not have an SMT architecture
         if not numa.get("threads"):
             return
-        vcpus = numa["threads"]
+        threads = numa["threads"]
         extra_specs["hw:cpu_thread_policy"] = "prefer"
         extra_specs["hw:cpu_policy"] = "dedicated"
-        return vcpus
+        return threads
 
     def _process_numa_parameters_of_flavor(
-        self, numas: List, extra_specs: Dict, vcpus: Optional[int]
-    ) -> int:
+        self, numas: List, extra_specs: Dict
+    ) -> None:
         """Process numa parameters and fill up extra_specs.
 
         Args:
             numas   (list):             List of dictionary which includes numa information
             extra_specs (dict):         To be filled.
-            vcpus       (int)      Number of virtual cpus
-
-        Returns:
-            vcpus       (int)           Number of virtual cpus
 
         """
         numa_nodes = len(numas)
         extra_specs["hw:numa_nodes"] = str(numa_nodes)
+        cpu_cores, cpu_threads = 0, 0
 
         if self.vim_type == "VIO":
             extra_specs["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
@@ -1370,15 +1368,21 @@ class vimconnector(vimconn.VimConnector):
             extra_specs["hw:cpu_sockets"] = str(numa_nodes)
 
             if "paired-threads" in numa:
-                vcpus = self.process_numa_paired_threads(numa, extra_specs)
+                threads = self.process_numa_paired_threads(numa, extra_specs)
+                cpu_threads += threads
 
             elif "cores" in numa:
-                vcpus = self.process_numa_cores(numa, extra_specs)
+                cores = self.process_numa_cores(numa, extra_specs)
+                cpu_cores += cores
 
             elif "threads" in numa:
-                vcpus = self.process_numa_threads(numa, extra_specs)
+                threads = self.process_numa_threads(numa, extra_specs)
+                cpu_threads += threads
 
-        return vcpus
+        if cpu_cores:
+            extra_specs["hw:cpu_cores"] = str(cpu_cores)
+        if cpu_threads:
+            extra_specs["hw:cpu_threads"] = str(cpu_threads)
 
     def _change_flavor_name(
         self, name: str, name_suffix: int, flavor_data: dict
@@ -1405,17 +1409,13 @@ class vimconnector(vimconn.VimConnector):
         return name
 
     def _process_extended_config_of_flavor(
-        self, extended: dict, extra_specs: dict, vcpus: Optional[int]
-    ) -> int:
+        self, extended: dict, extra_specs: dict
+    ) -> None:
         """Process the extended dict to fill up extra_specs.
         Args:
 
-            extended    (dict):         Keeping the extra specification of flavor
-            extra_specs (dict)          Dict to be filled to be used during flavor creation
-            vcpus       (int)           Number of virtual cpus
-
-        Returns:
-            vcpus       (int)           Number of virtual cpus
+            extended                    (dict):         Keeping the extra specification of flavor
+            extra_specs                 (dict)          Dict to be filled to be used during flavor creation
 
         """
         quotas = {
@@ -1441,7 +1441,7 @@ class vimconnector(vimconn.VimConnector):
 
         numas = extended.get("numas")
         if numas:
-            vcpus = self._process_numa_parameters_of_flavor(numas, extra_specs, vcpus)
+            self._process_numa_parameters_of_flavor(numas, extra_specs)
 
         for quota, item in quotas.items():
             if quota in extended.keys():
@@ -1461,8 +1461,6 @@ class vimconnector(vimconn.VimConnector):
         for policy, hw_policy in policies.items():
             if extended.get(policy):
                 extra_specs[hw_policy] = extended[policy].lower()
-
-        return vcpus
 
     @staticmethod
     def _get_flavor_details(flavor_data: dict) -> Tuple:
@@ -1513,9 +1511,7 @@ class vimconnector(vimconn.VimConnector):
                         flavor_data
                     )
                     if extended:
-                        vcpus = self._process_extended_config_of_flavor(
-                            extended, extra_specs, vcpus
-                        )
+                        self._process_extended_config_of_flavor(extended, extra_specs)
 
                     # Create flavor
 

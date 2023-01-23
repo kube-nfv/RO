@@ -722,9 +722,12 @@ class Ns(object):
             guest_epa_quota.get("cpu-pinning-policy") == "DEDICATED"
             and not epa_vcpu_set
         ):
+            # Pinning policy "REQUIRE" uses threads as host should support SMT architecture
+            # Pinning policy "ISOLATE" uses cores as host should not support SMT architecture
+            # Pinning policy "PREFER" uses threads in case host supports SMT architecture
             numa[
                 "cores"
-                if guest_epa_quota.get("cpu-thread-pinning-policy") != "PREFER"
+                if guest_epa_quota.get("cpu-thread-pinning-policy") == "ISOLATE"
                 else "threads"
             ] = max(vcpu_count, 1)
             local_epa_vcpu_set = True
