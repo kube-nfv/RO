@@ -1291,9 +1291,6 @@ class vimconnector(vimconn.VimConnector):
                             extra_specs["hw:numa_mempolicy"] = "strict"
 
                             if self.vim_type == "VIO":
-                                extra_specs[
-                                    "vmware:extra_config"
-                                ] = '{"numa.nodeAffinity":"0"}'
                                 extra_specs["vmware:latency_sensitivity_level"] = "high"
 
                             for numa in numas:
