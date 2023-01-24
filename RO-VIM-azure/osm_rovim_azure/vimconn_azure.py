@@ -21,7 +21,6 @@ import re
 from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import ClientSecretCredential
 from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.compute.models import DiskCreateOption
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 from azure.profiles import ProfileDefinition
@@ -952,32 +951,8 @@ class vimconnector(vimconn.VimConnector):
             virtual_machine = creation_result.result()
             self.logger.debug("created vm name: %s", vm_name)
 
-            """ Por ahora no hacer polling para ver si tarda menos
-            # Add disks if they are provided
-            if disk_list:
-                for disk_index, disk in enumerate(disk_list):
-                    self.logger.debug(
-                        "add disk size: %s, image: %s",
-                        disk.get("size"),
-                        disk.get("image"),
-                    )
-                    self._add_newvm_disk(
-                        virtual_machine, vm_name, disk_index, disk, created_items
-                    )
-
-            if start:
-                self.conn_compute.virtual_machines.start(self.resource_group, vm_name)
-            # start_result.wait()
-            """
-
             return virtual_machine.id, created_items
 
-            # run_command_parameters = {
-            #     "command_id": "RunShellScript", # For linux, don't change it
-            #     "script": [
-            #     "date > /tmp/test.txt"
-            #     ]
-            # }
         except Exception as e:
             # Rollback vm creacion
             vm_id = None
@@ -1112,92 +1087,6 @@ class vimconnector(vimconn.VimConnector):
     def _get_azure_availability_zones(self):
         return self.AZURE_ZONES
 
-    def _add_newvm_disk(
-        self, virtual_machine, vm_name, disk_index, disk, created_items={}
-    ):
-        disk_name = None
-        data_disk = None
-
-        # Check if must create empty disk or from image
-        if disk.get("vim_id"):
-            # disk already exists, just get
-            parsed_id = azure_tools.parse_resource_id(disk.get("vim_id"))
-            disk_name = parsed_id.get("name")
-            data_disk = self.conn_compute.disks.get(self.resource_group, disk_name)
-        else:
-            disk_name = vm_name + "_DataDisk_" + str(disk_index)
-            if not disk.get("image_id"):
-                self.logger.debug("create new data disk name: %s", disk_name)
-                async_disk_creation = self.conn_compute.disks.begin_create_or_update(
-                    self.resource_group,
-                    disk_name,
-                    {
-                        "location": self.region,
-                        "disk_size_gb": disk.get("size"),
-                        "creation_data": {"create_option": DiskCreateOption.empty},
-                    },
-                )
-                data_disk = async_disk_creation.result()
-                created_items[data_disk.id] = True
-            else:
-                image_id = disk.get("image_id")
-
-                if azure_tools.is_valid_resource_id(image_id):
-                    parsed_id = azure_tools.parse_resource_id(image_id)
-
-                    # Check if image is snapshot or disk
-                    image_name = parsed_id.get("name")
-                    type = parsed_id.get("resource_type")
-
-                    if type == "snapshots" or type == "disks":
-                        self.logger.debug("create disk from copy name: %s", image_name)
-                        # ¿Should check that snapshot exists?
-                        async_disk_creation = (
-                            self.conn_compute.disks.begin_create_or_update(
-                                self.resource_group,
-                                disk_name,
-                                {
-                                    "location": self.region,
-                                    "creation_data": {
-                                        "create_option": "Copy",
-                                        "source_uri": image_id,
-                                    },
-                                },
-                            )
-                        )
-                        data_disk = async_disk_creation.result()
-                        created_items[data_disk.id] = True
-                    else:
-                        raise vimconn.VimConnNotFoundException(
-                            "Invalid image_id: %s ", image_id
-                        )
-                else:
-                    raise vimconn.VimConnNotFoundException(
-                        "Invalid image_id: %s ", image_id
-                    )
-
-        # Attach the disk created
-        virtual_machine.storage_profile.data_disks.append(
-            {
-                "lun": disk_index,
-                "name": disk_name,
-                "create_option": DiskCreateOption.attach,
-                "managed_disk": {"id": data_disk.id},
-                "disk_size_gb": disk.get("size"),
-            }
-        )
-        self.logger.debug("attach disk name: %s", disk_name)
-        self.conn_compute.virtual_machines.begin_create_or_update(
-            self.resource_group, virtual_machine.name, virtual_machine
-        )
-
-    # It is necesary extract from image_id data to create the VM with this format
-    #        "image_reference": {
-    #           "publisher": vm_reference["publisher"],
-    #           "offer": vm_reference["offer"],
-    #           "sku": vm_reference["sku"],
-    #           "version": vm_reference["version"]
-    #        },
     def _get_image_reference(self, image_id):
         try:
             # The data input format example:
@@ -2074,128 +1963,3 @@ if __name__ == "__main__":
         log_level=None,
         config=config,
     )
-
-    """
-    logger.debug("List images")
-    image = azure.get_image_list({"name": "Canonical:UbuntuServer:18.04-LTS:18.04.201809110"})
-    logger.debug("image: {}".format(image))
-
-    logger.debug("List networks")
-    network_list = azure.get_network_list({"name": "internal"})
-    logger.debug("Network_list: {}".format(network_list))
-
-    logger.debug("List flavors")
-    flavors = azure.get_flavor_id_from_data({"vcpus": 2})
-    logger.debug("flavors: {}".format(flavors))
-    """
-
-    """
-    # Create network and test machine
-    #new_network_id, _ = azure.new_network("testnet1", "data")
-    new_network_id = ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers")
-                      "/Microsoft.Network/virtualNetworks/osm_vnet/subnets/testnet1"
-                      ).format(test_params["resource_group"])
-    logger.debug("new_network_id: {}".format(new_network_id))
-
-    logger.debug("Delete network")
-    new_network_id = azure.delete_network(new_network_id)
-    logger.debug("deleted network_id: {}".format(new_network_id))
-    """
-
-    """
-    logger.debug("List networks")
-    network_list = azure.get_network_list({"name": "internal"})
-    logger.debug("Network_list: {}".format(network_list))
-
-    logger.debug("Show machine isabelvm")
-    vmachine = azure.get_vminstance( ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}"
-                                      "/providers/Microsoft.Compute/virtualMachines/isabelVM"
-                                      ).format(test_params["resource_group"])
-                                    )
-    logger.debug("Vmachine: {}".format(vmachine))
-    """
-
-    """
-    logger.debug("List images")
-    image = azure.get_image_list({"name": "Canonical:UbuntuServer:16.04"})
-    # image = azure.get_image_list({"name": "Canonical:UbuntuServer:18.04-LTS"})
-    logger.debug("image: {}".format(image))
-    """
-
-    """
-    # Create network and test machine
-    new_network_id, _ = azure.new_network("testnet1", "data")
-    image_id = ("/Subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/Providers/Microsoft.Compute"
-                "/Locations/northeurope/Publishers/Canonical/ArtifactTypes/VMImage/Offers/UbuntuServer"
-                "/Skus/18.04-LTS/Versions/18.04.201809110")
-    """
-    """
-
-    network_id = ("subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}
-                  "/providers/Microsoft.Network/virtualNetworks/osm_vnet/subnets/internal"
-                 ).format(test_params["resource_group"])
-    """
-
-    """
-    logger.debug("Create machine")
-    image_id = ("/Subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/Providers/Microsoft.Compute/Locations"
-                "/northeurope/Publishers/Canonical/ArtifactTypes/VMImage/Offers/UbuntuServer/Skus/18.04-LTS"
-                "/Versions/18.04.202103151")
-    cloud_config = {"user-data": (
-                    "#cloud-config\n"
-                    "password: osm4u\n"
-                    "chpasswd: { expire: False }\n"
-                    "ssh_pwauth: True\n\n"
-                    "write_files:\n"
-                    "-   content: |\n"
-                    "        # My new helloworld file\n\n"
-                    "    owner: root:root\n"
-                    "    permissions: '0644'\n"
-                    "    path: /root/helloworld.txt",
-                    "key-pairs": [
-                        ("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC/p7fuw/W0+6uhx9XNPY4dN/K2cXZweDfjJN8W/sQ1AhKvn"
-                         "j0MF+dbBdsd2tfq6XUhx5LiKoGTunRpRonOw249ivH7pSyNN7FYpdLaij7Krn3K+QRNEOahMI4eoqdglVftA3"
-                         "vlw4Oe/aZOU9BXPdRLxfr9hRKzg5zkK91/LBkEViAijpCwK6ODPZLDDUwY4iihYK9R5eZ3fmM4+3k3Jd0hPRk"
-                         "B5YbtDQOu8ASWRZ9iTAWqr1OwQmvNc6ohSVg1tbq3wSxj/5bbz0J24A7TTpY0giWctne8Qkl/F2e0ZSErvbBB"
-                         "GXKxfnq7sc23OK1hPxMAuS+ufzyXsnL1+fB4t2iF azureuser@osm-test-client\n"
-                        )]
-    }
-    network_id = ("subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers"
-                  "/Microsoft.Network/virtualNetworks/osm_vnet/subnets/internal"
-                 ).format(test_params["resource_group"])
-    vm = azure.new_vminstance(name="isabelvm",
-                            description="testvm",
-                            start=True,
-                            image_id=image_id,
-                            flavor_id="Standard_B1ls",
-                            net_list = [{"net_id": network_id, "name": "internal", "use": "mgmt", "floating_ip":True}],
-                            cloud_config = cloud_config)
-    logger.debug("vm: {}".format(vm))
-    """
-
-    """
-    # Delete nonexistent vm
-    try:
-        logger.debug("Delete machine")
-        vm_id = ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers/Microsoft.Compute/"
-                "virtualMachines/isabelvm"
-                ).format(test_params["resource_group"])
-        created_items = {
-            ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers/Microsoft.Network"
-             "/networkInterfaces/isabelvm-nic-0"
-            ).format(test_params["resource_group"]): True,
-            ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers/Microsoft.Network"
-             "/publicIPAddresses/isabelvm-nic-0-public-ip"
-            ).format(test_params["resource_group"]): True
-        }
-        azure.delete_vminstance(vm_id, created_items)
-    except vimconn.VimConnNotFoundException as e:
-        print("Ok: excepcion no encontrada")
-    """
-
-    """
-    network_id = ("/subscriptions/5c1a2458-dfde-4adf-a4e3-08fa0e21d171/resourceGroups/{}/providers/Microsoft.Network"
-                  "/virtualNetworks/osm_vnet/subnets/hfcloudinit-internal-1"
-                 ).format(test_params["resource_group"])
-    azure.delete_network(network_id)
-    """

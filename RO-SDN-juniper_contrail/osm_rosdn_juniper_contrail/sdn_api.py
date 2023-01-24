@@ -233,9 +233,6 @@ class UnderlayApi:
             "virtual-port-group"
         )
 
-    def get_vpgs(self):
-        return self.get_all_by_type(self.controller_url, "virtual-port-groups")
-
     def get_vpg_by_name(self, vpg_name):
         fq_name = ["default-global-system-config", self.fabric, vpg_name]
 
