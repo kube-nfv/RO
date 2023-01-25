@@ -39,7 +39,7 @@ dist_ro_vim_gcp"
 TOX_ENV_LIST="$(echo $PACKAGES | sed "s/ /,/g")"
 PROCESSES=$(expr `nproc --a` / 2)
 
-TOX_PARALLEL_NO_SPINNER=1 tox -e $TOX_ENV_LIST --parallel $PROCESSES
+TOX_PARALLEL_NO_SPINNER=1 tox -e $TOX_ENV_LIST
 
 # Copying packages
 # RO plugin

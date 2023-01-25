@@ -162,9 +162,7 @@ class ContrailHttp(object):
         except AuthError:
             # If there is an auth error retry just once
             if retry_auth_error:
-                return self._request(
-                    self, op, url, headers, data, retry_auth_error=False
-                )
+                return self._request(op, url, headers, data, retry_auth_error=False)
 
     def _request_noauth(self, op, url, headers, data=None):
         # Method to execute http requests with error control

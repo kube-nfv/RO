@@ -606,52 +606,6 @@ class vimconnector(vimconn.VimConnector):
         except Exception as e:
             self.format_vimconn_exception(e)
 
-    def get_flavor_id_from_data(self, flavor_dict):
-        """Obtain flavor id that match the flavor description
-        Params:
-            'flavor_dict': dictionary that contains:
-                'disk': main hard disk in GB
-                'ram': memory in MB
-                'vcpus': number of virtual cpus
-                #todo: complete parameters for EPA
-        Returns the flavor_id or raises a vimconnNotFoundException
-        """
-        self.logger.debug("Getting flavor id from data")
-
-        try:
-            flavor = None
-            for key, values in self.flavor_info.items():
-                if (values["ram"], values["cpus"], values["disk"]) == (
-                    flavor_dict["ram"],
-                    flavor_dict["vcpus"],
-                    flavor_dict["disk"],
-                ):
-                    flavor = (key, values)
-                    break
-                elif (values["ram"], values["cpus"], values["disk"]) >= (
-                    flavor_dict["ram"],
-                    flavor_dict["vcpus"],
-                    flavor_dict["disk"],
-                ):
-                    if not flavor:
-                        flavor = (key, values)
-                    else:
-                        if (flavor[1]["ram"], flavor[1]["cpus"], flavor[1]["disk"]) >= (
-                            values["ram"],
-                            values["cpus"],
-                            values["disk"],
-                        ):
-                            flavor = (key, values)
-
-            if flavor:
-                return flavor[0]
-
-            raise vimconn.VimConnNotFoundException(
-                "Cannot find flavor with this flavor ID/Name"
-            )
-        except Exception as e:
-            self.format_vimconn_exception(e)
-
     def new_image(self, image_dict):
         """Adds a tenant image to VIM
         Params: image_dict
@@ -993,7 +947,6 @@ class vimconnector(vimconn.VimConnector):
         else:
             raise vimconn.VimConnException(
                 "Failed to get instance_id for reservation",
-                reservation,
                 http_code=vimconn.HTTP_Request_Timeout,
             )
 

@@ -1791,9 +1791,9 @@ class NsWorker(threading.Thread):
         )
         plugin_name = ""
         vim = None
+        step = "Getting {}={} from db".format(target, _id)
 
         try:
-            step = "Getting {}={} from db".format(target, _id)
             # TODO process for wim, sdnc, ...
             vim = self.db.get_one(target_database, {"_id": _id})
 
