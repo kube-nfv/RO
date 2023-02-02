@@ -829,7 +829,8 @@ class vimconnector(vimconn.VimConnector):
 
     def get_network(self, net_id):
         """Method obtains network details of net_id VIM network
-        Return a dict with  the fields at filter_dict (see get_network_list) plus some VIM specific>}, ...]"""
+        Return a dict with  the fields at filter_dict (see get_network_list) plus some VIM specific>}, ...]
+        """
         try:
             _, vdc = self.get_vdc_details()
             vdc_id = vdc.get("id").split(":")[3]

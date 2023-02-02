@@ -214,7 +214,6 @@ class Server(object):
         }
 
     def _format_in(self, kwargs):
-
         error_text = ""
         try:
             indata = None

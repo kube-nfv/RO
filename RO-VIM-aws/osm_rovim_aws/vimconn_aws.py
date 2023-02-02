@@ -806,7 +806,6 @@ class vimconnector(vimconn.VimConnector):
 
             else:
                 for index, subnet in enumerate(net_list):
-
                     net_intr = self.conn_vpc.create_network_interface(
                         subnet_id=subnet.get("net_id"),
                         groups=None,

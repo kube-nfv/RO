@@ -1040,7 +1040,6 @@ class VimInteractionSdnNet(VimInteractionBase):
         return self.new(ro_task, task_create_index, None)
 
     def new(self, ro_task, task_index, task_depends):
-
         task = ro_task["tasks"][task_index]
         task_id = task["task_id"]
         target_vim = self.my_vims[ro_task["target_id"]]
@@ -2293,7 +2292,10 @@ class NsWorker(threading.Thread):
                             )
 
                         if task["action"] == "DELETE":
-                            (new_status, db_vim_info_update,) = self._delete_task(
+                            (
+                                new_status,
+                                db_vim_info_update,
+                            ) = self._delete_task(
                                 ro_task, task_index, task_depends, db_ro_task_update
                             )
                             new_status = (
@@ -2341,7 +2343,10 @@ class NsWorker(threading.Thread):
                             else:
                                 refresh_at = ro_task["vim_info"]["refresh_at"]
                                 if refresh_at and refresh_at != -1 and now > refresh_at:
-                                    (new_status, db_vim_info_update,) = self.item2class[
+                                    (
+                                        new_status,
+                                        db_vim_info_update,
+                                    ) = self.item2class[
                                         task["item"]
                                     ].refresh(ro_task)
                                     _update_refresh(new_status)

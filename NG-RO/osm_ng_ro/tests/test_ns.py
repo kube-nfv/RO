@@ -1815,7 +1815,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         target_flavor = {}
         indata = {
             "vnf": [
@@ -1842,7 +1841,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         target_flavor = {
             "no-target-flavor": "here",
         }
@@ -1865,7 +1863,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -1910,7 +1907,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -2067,7 +2063,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -2132,7 +2127,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         kwargs = {
             "db": db,
         }
@@ -2243,7 +2237,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -2308,7 +2301,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         kwargs = {
             "db": db,
         }
@@ -3650,7 +3642,8 @@ class TestProcessVduParams(unittest.TestCase):
         self, mock_volume_keeping_required
     ):
         """Find persistent ordinary volume, volume id is not persistent_root_disk dict,
-        vim-volume-id is given as instantiation parameter but disk id is not matching."""
+        vim-volume-id is given as instantiation parameter but disk id is not matching.
+        """
         mock_volume_keeping_required.return_value = True
         vdu_instantiation_volumes_list = [
             {
