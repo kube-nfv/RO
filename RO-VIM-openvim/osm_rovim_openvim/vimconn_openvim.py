@@ -902,6 +902,50 @@ class vimconnector(vimconn.VimConnector):
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
 
+    def new_vminstancefromJSON(self, vm_data):
+        """Adds a VM instance to VIM"""
+        """Returns the instance identifier"""
+        try:
+            self._get_my_tenant()
+        except Exception as e:
+            return -vimconn.HTTP_Not_Found, str(e)
+        print("VIMConnector: Adding a new VM instance from JSON to VIM")
+        payload_req = vm_data
+        try:
+            vim_response = requests.post(
+                self.url + "/" + self.tenant + "/servers",
+                headers=self.headers_req,
+                data=payload_req,
+            )
+        except requests.exceptions.RequestException as e:
+            print("new_vminstancefromJSON Exception: ", e.args)
+            return -vimconn.HTTP_Not_Found, str(e.args[0])
+        # print vim_response
+        # print vim_response.status_code
+        if vim_response.status_code == 200:
+            # print vim_response.json()
+            # print json.dumps(vim_response.json(), indent=4)
+            res, http_content = self._format_in(vim_response, new_image_response_schema)
+            # print http_content
+            if res:
+                r = self._remove_extra_items(http_content, new_image_response_schema)
+                if r is not None:
+                    print("Warning: remove extra items ", r)
+                # print http_content
+                vminstance_id = http_content["server"]["id"]
+                print("Tenant image id: ", vminstance_id)
+                return vim_response.status_code, vminstance_id
+            else:
+                return -vimconn.HTTP_Bad_Request, http_content
+        else:
+            # print vim_response.text
+            jsonerror = self._format_jsonerror(vim_response)
+            text = 'Error in VIM "{}": not possible to add new vm instance. HTTP Response: {}. Error: {}'.format(
+                self.url, vim_response.status_code, jsonerror
+            )
+            # print text
+            return -vim_response.status_code, text
+
     def new_vminstance(
         self,
         name,
@@ -1218,6 +1262,378 @@ class vimconnector(vimconn.VimConnector):
             return None
         except (requests.exceptions.RequestException, js_e.ValidationError) as e:
             self._format_request_exception(e)
+
+    # NOT USED METHODS in current version
+
+    def host_vim2gui(self, host, server_dict):
+        """Transform host dictionary from VIM format to GUI format,
+        and append to the server_dict
+        """
+        if type(server_dict) is not dict:
+            print(
+                "vimconnector.host_vim2gui() ERROR, param server_dict must be a dictionary"
+            )
+            return
+        RAD = {}
+        occupation = {}
+        for numa in host["host"]["numas"]:
+            RAD_item = {}
+            occupation_item = {}
+            # memory
+            RAD_item["memory"] = {
+                "size": str(numa["memory"]) + "GB",
+                "eligible": str(numa["hugepages"]) + "GB",
+            }
+            occupation_item["memory"] = str(numa["hugepages_consumed"]) + "GB"
+            # cpus
+            RAD_item["cpus"] = {}
+            RAD_item["cpus"]["cores"] = []
+            RAD_item["cpus"]["eligible_cores"] = []
+            occupation_item["cores"] = []
+            for _ in range(0, len(numa["cores"]) // 2):
+                RAD_item["cpus"]["cores"].append([])
+            for core in numa["cores"]:
+                RAD_item["cpus"]["cores"][core["core_id"]].append(core["thread_id"])
+                if "status" not in core:
+                    RAD_item["cpus"]["eligible_cores"].append(core["thread_id"])
+                if "instance_id" in core:
+                    occupation_item["cores"].append(core["thread_id"])
+            # ports
+            RAD_item["ports"] = {}
+            occupation_item["ports"] = {}
+            for iface in numa["interfaces"]:
+                RAD_item["ports"][iface["pci"]] = "speed:" + str(iface["Mbps"]) + "M"
+                occupation_item["ports"][iface["pci"]] = {
+                    "occupied": str(100 * iface["Mbps_consumed"] // iface["Mbps"]) + "%"
+                }
+
+            RAD[numa["numa_socket"]] = RAD_item
+            occupation[numa["numa_socket"]] = occupation_item
+        server_dict[host["host"]["name"]] = {"RAD": RAD, "occupation": occupation}
+
+    def get_hosts_info(self):
+        """Get the information of deployed hosts
+        Returns the hosts content"""
+        # obtain hosts list
+        url = self.url + "/hosts"
+        try:
+            vim_response = requests.get(url)
+        except requests.exceptions.RequestException as e:
+            print("get_hosts_info Exception: ", e.args)
+            return -vimconn.HTTP_Not_Found, str(e.args[0])
+        print(
+            "vim get", url, "response:", vim_response.status_code, vim_response.json()
+        )
+        # print vim_response.status_code
+        # print json.dumps(vim_response.json(), indent=4)
+        if vim_response.status_code != 200:
+            # TODO: get error
+            print(
+                "vimconnector.get_hosts_info error getting host list {} {}".format(
+                    vim_response.status_code, vim_response.json()
+                )
+            )
+            return -vim_response.status_code, "Error getting host list"
+
+        res, hosts = self._format_in(vim_response, get_hosts_response_schema)
+
+        if not res:
+            print(
+                "vimconnector.get_hosts_info error parsing GET HOSTS vim response",
+                hosts,
+            )
+            return vimconn.HTTP_Internal_Server_Error, hosts
+        # obtain hosts details
+        hosts_dict = {}
+        for host in hosts["hosts"]:
+            url = self.url + "/hosts/" + host["id"]
+            try:
+                vim_response = requests.get(url)
+            except requests.exceptions.RequestException as e:
+                print("get_hosts_info Exception: ", e.args)
+                return -vimconn.HTTP_Not_Found, str(e.args[0])
+            print(
+                "vim get",
+                url,
+                "response:",
+                vim_response.status_code,
+                vim_response.json(),
+            )
+            if vim_response.status_code != 200:
+                print(
+                    "vimconnector.get_hosts_info error getting detailed host {} {}".format(
+                        vim_response.status_code, vim_response.json()
+                    )
+                )
+                continue
+            res, host_detail = self._format_in(
+                vim_response, get_host_detail_response_schema
+            )
+            if not res:
+                print(
+                    "vimconnector.get_hosts_info error parsing GET HOSTS/{} vim response {}".format(
+                        host["id"], host_detail
+                    ),
+                )
+                continue
+            # print 'host id '+host['id'], json.dumps(host_detail, indent=4)
+            self.host_vim2gui(host_detail, hosts_dict)
+        return 200, hosts_dict
+
+    def get_hosts(self, vim_tenant):
+        """Get the hosts and deployed instances
+        Returns the hosts content"""
+        # obtain hosts list
+        url = self.url + "/hosts"
+        try:
+            vim_response = requests.get(url)
+        except requests.exceptions.RequestException as e:
+            print("get_hosts Exception: ", e.args)
+            return -vimconn.HTTP_Not_Found, str(e.args[0])
+        print(
+            "vim get", url, "response:", vim_response.status_code, vim_response.json()
+        )
+        # print vim_response.status_code
+        # print json.dumps(vim_response.json(), indent=4)
+        if vim_response.status_code != 200:
+            # TODO: get error
+            print(
+                "vimconnector.get_hosts error getting host list {} {}".format(
+                    vim_response.status_code, vim_response.json()
+                )
+            )
+            return -vim_response.status_code, "Error getting host list"
+
+        res, hosts = self._format_in(vim_response, get_hosts_response_schema)
+
+        if not res:
+            print("vimconnector.get_host error parsing GET HOSTS vim response", hosts)
+            return vimconn.HTTP_Internal_Server_Error, hosts
+        # obtain instances from hosts
+        for host in hosts["hosts"]:
+            url = self.url + "/" + vim_tenant + "/servers?hostId=" + host["id"]
+            try:
+                vim_response = requests.get(url)
+            except requests.exceptions.RequestException as e:
+                print("get_hosts Exception: ", e.args)
+                return -vimconn.HTTP_Not_Found, str(e.args[0])
+            print(
+                "vim get",
+                url,
+                "response:",
+                vim_response.status_code,
+                vim_response.json(),
+            )
+            if vim_response.status_code != 200:
+                print(
+                    "vimconnector.get_hosts error getting instances at host {} {}".format(
+                        vim_response.status_code, vim_response.json()
+                    )
+                )
+                continue
+            res, servers = self._format_in(vim_response, get_server_response_schema)
+            if not res:
+                print(
+                    "vimconnector.get_host error parsing GET SERVERS/{} vim response {}".format(
+                        host["id"], servers
+                    ),
+                )
+                continue
+            # print 'host id '+host['id'], json.dumps(host_detail, indent=4)
+            host["instances"] = servers["servers"]
+        return 200, hosts["hosts"]
+
+    def get_processor_rankings(self):
+        """Get the processor rankings in the VIM database"""
+        url = self.url + "/processor_ranking"
+        try:
+            vim_response = requests.get(url)
+        except requests.exceptions.RequestException as e:
+            print("get_processor_rankings Exception: ", e.args)
+            return -vimconn.HTTP_Not_Found, str(e.args[0])
+        print(
+            "vim get", url, "response:", vim_response.status_code, vim_response.json()
+        )
+        # print vim_response.status_code
+        # print json.dumps(vim_response.json(), indent=4)
+        if vim_response.status_code != 200:
+            # TODO: get error
+            print(
+                "vimconnector.get_processor_rankings error getting processor rankings {} {}".format(
+                    vim_response.status_code, vim_response.json()
+                )
+            )
+            return -vim_response.status_code, "Error getting processor rankings"
+
+        res, rankings = self._format_in(
+            vim_response, get_processor_rankings_response_schema
+        )
+        return res, rankings["rankings"]
+
+    def new_host(self, host_data):
+        """Adds a new host to VIM"""
+        """Returns status code of the VIM response"""
+        payload_req = host_data
+        try:
+            url = self.url_admin + "/hosts"
+            self.logger.info("Adding a new host POST %s", url)
+            vim_response = requests.post(
+                url, headers=self.headers_req, data=payload_req
+            )
+            self._check_http_request_response(vim_response)
+            self.logger.debug(vim_response.text)
+            # print json.dumps(vim_response.json(), indent=4)
+            response = vim_response.json()
+            js_v(response, new_host_response_schema)
+            r = self._remove_extra_items(response, new_host_response_schema)
+            if r is not None:
+                self.logger.warn("Warning: remove extra items %s", str(r))
+            host_id = response["host"]["id"]
+            return host_id
+        except (requests.exceptions.RequestException, js_e.ValidationError) as e:
+            self._format_request_exception(e)
+
+    def new_external_port(self, port_data):
+        """Adds a external port to VIM"""
+        """Returns the port identifier"""
+        # TODO change to logging exception code policies
+        print("VIMConnector: Adding a new external port")
+        payload_req = port_data
+        try:
+            vim_response = requests.post(
+                self.url_admin + "/ports", headers=self.headers_req, data=payload_req
+            )
+        except requests.exceptions.RequestException as e:
+            self.logger.error("new_external_port Exception: ", str(e))
+            return -vimconn.HTTP_Not_Found, str(e.args[0])
+        print(vim_response)
+        # print vim_response.status_code
+        if vim_response.status_code == 200:
+            # print vim_response.json()
+            # print json.dumps(vim_response.json(), indent=4)
+            res, http_content = self._format_in(vim_response, new_port_response_schema)
+            # print http_content
+            if res:
+                r = self._remove_extra_items(http_content, new_port_response_schema)
+                if r is not None:
+                    print("Warning: remove extra items ", r)
+                # print http_content
+                port_id = http_content["port"]["id"]
+                print("Port id: ", port_id)
+                return vim_response.status_code, port_id
+            else:
+                return -vimconn.HTTP_Bad_Request, http_content
+        else:
+            # print vim_response.text
+            jsonerror = self._format_jsonerror(vim_response)
+            text = 'Error in VIM "{}": not possible to add new external port. HTTP Response: {}. Error: {}'.format(
+                self.url_admin, vim_response.status_code, jsonerror
+            )
+            # print text
+            return -vim_response.status_code, text
+
+    def new_external_network(self, net_name, net_type):
+        """Adds a external network to VIM (shared)"""
+        """Returns the network identifier"""
+        # TODO change to logging exception code policies
+        print(
+            "VIMConnector: Adding external shared network to VIM (type "
+            + net_type
+            + "): "
+            + net_name
+        )
+
+        payload_req = (
+            '{"network":{"name": "'
+            + net_name
+            + '","shared":true,"type": "'
+            + net_type
+            + '"}}'
+        )
+        try:
+            vim_response = requests.post(
+                self.url + "/networks", headers=self.headers_req, data=payload_req
+            )
+        except requests.exceptions.RequestException as e:
+            self.logger.error("new_external_network Exception: ", e.args)
+            return -vimconn.HTTP_Not_Found, str(e.args[0])
+        print(vim_response)
+        # print vim_response.status_code
+        if vim_response.status_code == 200:
+            # print vim_response.json()
+            # print json.dumps(vim_response.json(), indent=4)
+            res, http_content = self._format_in(
+                vim_response, new_network_response_schema
+            )
+            # print http_content
+            if res:
+                r = self._remove_extra_items(http_content, new_network_response_schema)
+                if r is not None:
+                    print("Warning: remove extra items ", r)
+                # print http_content
+                network_id = http_content["network"]["id"]
+                print("Network id: ", network_id)
+                return vim_response.status_code, network_id
+            else:
+                return -vimconn.HTTP_Bad_Request, http_content
+        else:
+            # print vim_response.text
+            jsonerror = self._format_jsonerror(vim_response)
+            text = 'Error in VIM "{}": not possible to add new external network. HTTP Response: {}. Error: {}'.format(
+                self.url, vim_response.status_code, jsonerror
+            )
+            # print text
+            return -vim_response.status_code, text
+
+    def connect_port_network(self, port_id, network_id, admin=False):
+        """Connects a external port to a network"""
+        """Returns status code of the VIM response"""
+        # TODO change to logging exception code policies
+        print("VIMConnector: Connecting external port to network")
+
+        payload_req = '{"port":{"network_id":"' + network_id + '"}}'
+        if admin:
+            if self.url_admin is None:
+                return (
+                    -vimconn.HTTP_Unauthorized,
+                    "datacenter cannot contain  admin URL",
+                )
+            url = self.url_admin
+        else:
+            url = self.url
+        try:
+            vim_response = requests.put(
+                url + "/ports/" + port_id, headers=self.headers_req, data=payload_req
+            )
+        except requests.exceptions.RequestException as e:
+            print("connect_port_network Exception: ", e.args)
+            return -vimconn.HTTP_Not_Found, str(e.args[0])
+        print(vim_response)
+        # print vim_response.status_code
+        if vim_response.status_code == 200:
+            # print vim_response.json()
+            # print json.dumps(vim_response.json(), indent=4)
+            res, http_content = self._format_in(vim_response, new_port_response_schema)
+            # print http_content
+            if res:
+                r = self._remove_extra_items(http_content, new_port_response_schema)
+                if r is not None:
+                    print("Warning: remove extra items ", r)
+                # print http_content
+                port_id = http_content["port"]["id"]
+                print("Port id: ", port_id)
+                return vim_response.status_code, port_id
+            else:
+                return -vimconn.HTTP_Bad_Request, http_content
+        else:
+            print(vim_response.text)
+            jsonerror = self._format_jsonerror(vim_response)
+            text = (
+                'Error in VIM "{}": not possible to connect external port to network. HTTP Response: {}.'
+                " Error: {}".format(self.url_admin, vim_response.status_code, jsonerror)
+            )
+            print(text)
+            return -vim_response.status_code, text
 
     def migrate_instance(self, vm_id, compute_host=None):
         """

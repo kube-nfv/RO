@@ -17,4 +17,4 @@
 ---
 other:
   - |
-    Removing unused methods from RO module to get rid of unmaintained code.
+    Revert change 12910 "Removing unused methods from RO module to get rid of unmaintained code."

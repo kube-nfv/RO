@@ -213,6 +213,9 @@ class JuniperContrail(SdnConnectorBase):
     def get_url(self):
         return self.url
 
+    def get_overlay_url(self):
+        return self.overlay_url
+
     def _create_port(self, switch_id, switch_port, network, vlan):
         """
         1 - Look for virtual port groups for provided switch_id, switch_port using name
