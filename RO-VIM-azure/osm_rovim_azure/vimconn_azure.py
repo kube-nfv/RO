@@ -57,7 +57,6 @@ def find_in_list(the_list, condition_lambda):
 
 
 class vimconnector(vimconn.VimConnector):
-
     # Translate azure provisioning state to OSM provision state
     # The first three ones are the transitional status once a user initiated action has been requested
     # Once the operation is complete, it will transition into the states Succeeded or Failed
@@ -995,7 +994,6 @@ class vimconnector(vimconn.VimConnector):
             self._format_vimconn_exception(e)
 
     def _build_os_profile(self, vm_name, cloud_config, image_id):
-
         # initial os_profile
         os_profile = {"computer_name": vm_name}
 
@@ -1426,7 +1424,6 @@ class vimconnector(vimconn.VimConnector):
             self._format_vimconn_exception(e)
 
     def delete_inuse_nic(self, nic_name):
-
         # Obtain nic data
         nic_data = self.conn_vnet.network_interfaces.get(self.resource_group, nic_name)
 
@@ -1449,7 +1446,6 @@ class vimconnector(vimconn.VimConnector):
 
             # TODO - check if there is a public ip to delete and delete it
             if network_interfaces:
-
                 # Deallocate the vm
                 async_vm_deallocate = (
                     self.conn_compute.virtual_machines.begin_deallocate(

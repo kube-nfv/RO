@@ -2479,7 +2479,8 @@ class vimconnector(vimconn.VimConnector):
 
     def action_vminstance(self, vm_id, action_dict, created_items={}):
         """Send and action over a VM instance from VIM
-        Returns None or the console dict if the action was successfully sent to the VIM"""
+        Returns None or the console dict if the action was successfully sent to the VIM
+        """
         self.logger.debug("Action over VM '%s': %s", vm_id, str(action_dict))
 
         try:

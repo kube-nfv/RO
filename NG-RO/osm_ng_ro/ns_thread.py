@@ -977,7 +977,6 @@ class VimInteractionSdnNet(VimInteractionBase):
         return self.new(ro_task, task_create_index, None)
 
     def new(self, ro_task, task_index, task_depends):
-
         task = ro_task["tasks"][task_index]
         task_id = task["task_id"]
         target_vim = self.my_vims[ro_task["target_id"]]
@@ -2185,7 +2184,10 @@ class NsWorker(threading.Thread):
                             )
 
                         if task["action"] == "DELETE":
-                            (new_status, db_vim_info_update,) = self._delete_task(
+                            (
+                                new_status,
+                                db_vim_info_update,
+                            ) = self._delete_task(
                                 ro_task, task_index, task_depends, db_ro_task_update
                             )
                             new_status = (
