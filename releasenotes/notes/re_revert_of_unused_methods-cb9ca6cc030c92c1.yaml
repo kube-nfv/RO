@@ -17,4 +17,5 @@
 ---
 other:
   - |
-    Removing unused methods from RO module to get rid of unmaintained code.
+    Removing unused methods from RO module to get rid of unmaintained code
+    Removed codes are accounted to ETSI.

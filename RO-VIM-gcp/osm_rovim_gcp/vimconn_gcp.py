@@ -19,9 +19,6 @@ import random
 from random import choice as random_choice
 import time
 
-from cryptography.hazmat.backends import default_backend as crypto_default_backend
-from cryptography.hazmat.primitives import serialization as crypto_serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from google.oauth2 import service_account
 import googleapiclient.discovery
 from osm_ro_plugin import vimconn
@@ -809,9 +806,6 @@ class vimconnector(vimconn.VimConnector):
         except Exception as e:
             self._format_vimconn_exception(e)
 
-    def delete_inuse_nic(self, nic_name):
-        raise vimconn.VimConnNotImplemented("Not necessary")
-
     def delete_image(self, image_id):
         raise vimconn.VimConnNotImplemented("Not implemented")
 
@@ -1014,84 +1008,9 @@ class vimconnector(vimconn.VimConnector):
 
         # either password of ssh-keys are required
         # we will always use ssh-keys, in case it is not available we will generate it
-        """
-        if cloud_config and cloud_config.get("key-pairs"):
-            key_data = ""
-            key_pairs = {}
-            if cloud_config.get("key-pairs"):
-                if isinstance(cloud_config["key-pairs"], list):
-                    # Transform the format "<key> <user@host>" into "<user>:<key>"
-                    key_data = ""
-                    for key in cloud_config.get("key-pairs"):
-                        key_data = key_data + key + "\n"
-                    key_pairs = {
-                        "key": "ssh-keys",
-                        "value": key_data
-                    }
-        else:
-            # If there is no ssh key in cloud config, a new key is generated:
-            _, key_data = self._generate_keys()
-            key_pairs = {
-                "key": "ssh-keys",
-                "value": "" + key_data
-            }
-            self.logger.debug("generated keys: %s", key_data)
-
-        metadata["items"].append(key_pairs)
-        """
         self.logger.debug("metadata: %s", metadata)
 
         return metadata
-
-    def _generate_keys(self):
-        """Method used to generate a pair of private/public keys.
-        This method is used because to create a vm in Azure we always need a key or a password
-        In some cases we may have a password in a cloud-init file but it may not be available
-        """
-        key = rsa.generate_private_key(
-            backend=crypto_default_backend(), public_exponent=65537, key_size=2048
-        )
-        private_key = key.private_bytes(
-            crypto_serialization.Encoding.PEM,
-            crypto_serialization.PrivateFormat.PKCS8,
-            crypto_serialization.NoEncryption(),
-        )
-        public_key = key.public_key().public_bytes(
-            crypto_serialization.Encoding.OpenSSH,
-            crypto_serialization.PublicFormat.OpenSSH,
-        )
-        private_key = private_key.decode("utf8")
-        # Change first line because Paramiko needs a explicit start with 'BEGIN RSA PRIVATE KEY'
-        i = private_key.find("\n")
-        private_key = "-----BEGIN RSA PRIVATE KEY-----" + private_key[i:]
-        public_key = public_key.decode("utf8")
-
-        return private_key, public_key
-
-    def _get_unused_vm_name(self, vm_name):
-        """
-        Checks the vm name and in case it is used adds a suffix to the name to allow creation
-        :return:
-        """
-        all_vms = (
-            self.conn_compute.instances()
-            .list(project=self.project, zone=self.zone)
-            .execute()
-        )
-        # Filter to vms starting with the indicated name
-        vms = list(filter(lambda vm: (vm.name.startswith(vm_name)), all_vms))
-        vm_names = [str(vm.name) for vm in vms]
-
-        # get the name with the first not used suffix
-        name_suffix = 0
-        # name = subnet_name + "-" + str(name_suffix)
-        name = vm_name  # first subnet created will have no prefix
-
-        while name in vm_names:
-            name_suffix += 1
-            name = vm_name + "-" + str(name_suffix)
-
-        return name
 
     def get_vminstance(self, vm_id):
         """
@@ -1152,18 +1071,6 @@ class vimconnector(vimconn.VimConnector):
                 self.logger.debug("The VM doesn't exist or has been deleted")
             else:
                 self._format_vimconn_exception(e)
-
-    def _get_net_name_from_resource_id(self, resource_id):
-        try:
-            net_name = str(resource_id.split("/")[-1])
-
-            return net_name
-        except Exception:
-            raise vimconn.VimConnException(
-                "Unable to get google cloud net_name from invalid resource_id format '{}'".format(
-                    resource_id
-                )
-            )
 
     def _get_resource_name_from_resource_id(self, resource_id):
         """
@@ -1341,12 +1248,6 @@ class vimconnector(vimconn.VimConnector):
                 exc_info=True,
             )
             self._format_vimconn_exception(e)
-
-    def _get_default_admin_user(self, image_id):
-        if "ubuntu" in image_id.lower():
-            return "ubuntu"
-        else:
-            return self._default_admin_user
 
     def _create_firewall_rules(self, network):
         """

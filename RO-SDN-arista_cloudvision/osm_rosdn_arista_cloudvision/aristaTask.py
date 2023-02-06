@@ -72,34 +72,6 @@ class AristaCVPTask:
 
         return new_data
 
-    def get_pending_tasks(self):
-        return self.cvpClientApi.get_tasks_by_status("Pending")
-
-    def get_pending_tasks_old(self):
-        taskList = []
-        tasksField = {
-            "workOrderId": "workOrderId",
-            "workOrderState": "workOrderState",
-            "currentTaskName": "currentTaskName",
-            "description": "description",
-            "workOrderUserDefinedStatus": "workOrderUserDefinedStatus",
-            "note": "note",
-            "taskStatus": "taskStatus",
-            "workOrderDetails": "workOrderDetails",
-        }
-        tasks = self.cvpClientApi.get_tasks_by_status("Pending")
-
-        # Reduce task data to required fields
-        for task in tasks:
-            taskFacts = {}
-            for field in task.keys():
-                if field in tasksField:
-                    taskFacts[tasksField[field]] = task[field]
-
-            taskList.append(taskFacts)
-
-        return taskList
-
     def task_action(self, tasks, wait, state):
         changed = False
         data = dict()
