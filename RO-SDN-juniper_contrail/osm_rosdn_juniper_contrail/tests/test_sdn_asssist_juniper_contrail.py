@@ -35,7 +35,6 @@ class TestJuniperContrail(unittest.TestCase):
 
     @patch("osm_rosdn_juniper_contrail.sdn_api.UnderlayApi")
     def test_juniper_contrail_sdn_with_ssl_cert(self, mock_underlay_api):
-
         config = {
             "ca_cert": "/path/to/certfile",
             "project": "test_project",

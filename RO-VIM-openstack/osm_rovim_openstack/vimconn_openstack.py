@@ -1287,16 +1287,17 @@ class vimconnector(vimconn.VimConnector):
             extra_specs (dict):         To be filled.
 
         Returns:
-            vcpus       (int)           Number of virtual cpus
+            threads       (int)           Number of virtual cpus
 
         """
         if not numa.get("paired-threads"):
             return
+
         # cpu_thread_policy "require" implies that compute node must have an STM architecture
-        vcpus = numa["paired-threads"] * 2
+        threads = numa["paired-threads"] * 2
         extra_specs["hw:cpu_thread_policy"] = "require"
         extra_specs["hw:cpu_policy"] = "dedicated"
-        return vcpus
+        return threads
 
     @staticmethod
     def process_numa_cores(numa: dict, extra_specs: dict) -> Optional[int]:
@@ -1306,17 +1307,17 @@ class vimconnector(vimconn.VimConnector):
             extra_specs (dict):         To be filled.
 
         Returns:
-            vcpus       (int)           Number of virtual cpus
+            cores       (int)           Number of virtual cpus
 
         """
         # cpu_thread_policy "isolate" implies that the host must not have an SMT
         # architecture, or a non-SMT architecture will be emulated
         if not numa.get("cores"):
             return
-        vcpus = numa["cores"]
+        cores = numa["cores"]
         extra_specs["hw:cpu_thread_policy"] = "isolate"
         extra_specs["hw:cpu_policy"] = "dedicated"
-        return vcpus
+        return cores
 
     @staticmethod
     def process_numa_threads(numa: dict, extra_specs: dict) -> Optional[int]:
@@ -1326,37 +1327,33 @@ class vimconnector(vimconn.VimConnector):
             extra_specs (dict):         To be filled.
 
         Returns:
-            vcpus       (int)           Number of virtual cpus
+            threads       (int)           Number of virtual cpus
 
         """
         # cpu_thread_policy "prefer" implies that the host may or may not have an SMT architecture
         if not numa.get("threads"):
             return
-        vcpus = numa["threads"]
+        threads = numa["threads"]
         extra_specs["hw:cpu_thread_policy"] = "prefer"
         extra_specs["hw:cpu_policy"] = "dedicated"
-        return vcpus
+        return threads
 
     def _process_numa_parameters_of_flavor(
-        self, numas: List, extra_specs: Dict, vcpus: Optional[int]
-    ) -> int:
+        self, numas: List, extra_specs: Dict
+    ) -> None:
         """Process numa parameters and fill up extra_specs.
 
         Args:
             numas   (list):             List of dictionary which includes numa information
             extra_specs (dict):         To be filled.
-            vcpus       (int)      Number of virtual cpus
-
-        Returns:
-            vcpus       (int)           Number of virtual cpus
 
         """
         numa_nodes = len(numas)
         extra_specs["hw:numa_nodes"] = str(numa_nodes)
+        cpu_cores, cpu_threads = 0, 0
 
         if self.vim_type == "VIO":
-            extra_specs["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
-            extra_specs["vmware:latency_sensitivity_level"] = "high"
+            self.process_vio_numa_nodes(numa_nodes, extra_specs)
 
         for numa in numas:
             if "id" in numa:
@@ -1370,15 +1367,38 @@ class vimconnector(vimconn.VimConnector):
             extra_specs["hw:cpu_sockets"] = str(numa_nodes)
 
             if "paired-threads" in numa:
-                vcpus = self.process_numa_paired_threads(numa, extra_specs)
+                threads = self.process_numa_paired_threads(numa, extra_specs)
+                cpu_threads += threads
 
             elif "cores" in numa:
-                vcpus = self.process_numa_cores(numa, extra_specs)
+                cores = self.process_numa_cores(numa, extra_specs)
+                cpu_cores += cores
 
             elif "threads" in numa:
-                vcpus = self.process_numa_threads(numa, extra_specs)
+                threads = self.process_numa_threads(numa, extra_specs)
+                cpu_threads += threads
 
-        return vcpus
+        if cpu_cores:
+            extra_specs["hw:cpu_cores"] = str(cpu_cores)
+        if cpu_threads:
+            extra_specs["hw:cpu_threads"] = str(cpu_threads)
+
+    @staticmethod
+    def process_vio_numa_nodes(numa_nodes: int, extra_specs: Dict) -> None:
+        """According to number of numa nodes, updates the extra_specs for VIO.
+
+        Args:
+
+            numa_nodes      (int):         List keeps the numa node numbers
+            extra_specs     (dict):        Extra specs dict to be updated
+
+        """
+        # If there is not any numa, numas_nodes equals to 0.
+        if not numa_nodes:
+            extra_specs["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
+
+        # If there are several numas, we do not define specific affinity.
+        extra_specs["vmware:latency_sensitivity_level"] = "high"
 
     def _change_flavor_name(
         self, name: str, name_suffix: int, flavor_data: dict
@@ -1405,17 +1425,13 @@ class vimconnector(vimconn.VimConnector):
         return name
 
     def _process_extended_config_of_flavor(
-        self, extended: dict, extra_specs: dict, vcpus: Optional[int]
-    ) -> int:
+        self, extended: dict, extra_specs: dict
+    ) -> None:
         """Process the extended dict to fill up extra_specs.
         Args:
 
-            extended    (dict):         Keeping the extra specification of flavor
-            extra_specs (dict)          Dict to be filled to be used during flavor creation
-            vcpus       (int)           Number of virtual cpus
-
-        Returns:
-            vcpus       (int)           Number of virtual cpus
+            extended                    (dict):         Keeping the extra specification of flavor
+            extra_specs                 (dict)          Dict to be filled to be used during flavor creation
 
         """
         quotas = {
@@ -1441,7 +1457,7 @@ class vimconnector(vimconn.VimConnector):
 
         numas = extended.get("numas")
         if numas:
-            vcpus = self._process_numa_parameters_of_flavor(numas, extra_specs, vcpus)
+            self._process_numa_parameters_of_flavor(numas, extra_specs)
 
         for quota, item in quotas.items():
             if quota in extended.keys():
@@ -1461,8 +1477,6 @@ class vimconnector(vimconn.VimConnector):
         for policy, hw_policy in policies.items():
             if extended.get(policy):
                 extra_specs[hw_policy] = extended[policy].lower()
-
-        return vcpus
 
     @staticmethod
     def _get_flavor_details(flavor_data: dict) -> Tuple:
@@ -1513,9 +1527,7 @@ class vimconnector(vimconn.VimConnector):
                         flavor_data
                     )
                     if extended:
-                        vcpus = self._process_extended_config_of_flavor(
-                            extended, extra_specs, vcpus
-                        )
+                        self._process_extended_config_of_flavor(extended, extra_specs)
 
                     # Create flavor
 
@@ -1536,7 +1548,6 @@ class vimconnector(vimconn.VimConnector):
                     return new_flavor.id
 
                 except nvExceptions.Conflict as e:
-
                     if change_name_if_used and retry < max_retries:
                         continue
 
@@ -1880,7 +1891,6 @@ class vimconnector(vimconn.VimConnector):
 
         # For VF
         elif net["type"] == "VF" or net["type"] == "SR-IOV":
-
             port_dict["binding:vnic_type"] = "direct"
 
             # VIO specific Changes
@@ -2068,7 +2078,6 @@ class vimconnector(vimconn.VimConnector):
         key_id = "vim_volume_id" if "vim_volume_id" in disk.keys() else "vim_id"
 
         if disk.get(key_id):
-
             block_device_mapping["vd" + chr(base_disk_index)] = disk[key_id]
             existing_vim_volumes.append({"id": disk[key_id]})
 
@@ -2148,7 +2157,6 @@ class vimconnector(vimconn.VimConnector):
         key_id = "vim_volume_id" if "vim_volume_id" in disk.keys() else "vim_id"
 
         if disk.get(key_id):
-
             # Use existing persistent volume
             block_device_mapping["vd" + chr(base_disk_index)] = disk[key_id]
             existing_vim_volumes.append({"id": disk[key_id]})
@@ -2479,7 +2487,6 @@ class vimconnector(vimconn.VimConnector):
                 # In case of RO in HA there can be conflicts, two RO trying to assign same floating IP, so retry
                 # several times
                 while not assigned:
-
                     free_floating_ip = self._get_free_floating_ip(
                         server, floating_network
                     )
@@ -2576,7 +2583,6 @@ class vimconnector(vimconn.VimConnector):
                 self.neutron.update_port(port[0], port_update)
 
             except Exception:
-
                 raise vimconn.VimConnException(
                     "It was not possible to disable port security for port {}".format(
                         port[0]
@@ -2883,7 +2889,6 @@ class vimconnector(vimconn.VimConnector):
             k_id    (str):      Port id in the VIM
         """
         try:
-
             port_dict = self.neutron.list_ports()
             existing_ports = [port["id"] for port in port_dict["ports"] if port_dict]
 
@@ -2891,7 +2896,6 @@ class vimconnector(vimconn.VimConnector):
                 self.neutron.delete_port(k_id)
 
         except Exception as e:
-
             self.logger.error("Error deleting port: {}: {}".format(type(e).__name__, e))
 
     def _delete_volumes_by_id_wth_cinder(
@@ -2973,7 +2977,6 @@ class vimconnector(vimconn.VimConnector):
                 k_item, k_id = self._get_item_name_id(k)
 
                 if k_item == "volume":
-
                     unavailable_vol = self._delete_volumes_by_id_wth_cinder(
                         k, k_id, volumes_to_hold, created_items
                     )
@@ -2982,7 +2985,6 @@ class vimconnector(vimconn.VimConnector):
                         keep_waiting = True
 
                 elif k_item == "floating_ip":
-
                     self._delete_floating_ip_by_id(k, k_id, created_items)
 
             except Exception as e:
@@ -3204,7 +3206,8 @@ class vimconnector(vimconn.VimConnector):
 
     def action_vminstance(self, vm_id, action_dict, created_items={}):
         """Send and action over a VM instance from VIM
-        Returns None or the console dict if the action was successfully sent to the VIM"""
+        Returns None or the console dict if the action was successfully sent to the VIM
+        """
         self.logger.debug("Action over VM '%s': %s", vm_id, str(action_dict))
 
         try:
@@ -3448,45 +3451,6 @@ class vimconnector(vimconn.VimConnector):
                     )
                 )
 
-    def delete_user(self, user_id):
-        """Delete a user from openstack VIM
-        Returns the user identifier"""
-        if self.debug:
-            print("osconnector: Deleting  a  user from VIM")
-
-        try:
-            self._reload_connection()
-            self.keystone.users.delete(user_id)
-
-            return 1, user_id
-        except ksExceptions.ConnectionError as e:
-            error_value = -vimconn.HTTP_Bad_Request
-            error_text = (
-                type(e).__name__
-                + ": "
-                + (str(e) if len(e.args) == 0 else str(e.args[0]))
-            )
-        except ksExceptions.NotFound as e:
-            error_value = -vimconn.HTTP_Not_Found
-            error_text = (
-                type(e).__name__
-                + ": "
-                + (str(e) if len(e.args) == 0 else str(e.args[0]))
-            )
-        except ksExceptions.ClientException as e:  # TODO remove
-            error_value = -vimconn.HTTP_Bad_Request
-            error_text = (
-                type(e).__name__
-                + ": "
-                + (str(e) if len(e.args) == 0 else str(e.args[0]))
-            )
-
-        # TODO insert exception vimconn.HTTP_Unauthorized
-        # if reaching here is because an exception
-        self.logger.debug("delete_tenant " + error_text)
-
-        return error_value, error_text
-
     def get_hosts_info(self):
         """Get the information of deployed hosts
         Returns the hosts content"""
@@ -3559,619 +3523,6 @@ class vimconnector(vimconn.VimConnector):
         self.logger.debug("get_hosts " + error_text)
 
         return error_value, error_text
-
-    def new_classification(self, name, ctype, definition):
-        self.logger.debug(
-            "Adding a new (Traffic) Classification to VIM, named %s", name
-        )
-
-        try:
-            new_class = None
-            self._reload_connection()
-
-            if ctype not in supportedClassificationTypes:
-                raise vimconn.VimConnNotSupportedException(
-                    "OpenStack VIM connector does not support provided "
-                    "Classification Type {}, supported ones are: {}".format(
-                        ctype, supportedClassificationTypes
-                    )
-                )
-
-            if not self._validate_classification(ctype, definition):
-                raise vimconn.VimConnException(
-                    "Incorrect Classification definition for the type specified."
-                )
-
-            classification_dict = definition
-            classification_dict["name"] = name
-            new_class = self.neutron.create_sfc_flow_classifier(
-                {"flow_classifier": classification_dict}
-            )
-
-            return new_class["flow_classifier"]["id"]
-        except (
-            neExceptions.ConnectionFailed,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            self.logger.error("Creation of Classification failed.")
-            self._format_exception(e)
-
-    def get_classification(self, class_id):
-        self.logger.debug(" Getting Classification %s from VIM", class_id)
-        filter_dict = {"id": class_id}
-        class_list = self.get_classification_list(filter_dict)
-
-        if len(class_list) == 0:
-            raise vimconn.VimConnNotFoundException(
-                "Classification '{}' not found".format(class_id)
-            )
-        elif len(class_list) > 1:
-            raise vimconn.VimConnConflictException(
-                "Found more than one Classification with this criteria"
-            )
-
-        classification = class_list[0]
-
-        return classification
-
-    def get_classification_list(self, filter_dict={}):
-        self.logger.debug(
-            "Getting Classifications from VIM filter: '%s'", str(filter_dict)
-        )
-
-        try:
-            filter_dict_os = filter_dict.copy()
-            self._reload_connection()
-
-            if self.api_version3 and "tenant_id" in filter_dict_os:
-                filter_dict_os["project_id"] = filter_dict_os.pop("tenant_id")
-
-            classification_dict = self.neutron.list_sfc_flow_classifiers(
-                **filter_dict_os
-            )
-            classification_list = classification_dict["flow_classifiers"]
-            self.__classification_os2mano(classification_list)
-
-            return classification_list
-        except (
-            neExceptions.ConnectionFailed,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-
-    def delete_classification(self, class_id):
-        self.logger.debug("Deleting Classification '%s' from VIM", class_id)
-
-        try:
-            self._reload_connection()
-            self.neutron.delete_sfc_flow_classifier(class_id)
-
-            return class_id
-        except (
-            neExceptions.ConnectionFailed,
-            neExceptions.NeutronException,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-
-    def new_sfi(self, name, ingress_ports, egress_ports, sfc_encap=True):
-        self.logger.debug(
-            "Adding a new Service Function Instance to VIM, named '%s'", name
-        )
-
-        try:
-            new_sfi = None
-            self._reload_connection()
-            correlation = None
-
-            if sfc_encap:
-                correlation = "nsh"
-
-            if len(ingress_ports) != 1:
-                raise vimconn.VimConnNotSupportedException(
-                    "OpenStack VIM connector can only have 1 ingress port per SFI"
-                )
-
-            if len(egress_ports) != 1:
-                raise vimconn.VimConnNotSupportedException(
-                    "OpenStack VIM connector can only have 1 egress port per SFI"
-                )
-
-            sfi_dict = {
-                "name": name,
-                "ingress": ingress_ports[0],
-                "egress": egress_ports[0],
-                "service_function_parameters": {"correlation": correlation},
-            }
-            new_sfi = self.neutron.create_sfc_port_pair({"port_pair": sfi_dict})
-
-            return new_sfi["port_pair"]["id"]
-        except (
-            neExceptions.ConnectionFailed,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            if new_sfi:
-                try:
-                    self.neutron.delete_sfc_port_pair(new_sfi["port_pair"]["id"])
-                except Exception:
-                    self.logger.error(
-                        "Creation of Service Function Instance failed, with "
-                        "subsequent deletion failure as well."
-                    )
-
-            self._format_exception(e)
-
-    def get_sfi(self, sfi_id):
-        self.logger.debug("Getting Service Function Instance %s from VIM", sfi_id)
-        filter_dict = {"id": sfi_id}
-        sfi_list = self.get_sfi_list(filter_dict)
-
-        if len(sfi_list) == 0:
-            raise vimconn.VimConnNotFoundException(
-                "Service Function Instance '{}' not found".format(sfi_id)
-            )
-        elif len(sfi_list) > 1:
-            raise vimconn.VimConnConflictException(
-                "Found more than one Service Function Instance with this criteria"
-            )
-
-        sfi = sfi_list[0]
-
-        return sfi
-
-    def get_sfi_list(self, filter_dict={}):
-        self.logger.debug(
-            "Getting Service Function Instances from VIM filter: '%s'", str(filter_dict)
-        )
-
-        try:
-            self._reload_connection()
-            filter_dict_os = filter_dict.copy()
-
-            if self.api_version3 and "tenant_id" in filter_dict_os:
-                filter_dict_os["project_id"] = filter_dict_os.pop("tenant_id")
-
-            sfi_dict = self.neutron.list_sfc_port_pairs(**filter_dict_os)
-            sfi_list = sfi_dict["port_pairs"]
-            self.__sfi_os2mano(sfi_list)
-
-            return sfi_list
-        except (
-            neExceptions.ConnectionFailed,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-
-    def delete_sfi(self, sfi_id):
-        self.logger.debug("Deleting Service Function Instance '%s' from VIM", sfi_id)
-
-        try:
-            self._reload_connection()
-            self.neutron.delete_sfc_port_pair(sfi_id)
-
-            return sfi_id
-        except (
-            neExceptions.ConnectionFailed,
-            neExceptions.NeutronException,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-
-    def new_sf(self, name, sfis, sfc_encap=True):
-        self.logger.debug("Adding a new Service Function to VIM, named '%s'", name)
-
-        try:
-            new_sf = None
-            self._reload_connection()
-            # correlation = None
-            # if sfc_encap:
-            #     correlation = "nsh"
-
-            for instance in sfis:
-                sfi = self.get_sfi(instance)
-
-                if sfi.get("sfc_encap") != sfc_encap:
-                    raise vimconn.VimConnNotSupportedException(
-                        "OpenStack VIM connector requires all SFIs of the "
-                        "same SF to share the same SFC Encapsulation"
-                    )
-
-            sf_dict = {"name": name, "port_pairs": sfis}
-            new_sf = self.neutron.create_sfc_port_pair_group(
-                {"port_pair_group": sf_dict}
-            )
-
-            return new_sf["port_pair_group"]["id"]
-        except (
-            neExceptions.ConnectionFailed,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            if new_sf:
-                try:
-                    self.neutron.delete_sfc_port_pair_group(
-                        new_sf["port_pair_group"]["id"]
-                    )
-                except Exception:
-                    self.logger.error(
-                        "Creation of Service Function failed, with "
-                        "subsequent deletion failure as well."
-                    )
-
-            self._format_exception(e)
-
-    def get_sf(self, sf_id):
-        self.logger.debug("Getting Service Function %s from VIM", sf_id)
-        filter_dict = {"id": sf_id}
-        sf_list = self.get_sf_list(filter_dict)
-
-        if len(sf_list) == 0:
-            raise vimconn.VimConnNotFoundException(
-                "Service Function '{}' not found".format(sf_id)
-            )
-        elif len(sf_list) > 1:
-            raise vimconn.VimConnConflictException(
-                "Found more than one Service Function with this criteria"
-            )
-
-        sf = sf_list[0]
-
-        return sf
-
-    def get_sf_list(self, filter_dict={}):
-        self.logger.debug(
-            "Getting Service Function from VIM filter: '%s'", str(filter_dict)
-        )
-
-        try:
-            self._reload_connection()
-            filter_dict_os = filter_dict.copy()
-
-            if self.api_version3 and "tenant_id" in filter_dict_os:
-                filter_dict_os["project_id"] = filter_dict_os.pop("tenant_id")
-
-            sf_dict = self.neutron.list_sfc_port_pair_groups(**filter_dict_os)
-            sf_list = sf_dict["port_pair_groups"]
-            self.__sf_os2mano(sf_list)
-
-            return sf_list
-        except (
-            neExceptions.ConnectionFailed,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-
-    def delete_sf(self, sf_id):
-        self.logger.debug("Deleting Service Function '%s' from VIM", sf_id)
-
-        try:
-            self._reload_connection()
-            self.neutron.delete_sfc_port_pair_group(sf_id)
-
-            return sf_id
-        except (
-            neExceptions.ConnectionFailed,
-            neExceptions.NeutronException,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-
-    def new_sfp(self, name, classifications, sfs, sfc_encap=True, spi=None):
-        self.logger.debug("Adding a new Service Function Path to VIM, named '%s'", name)
-
-        try:
-            new_sfp = None
-            self._reload_connection()
-            # In networking-sfc the MPLS encapsulation is legacy
-            # should be used when no full SFC Encapsulation is intended
-            correlation = "mpls"
-
-            if sfc_encap:
-                correlation = "nsh"
-
-            sfp_dict = {
-                "name": name,
-                "flow_classifiers": classifications,
-                "port_pair_groups": sfs,
-                "chain_parameters": {"correlation": correlation},
-            }
-
-            if spi:
-                sfp_dict["chain_id"] = spi
-
-            new_sfp = self.neutron.create_sfc_port_chain({"port_chain": sfp_dict})
-
-            return new_sfp["port_chain"]["id"]
-        except (
-            neExceptions.ConnectionFailed,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            if new_sfp:
-                try:
-                    self.neutron.delete_sfc_port_chain(new_sfp["port_chain"]["id"])
-                except Exception:
-                    self.logger.error(
-                        "Creation of Service Function Path failed, with "
-                        "subsequent deletion failure as well."
-                    )
-
-            self._format_exception(e)
-
-    def get_sfp(self, sfp_id):
-        self.logger.debug(" Getting Service Function Path %s from VIM", sfp_id)
-
-        filter_dict = {"id": sfp_id}
-        sfp_list = self.get_sfp_list(filter_dict)
-
-        if len(sfp_list) == 0:
-            raise vimconn.VimConnNotFoundException(
-                "Service Function Path '{}' not found".format(sfp_id)
-            )
-        elif len(sfp_list) > 1:
-            raise vimconn.VimConnConflictException(
-                "Found more than one Service Function Path with this criteria"
-            )
-
-        sfp = sfp_list[0]
-
-        return sfp
-
-    def get_sfp_list(self, filter_dict={}):
-        self.logger.debug(
-            "Getting Service Function Paths from VIM filter: '%s'", str(filter_dict)
-        )
-
-        try:
-            self._reload_connection()
-            filter_dict_os = filter_dict.copy()
-
-            if self.api_version3 and "tenant_id" in filter_dict_os:
-                filter_dict_os["project_id"] = filter_dict_os.pop("tenant_id")
-
-            sfp_dict = self.neutron.list_sfc_port_chains(**filter_dict_os)
-            sfp_list = sfp_dict["port_chains"]
-            self.__sfp_os2mano(sfp_list)
-
-            return sfp_list
-        except (
-            neExceptions.ConnectionFailed,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-
-    def delete_sfp(self, sfp_id):
-        self.logger.debug("Deleting Service Function Path '%s' from VIM", sfp_id)
-
-        try:
-            self._reload_connection()
-            self.neutron.delete_sfc_port_chain(sfp_id)
-
-            return sfp_id
-        except (
-            neExceptions.ConnectionFailed,
-            neExceptions.NeutronException,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-
-    def refresh_sfps_status(self, sfp_list):
-        """Get the status of the service function path
-        Params: the list of sfp identifiers
-        Returns a dictionary with:
-            vm_id:          #VIM id of this service function path
-                status:     #Mandatory. Text with one of:
-                            #  DELETED (not found at vim)
-                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
-                            #  OTHER (Vim reported other status not understood)
-                            #  ERROR (VIM indicates an ERROR status)
-                            #  ACTIVE,
-                            #  CREATING (on building process)
-                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
-                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)F
-        """
-        sfp_dict = {}
-        self.logger.debug(
-            "refresh_sfps status: Getting tenant SFP information from VIM"
-        )
-
-        for sfp_id in sfp_list:
-            sfp = {}
-
-            try:
-                sfp_vim = self.get_sfp(sfp_id)
-
-                if sfp_vim["spi"]:
-                    sfp["status"] = vmStatus2manoFormat["ACTIVE"]
-                else:
-                    sfp["status"] = "OTHER"
-                    sfp["error_msg"] = "VIM status reported " + sfp["status"]
-
-                sfp["vim_info"] = self.serialize(sfp_vim)
-
-                if sfp_vim.get("fault"):
-                    sfp["error_msg"] = str(sfp_vim["fault"])
-            except vimconn.VimConnNotFoundException as e:
-                self.logger.error("Exception getting sfp status: %s", str(e))
-                sfp["status"] = "DELETED"
-                sfp["error_msg"] = str(e)
-            except vimconn.VimConnException as e:
-                self.logger.error("Exception getting sfp status: %s", str(e))
-                sfp["status"] = "VIM_ERROR"
-                sfp["error_msg"] = str(e)
-
-            sfp_dict[sfp_id] = sfp
-
-        return sfp_dict
-
-    def refresh_sfis_status(self, sfi_list):
-        """Get the status of the service function instances
-        Params: the list of sfi identifiers
-        Returns a dictionary with:
-            vm_id:          #VIM id of this service function instance
-                status:     #Mandatory. Text with one of:
-                            #  DELETED (not found at vim)
-                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
-                            #  OTHER (Vim reported other status not understood)
-                            #  ERROR (VIM indicates an ERROR status)
-                            #  ACTIVE,
-                            #  CREATING (on building process)
-                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
-                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
-        """
-        sfi_dict = {}
-        self.logger.debug(
-            "refresh_sfis status: Getting tenant sfi information from VIM"
-        )
-
-        for sfi_id in sfi_list:
-            sfi = {}
-
-            try:
-                sfi_vim = self.get_sfi(sfi_id)
-
-                if sfi_vim:
-                    sfi["status"] = vmStatus2manoFormat["ACTIVE"]
-                else:
-                    sfi["status"] = "OTHER"
-                    sfi["error_msg"] = "VIM status reported " + sfi["status"]
-
-                sfi["vim_info"] = self.serialize(sfi_vim)
-
-                if sfi_vim.get("fault"):
-                    sfi["error_msg"] = str(sfi_vim["fault"])
-            except vimconn.VimConnNotFoundException as e:
-                self.logger.error("Exception getting sfi status: %s", str(e))
-                sfi["status"] = "DELETED"
-                sfi["error_msg"] = str(e)
-            except vimconn.VimConnException as e:
-                self.logger.error("Exception getting sfi status: %s", str(e))
-                sfi["status"] = "VIM_ERROR"
-                sfi["error_msg"] = str(e)
-
-            sfi_dict[sfi_id] = sfi
-
-        return sfi_dict
-
-    def refresh_sfs_status(self, sf_list):
-        """Get the status of the service functions
-        Params: the list of sf identifiers
-        Returns a dictionary with:
-            vm_id:          #VIM id of this service function
-                status:     #Mandatory. Text with one of:
-                            #  DELETED (not found at vim)
-                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
-                            #  OTHER (Vim reported other status not understood)
-                            #  ERROR (VIM indicates an ERROR status)
-                            #  ACTIVE,
-                            #  CREATING (on building process)
-                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
-                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
-        """
-        sf_dict = {}
-        self.logger.debug("refresh_sfs status: Getting tenant sf information from VIM")
-
-        for sf_id in sf_list:
-            sf = {}
-
-            try:
-                sf_vim = self.get_sf(sf_id)
-
-                if sf_vim:
-                    sf["status"] = vmStatus2manoFormat["ACTIVE"]
-                else:
-                    sf["status"] = "OTHER"
-                    sf["error_msg"] = "VIM status reported " + sf_vim["status"]
-
-                sf["vim_info"] = self.serialize(sf_vim)
-
-                if sf_vim.get("fault"):
-                    sf["error_msg"] = str(sf_vim["fault"])
-            except vimconn.VimConnNotFoundException as e:
-                self.logger.error("Exception getting sf status: %s", str(e))
-                sf["status"] = "DELETED"
-                sf["error_msg"] = str(e)
-            except vimconn.VimConnException as e:
-                self.logger.error("Exception getting sf status: %s", str(e))
-                sf["status"] = "VIM_ERROR"
-                sf["error_msg"] = str(e)
-
-            sf_dict[sf_id] = sf
-
-        return sf_dict
-
-    def refresh_classifications_status(self, classification_list):
-        """Get the status of the classifications
-        Params: the list of classification identifiers
-        Returns a dictionary with:
-            vm_id:          #VIM id of this classifier
-                status:     #Mandatory. Text with one of:
-                            #  DELETED (not found at vim)
-                            #  VIM_ERROR (Cannot connect to VIM, VIM response error, ...)
-                            #  OTHER (Vim reported other status not understood)
-                            #  ERROR (VIM indicates an ERROR status)
-                            #  ACTIVE,
-                            #  CREATING (on building process)
-                error_msg:  #Text with VIM error message, if any. Or the VIM connection ERROR
-                vim_info:   #Text with plain information obtained from vim (yaml.safe_dump)
-        """
-        classification_dict = {}
-        self.logger.debug(
-            "refresh_classifications status: Getting tenant classification information from VIM"
-        )
-
-        for classification_id in classification_list:
-            classification = {}
-
-            try:
-                classification_vim = self.get_classification(classification_id)
-
-                if classification_vim:
-                    classification["status"] = vmStatus2manoFormat["ACTIVE"]
-                else:
-                    classification["status"] = "OTHER"
-                    classification["error_msg"] = (
-                        "VIM status reported " + classification["status"]
-                    )
-
-                classification["vim_info"] = self.serialize(classification_vim)
-
-                if classification_vim.get("fault"):
-                    classification["error_msg"] = str(classification_vim["fault"])
-            except vimconn.VimConnNotFoundException as e:
-                self.logger.error("Exception getting classification status: %s", str(e))
-                classification["status"] = "DELETED"
-                classification["error_msg"] = str(e)
-            except vimconn.VimConnException as e:
-                self.logger.error("Exception getting classification status: %s", str(e))
-                classification["status"] = "VIM_ERROR"
-                classification["error_msg"] = str(e)
-
-            classification_dict[classification_id] = classification
-
-        return classification_dict
 
     def new_affinity_group(self, affinity_group_data):
         """Adds a server group to VIM

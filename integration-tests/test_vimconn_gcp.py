@@ -35,7 +35,6 @@ __date__ = "$05-nov-2021 12:00:00$"
 
 
 class TestGCPOperations:
-
     gcp_conn = None
     time_id = datetime.today().strftime("%Y%m%d%H%M%S")
     vim_id = "gcp-test-" + time_id

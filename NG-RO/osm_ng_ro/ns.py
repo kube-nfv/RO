@@ -722,9 +722,12 @@ class Ns(object):
             guest_epa_quota.get("cpu-pinning-policy") == "DEDICATED"
             and not epa_vcpu_set
         ):
+            # Pinning policy "REQUIRE" uses threads as host should support SMT architecture
+            # Pinning policy "ISOLATE" uses cores as host should not support SMT architecture
+            # Pinning policy "PREFER" uses threads in case host supports SMT architecture
             numa[
                 "cores"
-                if guest_epa_quota.get("cpu-thread-pinning-policy") != "PREFER"
+                if guest_epa_quota.get("cpu-thread-pinning-policy") == "ISOLATE"
                 else "threads"
             ] = max(vcpu_count, 1)
             local_epa_vcpu_set = True
@@ -1009,12 +1012,10 @@ class Ns(object):
                     == "persistent-storage:persistent-storage"
                 ):
                     for vdu_volume in vdu_instantiation_volumes_list:
-
                         if (
                             vdu_volume["vim-volume-id"]
                             and root_disk["id"] == vdu_volume["name"]
                         ):
-
                             persistent_root_disk[vsd["id"]] = {
                                 "vim_volume_id": vdu_volume["vim-volume-id"],
                                 "image_id": vdu.get("sw-image-desc"),
@@ -1025,7 +1026,6 @@ class Ns(object):
                             return persistent_root_disk
 
                     else:
-
                         if root_disk.get("size-of-storage"):
                             persistent_root_disk[vsd["id"]] = {
                                 "image_id": vdu.get("sw-image-desc"),
@@ -1062,9 +1062,7 @@ class Ns(object):
                 and disk["id"] not in persistent_root_disk.keys()
             ):
                 for vdu_volume in vdu_instantiation_volumes_list:
-
                     if vdu_volume["vim-volume-id"] and disk["id"] == vdu_volume["name"]:
-
                         persistent_disk[disk["id"]] = {
                             "vim_volume_id": vdu_volume["vim-volume-id"],
                         }
@@ -1323,7 +1321,6 @@ class Ns(object):
             net_list    (list):                             Net list of VDU
         """
         for iface_index, interface in enumerate(target_vdu["interfaces"]):
-
             net_text = Ns._check_vld_information_of_interfaces(
                 interface, ns_preffix, vnf_preffix
             )
@@ -1542,13 +1539,11 @@ class Ns(object):
             True if i.get("position") is not None else False
             for i in target_vdu["interfaces"]
         ):
-
             Ns._sort_vdu_interfaces(target_vdu)
 
         # If the position info is provided for some interfaces but not all of them, the interfaces
         # which has specific position numbers will be placed and others' positions will not be taken care.
         else:
-
             Ns._partially_locate_vdu_interfaces(target_vdu)
 
         # If the position info is not provided for the interfaces, interfaces will be attached
@@ -1575,7 +1570,6 @@ class Ns(object):
             )
 
         if vdu_instantiation_volumes_list:
-
             # Find the root volumes and add to the disk_list
             persistent_root_disk = Ns.find_persistent_root_volumes(
                 vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
@@ -1701,7 +1695,6 @@ class Ns(object):
             vim_details = yaml.safe_load(f"{vim_details_text}")
 
         for iface_index, interface in enumerate(existing_vdu["interfaces"]):
-
             if "port-security-enabled" in interface:
                 interface["port_security"] = interface.pop("port-security-enabled")
 
@@ -3030,7 +3023,6 @@ class Ns(object):
                             task_index += 1
                             break
                 else:
-
                     for vdu_index, vdu in enumerate(db_vnfr["vdur"]):
                         extra_dict["params"] = {
                             "vim_vm_id": vdu["vim-id"],

@@ -204,19 +204,6 @@ class vimconnector(vimconn.VimConnector):
 
         raise vimconn.VimConnConnectionException(type(e).__name__ + ": " + str(e))
 
-    def get_availability_zones_list(self):
-        """Obtain AvailabilityZones from AWS"""
-        try:
-            self._reload_connection()
-            az_list = []
-
-            for az in self.conn.get_all_zones():
-                az_list.append(az.name)
-
-            return az_list
-        except Exception as e:
-            self.format_vimconn_exception(e)
-
     def get_tenant_list(self, filter_dict={}):
         """Obtain tenants of VIM
         filter_dict dictionary that can contain the following keys:
@@ -819,7 +806,6 @@ class vimconnector(vimconn.VimConnector):
 
             else:
                 for index, subnet in enumerate(net_list):
-
                     net_intr = self.conn_vpc.create_network_interface(
                         subnet_id=subnet.get("net_id"),
                         groups=None,

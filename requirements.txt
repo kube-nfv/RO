@@ -32,14 +32,14 @@ azure-common==1.1.28
     #   azure-mgmt-compute
     #   azure-mgmt-network
     #   azure-mgmt-resource
-azure-core==1.26.2
+azure-core==1.26.3
     # via
     #   azure-identity
     #   azure-mgmt-core
     #   msrest
 azure-identity==1.12.0
     # via -r RO-VIM-azure/requirements.in
-azure-mgmt-compute==29.0.0
+azure-mgmt-compute==29.1.0
     # via -r RO-VIM-azure/requirements.in
 azure-mgmt-core==1.3.2
     # via
@@ -54,7 +54,7 @@ bcrypt==4.0.1
     # via paramiko
 boto==2.49.0
     # via -r RO-VIM-aws/requirements.in
-cachetools==5.2.1
+cachetools==5.3.0
     # via google-auth
 certifi==2022.12.7
     # via
@@ -75,9 +75,9 @@ cliff==4.1.0
     #   osc-lib
     #   python-neutronclient
     #   python-openstackclient
-cmd2==2.4.2
+cmd2==2.4.3
     # via cliff
-cryptography==39.0.0
+cryptography==39.0.1
     # via
     #   -r NG-RO/requirements.in
     #   adal
@@ -107,7 +107,7 @@ flufl-enum==5.0.1
     # via pyvcloud
 google-api-core==2.11.0
     # via google-api-python-client
-google-api-python-client==2.72.0
+google-api-python-client==2.77.0
     # via -r RO-VIM-gcp/requirements.in
 google-auth==2.16.0
     # via
@@ -148,7 +148,9 @@ iso8601==1.1.0
 isodate==0.6.1
     # via msrest
 jaraco-functools==3.5.2
-    # via cheroot
+    # via
+    #   cheroot
+    #   tempora
 jinja2==3.1.2
     # via -r NG-RO/requirements.in
 jmespath==1.0.1
@@ -174,14 +176,14 @@ logutils==0.3.5
     # via -r NG-RO/requirements.in
 lxml==4.9.2
     # via pyvcloud
-markupsafe==2.1.1
+markupsafe==2.1.2
     # via jinja2
 more-itertools==9.0.0
     # via
     #   cheroot
     #   cherrypy
     #   jaraco-functools
-msal==1.20.0
+msal==1.21.0
     # via
     #   azure-identity
     #   msal-extensions
@@ -198,8 +200,6 @@ msrest==0.7.1
     #   msrestazure
 msrestazure==0.6.4
     # via -r RO-VIM-azure/requirements.in
-munch==2.5.0
-    # via openstacksdk
 netaddr==0.8.0
     # via
     #   -r RO-VIM-aws/requirements.in
@@ -218,7 +218,7 @@ netifaces==0.11.0
     #   oslo-utils
 oauthlib==3.2.2
     # via requests-oauthlib
-openstacksdk==0.103.0
+openstacksdk==1.0.0
     # via
     #   os-client-config
     #   osc-lib
@@ -274,7 +274,7 @@ packaging==23.0
     # via
     #   oslo-utils
     #   python-keystoneclient
-paramiko==2.12.0
+paramiko==3.0.0
     # via
     #   -r RO-SDN-dpb/requirements.in
     #   -r RO-VIM-gcp/requirements.in
@@ -298,7 +298,7 @@ pbr==5.11.1
     #   stevedore
 pkgutil-resolve-name==1.3.10
     # via jsonschema
-portalocker==2.6.0
+portalocker==2.7.0
     # via msal-extensions
 portend==3.1.0
     # via cherrypy
@@ -375,7 +375,7 @@ pytz==2022.7.1
     #   tempora
 pyvcloud==19.1.1
     # via -r RO-VIM-vmware/requirements.in
-pyvmomi==8.0.0.1.1
+pyvmomi==8.0.0.1.2
     # via -r RO-VIM-vmware/requirements.in
 pyyaml==5.4.1
     # via
@@ -431,7 +431,7 @@ rfc3986==2.0.0
     # via oslo-config
 rsa==4.9
     # via google-auth
-simplejson==3.18.1
+simplejson==3.18.3
     # via
     #   osc-lib
     #   python-cinderclient
@@ -446,8 +446,6 @@ six==1.16.0
     #   isodate
     #   keystoneauth1
     #   msrestazure
-    #   munch
-    #   paramiko
     #   python-dateutil
     #   python-keystoneclient
     #   pyvmomi
@@ -462,7 +460,7 @@ stevedore==4.1.1
     #   python-keystoneclient
     #   python-novaclient
     #   python-openstackclient
-tempora==5.2.0
+tempora==5.2.1
     # via portend
 tqdm==4.64.1
     # via ipconflict
@@ -486,7 +484,7 @@ wrapt==1.14.1
     #   python-glanceclient
 zc-lockfile==2.0
     # via cherrypy
-zipp==3.11.0
+zipp==3.13.0
     # via
     #   importlib-metadata
     #   importlib-resources

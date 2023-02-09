@@ -23,17 +23,13 @@
 This module contains unit tests for the OpenStack VIM connector
 Run this directly with python2 or python3.
 """
-import copy
 from copy import deepcopy
 import logging
 import unittest
 
-import mock
 from mock import MagicMock, patch
-from neutronclient.v2_0.client import Client
 from novaclient import exceptions as nvExceptions
 from novaclient.exceptions import ClientException, Conflict
-from osm_ro_plugin import vimconn
 from osm_ro_plugin.vimconn import (
     VimConnConnectionException,
     VimConnException,
@@ -81,7 +77,6 @@ created_items_all_true = {
 
 
 # Variables used in TestNewFlavor Class
-flavor_id = "075d2482-5edb-43e3-91b3-234e65b6268a"
 name1 = "sample-flavor"
 extended = (
     {
@@ -106,1026 +101,6 @@ flavor_data2 = {
     "vcpus": 8,
     "disk": 50,
 }
-
-
-class TestSfcOperations(unittest.TestCase):
-    @mock.patch("logging.getLogger", autospec=True)
-    def setUp(self, mock_logger):
-        # Instantiate dummy VIM connector so we can test it
-        # It throws exception because of dummy parameters,
-        # We are disabling the logging of exception not to print them to console.
-        mock_logger = logging.getLogger()
-        mock_logger.disabled = True
-        self.vimconn = vimconnector(
-            "123",
-            "openstackvim",
-            "456",
-            "789",
-            "http://dummy.url",
-            None,
-            "user",
-            "pass",
-        )
-
-    def _test_new_sfi(
-        self,
-        create_sfc_port_pair,
-        sfc_encap,
-        ingress_ports=["5311c75d-d718-4369-bbda-cdcc6da60fcc"],
-        egress_ports=["230cdf1b-de37-4891-bc07-f9010cf1f967"],
-    ):
-        # input to VIM connector
-        name = "osm_sfi"
-        # + ingress_ports
-        # + egress_ports
-        # TODO(igordc): must be changed to NSH in Queens (MPLS is a workaround)
-        correlation = "nsh"
-        if sfc_encap is not None:
-            if not sfc_encap:
-                correlation = None
-
-        # what OpenStack is assumed to respond (patch OpenStack"s return value)
-        dict_from_neutron = {
-            "port_pair": {
-                "id": "3d7ddc13-923c-4332-971e-708ed82902ce",
-                "name": name,
-                "description": "",
-                "tenant_id": "130b1e97-b0f1-40a8-8804-b6ad9b8c3e0c",
-                "project_id": "130b1e97-b0f1-40a8-8804-b6ad9b8c3e0c",
-                "ingress": ingress_ports[0] if len(ingress_ports) else None,
-                "egress": egress_ports[0] if len(egress_ports) else None,
-                "service_function_parameters": {"correlation": correlation},
-            }
-        }
-        create_sfc_port_pair.return_value = dict_from_neutron
-
-        # what the VIM connector is expected to
-        # send to OpenStack based on the input
-        dict_to_neutron = {
-            "port_pair": {
-                "name": name,
-                "ingress": "5311c75d-d718-4369-bbda-cdcc6da60fcc",
-                "egress": "230cdf1b-de37-4891-bc07-f9010cf1f967",
-                "service_function_parameters": {"correlation": correlation},
-            }
-        }
-
-        # call the VIM connector
-        if sfc_encap is None:
-            result = self.vimconn.new_sfi(name, ingress_ports, egress_ports)
-        else:
-            result = self.vimconn.new_sfi(name, ingress_ports, egress_ports, sfc_encap)
-
-        # assert that the VIM connector made the expected call to OpenStack
-        create_sfc_port_pair.assert_called_with(dict_to_neutron)
-        # assert that the VIM connector had the expected result / return value
-        self.assertEqual(result, dict_from_neutron["port_pair"]["id"])
-
-    def _test_new_sf(self, create_sfc_port_pair_group):
-        # input to VIM connector
-        name = "osm_sf"
-        instances = [
-            "bbd01220-cf72-41f2-9e70-0669c2e5c4cd",
-            "12ba215e-3987-4892-bd3a-d0fd91eecf98",
-            "e25a7c79-14c8-469a-9ae1-f601c9371ffd",
-        ]
-
-        # what OpenStack is assumed to respond (patch OpenStack"s return value)
-        dict_from_neutron = {
-            "port_pair_group": {
-                "id": "3d7ddc13-923c-4332-971e-708ed82902ce",
-                "name": name,
-                "description": "",
-                "tenant_id": "130b1e97-b0f1-40a8-8804-b6ad9b8c3e0c",
-                "project_id": "130b1e97-b0f1-40a8-8804-b6ad9b8c3e0c",
-                "port_pairs": instances,
-                "group_id": 1,
-                "port_pair_group_parameters": {
-                    "lb_fields": [],
-                    "ppg_n_tuple_mapping": {
-                        "ingress_n_tuple": {},
-                        "egress_n_tuple": {},
-                    },
-                },
-            }
-        }
-        create_sfc_port_pair_group.return_value = dict_from_neutron
-
-        # what the VIM connector is expected to
-        # send to OpenStack based on the input
-        dict_to_neutron = {
-            "port_pair_group": {
-                "name": name,
-                "port_pairs": [
-                    "bbd01220-cf72-41f2-9e70-0669c2e5c4cd",
-                    "12ba215e-3987-4892-bd3a-d0fd91eecf98",
-                    "e25a7c79-14c8-469a-9ae1-f601c9371ffd",
-                ],
-            }
-        }
-
-        # call the VIM connector
-        result = self.vimconn.new_sf(name, instances)
-
-        # assert that the VIM connector made the expected call to OpenStack
-        create_sfc_port_pair_group.assert_called_with(dict_to_neutron)
-        # assert that the VIM connector had the expected result / return value
-        self.assertEqual(result, dict_from_neutron["port_pair_group"]["id"])
-
-    def _test_new_sfp(self, create_sfc_port_chain, sfc_encap, spi):
-        # input to VIM connector
-        name = "osm_sfp"
-        classifications = [
-            "2bd2a2e5-c5fd-4eac-a297-d5e255c35c19",
-            "00f23389-bdfa-43c2-8b16-5815f2582fa8",
-        ]
-        sfs = [
-            "2314daec-c262-414a-86e3-69bb6fa5bc16",
-            "d8bfdb5d-195e-4f34-81aa-6135705317df",
-        ]
-
-        # TODO(igordc): must be changed to NSH in Queens (MPLS is a workaround)
-        correlation = "nsh"
-        chain_id = 33
-        if spi:
-            chain_id = spi
-
-        # what OpenStack is assumed to respond (patch OpenStack"s return value)
-        dict_from_neutron = {
-            "port_chain": {
-                "id": "5bc05721-079b-4b6e-a235-47cac331cbb6",
-                "name": name,
-                "description": "",
-                "tenant_id": "130b1e97-b0f1-40a8-8804-b6ad9b8c3e0c",
-                "project_id": "130b1e97-b0f1-40a8-8804-b6ad9b8c3e0c",
-                "chain_id": chain_id,
-                "flow_classifiers": classifications,
-                "port_pair_groups": sfs,
-                "chain_parameters": {"correlation": correlation},
-            }
-        }
-        create_sfc_port_chain.return_value = dict_from_neutron
-
-        # what the VIM connector is expected to
-        # send to OpenStack based on the input
-        dict_to_neutron = {
-            "port_chain": {
-                "name": name,
-                "flow_classifiers": [
-                    "2bd2a2e5-c5fd-4eac-a297-d5e255c35c19",
-                    "00f23389-bdfa-43c2-8b16-5815f2582fa8",
-                ],
-                "port_pair_groups": [
-                    "2314daec-c262-414a-86e3-69bb6fa5bc16",
-                    "d8bfdb5d-195e-4f34-81aa-6135705317df",
-                ],
-                "chain_parameters": {"correlation": correlation},
-            }
-        }
-        if spi:
-            dict_to_neutron["port_chain"]["chain_id"] = spi
-
-        # call the VIM connector
-        if sfc_encap is None:
-            dict_to_neutron["port_chain"]["chain_parameters"] = {"correlation": "mpls"}
-            if spi is None:
-                result = self.vimconn.new_sfp(
-                    name, classifications, sfs, sfc_encap=False
-                )
-            else:
-                result = self.vimconn.new_sfp(
-                    name, classifications, sfs, sfc_encap=False, spi=spi
-                )
-        else:
-            if spi is None:
-                result = self.vimconn.new_sfp(name, classifications, sfs, sfc_encap)
-            else:
-                result = self.vimconn.new_sfp(
-                    name, classifications, sfs, sfc_encap, spi
-                )
-
-        # assert that the VIM connector made the expected call to OpenStack
-        create_sfc_port_chain.assert_called_with(dict_to_neutron)
-        # assert that the VIM connector had the expected result / return value
-        self.assertEqual(result, dict_from_neutron["port_chain"]["id"])
-
-    def _test_new_classification(self, create_sfc_flow_classifier, ctype):
-        # input to VIM connector
-        name = "osm_classification"
-        definition = {
-            "ethertype": "IPv4",
-            "logical_source_port": "aaab0ab0-1452-4636-bb3b-11dca833fa2b",
-            "protocol": "tcp",
-            "source_ip_prefix": "192.168.2.0/24",
-            "source_port_range_max": 99,
-            "source_port_range_min": 50,
-        }
-
-        # what OpenStack is assumed to respond (patch OpenStack"s return value)
-        dict_from_neutron = {"flow_classifier": copy.copy(definition)}
-        dict_from_neutron["flow_classifier"][
-            "id"
-        ] = "7735ec2c-fddf-4130-9712-32ed2ab6a372"
-        dict_from_neutron["flow_classifier"]["name"] = name
-        dict_from_neutron["flow_classifier"]["description"] = ""
-        dict_from_neutron["flow_classifier"][
-            "tenant_id"
-        ] = "130b1e97-b0f1-40a8-8804-b6ad9b8c3e0c"
-        dict_from_neutron["flow_classifier"][
-            "project_id"
-        ] = "130b1e97-b0f1-40a8-8804-b6ad9b8c3e0c"
-        create_sfc_flow_classifier.return_value = dict_from_neutron
-
-        # what the VIM connector is expected to
-        # send to OpenStack based on the input
-        dict_to_neutron = {"flow_classifier": copy.copy(definition)}
-        dict_to_neutron["flow_classifier"]["name"] = "osm_classification"
-
-        # call the VIM connector
-        result = self.vimconn.new_classification(name, ctype, definition)
-
-        # assert that the VIM connector made the expected call to OpenStack
-        create_sfc_flow_classifier.assert_called_with(dict_to_neutron)
-        # assert that the VIM connector had the expected result / return value
-        self.assertEqual(result, dict_from_neutron["flow_classifier"]["id"])
-
-    @mock.patch.object(Client, "create_sfc_flow_classifier")
-    def test_new_classification(self, create_sfc_flow_classifier):
-        self._test_new_classification(
-            create_sfc_flow_classifier, "legacy_flow_classifier"
-        )
-
-    @mock.patch.object(Client, "create_sfc_flow_classifier")
-    def test_new_classification_unsupported_type(self, create_sfc_flow_classifier):
-        self.assertRaises(
-            vimconn.VimConnNotSupportedException,
-            self._test_new_classification,
-            create_sfc_flow_classifier,
-            "h265",
-        )
-
-    @mock.patch.object(Client, "create_sfc_port_pair")
-    def test_new_sfi_with_sfc_encap(self, create_sfc_port_pair):
-        self._test_new_sfi(create_sfc_port_pair, True)
-
-    @mock.patch.object(Client, "create_sfc_port_pair")
-    def test_new_sfi_without_sfc_encap(self, create_sfc_port_pair):
-        self._test_new_sfi(create_sfc_port_pair, False)
-
-    @mock.patch.object(Client, "create_sfc_port_pair")
-    def test_new_sfi_default_sfc_encap(self, create_sfc_port_pair):
-        self._test_new_sfi(create_sfc_port_pair, None)
-
-    @mock.patch.object(Client, "create_sfc_port_pair")
-    def test_new_sfi_bad_ingress_ports(self, create_sfc_port_pair):
-        ingress_ports = [
-            "5311c75d-d718-4369-bbda-cdcc6da60fcc",
-            "a0273f64-82c9-11e7-b08f-6328e53f0fa7",
-        ]
-        self.assertRaises(
-            vimconn.VimConnNotSupportedException,
-            self._test_new_sfi,
-            create_sfc_port_pair,
-            True,
-            ingress_ports=ingress_ports,
-        )
-        ingress_ports = []
-        self.assertRaises(
-            vimconn.VimConnNotSupportedException,
-            self._test_new_sfi,
-            create_sfc_port_pair,
-            True,
-            ingress_ports=ingress_ports,
-        )
-
-    @mock.patch.object(Client, "create_sfc_port_pair")
-    def test_new_sfi_bad_egress_ports(self, create_sfc_port_pair):
-        egress_ports = [
-            "230cdf1b-de37-4891-bc07-f9010cf1f967",
-            "b41228fe-82c9-11e7-9b44-17504174320b",
-        ]
-        self.assertRaises(
-            vimconn.VimConnNotSupportedException,
-            self._test_new_sfi,
-            create_sfc_port_pair,
-            True,
-            egress_ports=egress_ports,
-        )
-        egress_ports = []
-        self.assertRaises(
-            vimconn.VimConnNotSupportedException,
-            self._test_new_sfi,
-            create_sfc_port_pair,
-            True,
-            egress_ports=egress_ports,
-        )
-
-    @mock.patch.object(vimconnector, "get_sfi")
-    @mock.patch.object(Client, "create_sfc_port_pair_group")
-    def test_new_sf(self, create_sfc_port_pair_group, get_sfi):
-        get_sfi.return_value = {"sfc_encap": True}
-        self._test_new_sf(create_sfc_port_pair_group)
-
-    @mock.patch.object(vimconnector, "get_sfi")
-    @mock.patch.object(Client, "create_sfc_port_pair_group")
-    def test_new_sf_inconsistent_sfc_encap(self, create_sfc_port_pair_group, get_sfi):
-        get_sfi.return_value = {"sfc_encap": "nsh"}
-        self.assertRaises(
-            vimconn.VimConnNotSupportedException,
-            self._test_new_sf,
-            create_sfc_port_pair_group,
-        )
-
-    @mock.patch.object(Client, "create_sfc_port_chain")
-    def test_new_sfp_with_sfc_encap(self, create_sfc_port_chain):
-        self._test_new_sfp(create_sfc_port_chain, True, None)
-
-    @mock.patch.object(Client, "create_sfc_port_chain")
-    def test_new_sfp_without_sfc_encap(self, create_sfc_port_chain):
-        self._test_new_sfp(create_sfc_port_chain, None, None)
-        self._test_new_sfp(create_sfc_port_chain, None, 25)
-
-    @mock.patch.object(Client, "create_sfc_port_chain")
-    def test_new_sfp_default_sfc_encap(self, create_sfc_port_chain):
-        self._test_new_sfp(create_sfc_port_chain, None, None)
-
-    @mock.patch.object(Client, "create_sfc_port_chain")
-    def test_new_sfp_with_sfc_encap_spi(self, create_sfc_port_chain):
-        self._test_new_sfp(create_sfc_port_chain, True, 25)
-
-    @mock.patch.object(Client, "create_sfc_port_chain")
-    def test_new_sfp_default_sfc_encap_spi(self, create_sfc_port_chain):
-        self._test_new_sfp(create_sfc_port_chain, None, 25)
-
-    @mock.patch.object(Client, "list_sfc_flow_classifiers")
-    def test_get_classification_list(self, list_sfc_flow_classifiers):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_flow_classifiers.return_value = {
-            "flow_classifiers": [
-                {
-                    "source_port_range_min": 2000,
-                    "destination_ip_prefix": "192.168.3.0/24",
-                    "protocol": "udp",
-                    "description": "",
-                    "ethertype": "IPv4",
-                    "l7_parameters": {},
-                    "source_port_range_max": 2000,
-                    "destination_port_range_min": 3000,
-                    "source_ip_prefix": "192.168.2.0/24",
-                    "logical_destination_port": None,
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "destination_port_range_max": None,
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "logical_source_port": "aaab0ab0-1452-4636-bb3b-11dca833fa2b",
-                    "id": "22198366-d4e8-4d6b-b4d2-637d5d6cbb7d",
-                    "name": "fc1",
-                }
-            ]
-        }
-
-        # call the VIM connector
-        filter_dict = {"protocol": "tcp", "ethertype": "IPv4"}
-        result = self.vimconn.get_classification_list(filter_dict.copy())
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_flow_classifiers.assert_called_with(**filter_dict)
-        # assert that the VIM connector successfully
-        # translated and returned the OpenStack result
-        self.assertEqual(
-            result,
-            [
-                {
-                    "id": "22198366-d4e8-4d6b-b4d2-637d5d6cbb7d",
-                    "name": "fc1",
-                    "description": "",
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "ctype": "legacy_flow_classifier",
-                    "definition": {
-                        "source_port_range_min": 2000,
-                        "destination_ip_prefix": "192.168.3.0/24",
-                        "protocol": "udp",
-                        "ethertype": "IPv4",
-                        "l7_parameters": {},
-                        "source_port_range_max": 2000,
-                        "destination_port_range_min": 3000,
-                        "source_ip_prefix": "192.168.2.0/24",
-                        "logical_destination_port": None,
-                        "destination_port_range_max": None,
-                        "logical_source_port": "aaab0ab0-1452-4636-bb3b-11dca833fa2b",
-                    },
-                }
-            ],
-        )
-
-    def _test_get_sfi_list(self, list_port_pair, correlation, sfc_encap):
-        # what OpenStack is assumed to return to the VIM connector
-        list_port_pair.return_value = {
-            "port_pairs": [
-                {
-                    "ingress": "5311c75d-d718-4369-bbda-cdcc6da60fcc",
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "egress": "5311c75d-d718-4369-bbda-cdcc6da60fcc",
-                    "service_function_parameters": {"correlation": correlation},
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "c121ebdd-7f2d-4213-b933-3325298a6966",
-                    "name": "osm_sfi",
-                }
-            ]
-        }
-
-        # call the VIM connector
-        filter_dict = {"name": "osm_sfi", "description": ""}
-        result = self.vimconn.get_sfi_list(filter_dict.copy())
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_port_pair.assert_called_with(**filter_dict)
-        # assert that the VIM connector successfully
-        # translated and returned the OpenStack result
-        self.assertEqual(
-            result,
-            [
-                {
-                    "ingress_ports": ["5311c75d-d718-4369-bbda-cdcc6da60fcc"],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "egress_ports": ["5311c75d-d718-4369-bbda-cdcc6da60fcc"],
-                    "sfc_encap": sfc_encap,
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "c121ebdd-7f2d-4213-b933-3325298a6966",
-                    "name": "osm_sfi",
-                }
-            ],
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_pairs")
-    def test_get_sfi_list_with_sfc_encap(self, list_sfc_port_pairs):
-        self._test_get_sfi_list(list_sfc_port_pairs, "nsh", True)
-
-    @mock.patch.object(Client, "list_sfc_port_pairs")
-    def test_get_sfi_list_without_sfc_encap(self, list_sfc_port_pairs):
-        self._test_get_sfi_list(list_sfc_port_pairs, None, False)
-
-    @mock.patch.object(Client, "list_sfc_port_pair_groups")
-    def test_get_sf_list(self, list_sfc_port_pair_groups):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_pair_groups.return_value = {
-            "port_pair_groups": [
-                {
-                    "port_pairs": [
-                        "08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2",
-                        "0d63799c-82d6-11e7-8deb-a746bb3ae9f5",
-                    ],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "port_pair_group_parameters": {},
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "f4a0bde8-82d5-11e7-90e1-a72b762fa27f",
-                    "name": "osm_sf",
-                }
-            ]
-        }
-
-        # call the VIM connector
-        filter_dict = {"name": "osm_sf", "description": ""}
-        result = self.vimconn.get_sf_list(filter_dict.copy())
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_port_pair_groups.assert_called_with(**filter_dict)
-        # assert that the VIM connector successfully
-        # translated and returned the OpenStack result
-        self.assertEqual(
-            result,
-            [
-                {
-                    "sfis": [
-                        "08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2",
-                        "0d63799c-82d6-11e7-8deb-a746bb3ae9f5",
-                    ],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "f4a0bde8-82d5-11e7-90e1-a72b762fa27f",
-                    "name": "osm_sf",
-                }
-            ],
-        )
-
-    def _test_get_sfp_list(self, list_sfc_port_chains, correlation, sfc_encap):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_chains.return_value = {
-            "port_chains": [
-                {
-                    "port_pair_groups": [
-                        "7d8e3bf8-82d6-11e7-a032-8ff028839d25",
-                        "7dc9013e-82d6-11e7-a5a6-a3a8d78a5518",
-                    ],
-                    "flow_classifiers": [
-                        "1333c2f4-82d7-11e7-a5df-9327f33d104e",
-                        "1387ab44-82d7-11e7-9bb0-476337183905",
-                    ],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "chain_parameters": {"correlation": correlation},
-                    "chain_id": 40,
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "821bc9be-82d7-11e7-8ce3-23a08a27ab47",
-                    "name": "osm_sfp",
-                }
-            ]
-        }
-
-        # call the VIM connector
-        filter_dict = {"name": "osm_sfp", "description": ""}
-        result = self.vimconn.get_sfp_list(filter_dict.copy())
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_port_chains.assert_called_with(**filter_dict)
-        # assert that the VIM connector successfully
-        # translated and returned the OpenStack result
-        self.assertEqual(
-            result,
-            [
-                {
-                    "service_functions": [
-                        "7d8e3bf8-82d6-11e7-a032-8ff028839d25",
-                        "7dc9013e-82d6-11e7-a5a6-a3a8d78a5518",
-                    ],
-                    "classifications": [
-                        "1333c2f4-82d7-11e7-a5df-9327f33d104e",
-                        "1387ab44-82d7-11e7-9bb0-476337183905",
-                    ],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "sfc_encap": sfc_encap,
-                    "spi": 40,
-                    "id": "821bc9be-82d7-11e7-8ce3-23a08a27ab47",
-                    "name": "osm_sfp",
-                }
-            ],
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_chains")
-    def test_get_sfp_list_with_sfc_encap(self, list_sfc_port_chains):
-        self._test_get_sfp_list(list_sfc_port_chains, "nsh", True)
-
-    @mock.patch.object(Client, "list_sfc_port_chains")
-    def test_get_sfp_list_without_sfc_encap(self, list_sfc_port_chains):
-        self._test_get_sfp_list(list_sfc_port_chains, None, False)
-
-    @mock.patch.object(Client, "list_sfc_flow_classifiers")
-    def test_get_classification(self, list_sfc_flow_classifiers):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_flow_classifiers.return_value = {
-            "flow_classifiers": [
-                {
-                    "source_port_range_min": 2000,
-                    "destination_ip_prefix": "192.168.3.0/24",
-                    "protocol": "udp",
-                    "description": "",
-                    "ethertype": "IPv4",
-                    "l7_parameters": {},
-                    "source_port_range_max": 2000,
-                    "destination_port_range_min": 3000,
-                    "source_ip_prefix": "192.168.2.0/24",
-                    "logical_destination_port": None,
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "destination_port_range_max": None,
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "logical_source_port": "aaab0ab0-1452-4636-bb3b-11dca833fa2b",
-                    "id": "22198366-d4e8-4d6b-b4d2-637d5d6cbb7d",
-                    "name": "fc1",
-                }
-            ]
-        }
-
-        # call the VIM connector
-        result = self.vimconn.get_classification("22198366-d4e8-4d6b-b4d2-637d5d6cbb7d")
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_flow_classifiers.assert_called_with(
-            id="22198366-d4e8-4d6b-b4d2-637d5d6cbb7d"
-        )
-        # assert that VIM connector successfully returned the OpenStack result
-        self.assertEqual(
-            result,
-            {
-                "id": "22198366-d4e8-4d6b-b4d2-637d5d6cbb7d",
-                "name": "fc1",
-                "description": "",
-                "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                "ctype": "legacy_flow_classifier",
-                "definition": {
-                    "source_port_range_min": 2000,
-                    "destination_ip_prefix": "192.168.3.0/24",
-                    "protocol": "udp",
-                    "ethertype": "IPv4",
-                    "l7_parameters": {},
-                    "source_port_range_max": 2000,
-                    "destination_port_range_min": 3000,
-                    "source_ip_prefix": "192.168.2.0/24",
-                    "logical_destination_port": None,
-                    "destination_port_range_max": None,
-                    "logical_source_port": "aaab0ab0-1452-4636-bb3b-11dca833fa2b",
-                },
-            },
-        )
-
-    @mock.patch.object(Client, "list_sfc_flow_classifiers")
-    def test_get_classification_many_results(self, list_sfc_flow_classifiers):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_flow_classifiers.return_value = {
-            "flow_classifiers": [
-                {
-                    "source_port_range_min": 2000,
-                    "destination_ip_prefix": "192.168.3.0/24",
-                    "protocol": "udp",
-                    "description": "",
-                    "ethertype": "IPv4",
-                    "l7_parameters": {},
-                    "source_port_range_max": 2000,
-                    "destination_port_range_min": 3000,
-                    "source_ip_prefix": "192.168.2.0/24",
-                    "logical_destination_port": None,
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "destination_port_range_max": None,
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "logical_source_port": "aaab0ab0-1452-4636-bb3b-11dca833fa2b",
-                    "id": "22198366-d4e8-4d6b-b4d2-637d5d6cbb7d",
-                    "name": "fc1",
-                },
-                {
-                    "source_port_range_min": 1000,
-                    "destination_ip_prefix": "192.168.3.0/24",
-                    "protocol": "udp",
-                    "description": "",
-                    "ethertype": "IPv4",
-                    "l7_parameters": {},
-                    "source_port_range_max": 1000,
-                    "destination_port_range_min": 3000,
-                    "source_ip_prefix": "192.168.2.0/24",
-                    "logical_destination_port": None,
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "destination_port_range_max": None,
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "logical_source_port": "aaab0ab0-1452-4636-bb3b-11dca833fa2b",
-                    "id": "3196bafc-82dd-11e7-a205-9bf6c14b0721",
-                    "name": "fc2",
-                },
-            ]
-        }
-
-        # call the VIM connector
-        self.assertRaises(
-            vimconn.VimConnConflictException,
-            self.vimconn.get_classification,
-            "3196bafc-82dd-11e7-a205-9bf6c14b0721",
-        )
-
-        # assert the VIM connector called OpenStack with the expected filter
-        list_sfc_flow_classifiers.assert_called_with(
-            id="3196bafc-82dd-11e7-a205-9bf6c14b0721"
-        )
-
-    @mock.patch.object(Client, "list_sfc_flow_classifiers")
-    def test_get_classification_no_results(self, list_sfc_flow_classifiers):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_flow_classifiers.return_value = {"flow_classifiers": []}
-
-        # call the VIM connector
-        self.assertRaises(
-            vimconn.VimConnNotFoundException,
-            self.vimconn.get_classification,
-            "3196bafc-82dd-11e7-a205-9bf6c14b0721",
-        )
-
-        # assert the VIM connector called OpenStack with the expected filter
-        list_sfc_flow_classifiers.assert_called_with(
-            id="3196bafc-82dd-11e7-a205-9bf6c14b0721"
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_pairs")
-    def test_get_sfi(self, list_sfc_port_pairs):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_pairs.return_value = {
-            "port_pairs": [
-                {
-                    "ingress": "5311c75d-d718-4369-bbda-cdcc6da60fcc",
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "egress": "5311c75d-d718-4369-bbda-cdcc6da60fcc",
-                    "service_function_parameters": {"correlation": "nsh"},
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "c121ebdd-7f2d-4213-b933-3325298a6966",
-                    "name": "osm_sfi1",
-                },
-            ]
-        }
-
-        # call the VIM connector
-        result = self.vimconn.get_sfi("c121ebdd-7f2d-4213-b933-3325298a6966")
-
-        # assert the VIM connector called OpenStack with the expected filter
-        list_sfc_port_pairs.assert_called_with(
-            id="c121ebdd-7f2d-4213-b933-3325298a6966"
-        )
-        # assert the VIM connector successfully returned the OpenStack result
-        self.assertEqual(
-            result,
-            {
-                "ingress_ports": ["5311c75d-d718-4369-bbda-cdcc6da60fcc"],
-                "egress_ports": ["5311c75d-d718-4369-bbda-cdcc6da60fcc"],
-                "sfc_encap": True,
-                "description": "",
-                "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                "id": "c121ebdd-7f2d-4213-b933-3325298a6966",
-                "name": "osm_sfi1",
-            },
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_pairs")
-    def test_get_sfi_many_results(self, list_sfc_port_pairs):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_pairs.return_value = {
-            "port_pairs": [
-                {
-                    "ingress": "5311c75d-d718-4369-bbda-cdcc6da60fcc",
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "egress": "5311c75d-d718-4369-bbda-cdcc6da60fcc",
-                    "service_function_parameters": {"correlation": "nsh"},
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "c121ebdd-7f2d-4213-b933-3325298a6966",
-                    "name": "osm_sfi1",
-                },
-                {
-                    "ingress": "5311c75d-d718-4369-bbda-cdcc6da60fcc",
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "egress": "5311c75d-d718-4369-bbda-cdcc6da60fcc",
-                    "service_function_parameters": {"correlation": "nsh"},
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "c0436d92-82db-11e7-8f9c-5fa535f1261f",
-                    "name": "osm_sfi2",
-                },
-            ]
-        }
-
-        # call the VIM connector
-        self.assertRaises(
-            vimconn.VimConnConflictException,
-            self.vimconn.get_sfi,
-            "c0436d92-82db-11e7-8f9c-5fa535f1261f",
-        )
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_port_pairs.assert_called_with(
-            id="c0436d92-82db-11e7-8f9c-5fa535f1261f"
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_pairs")
-    def test_get_sfi_no_results(self, list_sfc_port_pairs):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_pairs.return_value = {"port_pairs": []}
-
-        # call the VIM connector
-        self.assertRaises(
-            vimconn.VimConnNotFoundException,
-            self.vimconn.get_sfi,
-            "b22892fc-82d9-11e7-ae85-0fea6a3b3757",
-        )
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_port_pairs.assert_called_with(
-            id="b22892fc-82d9-11e7-ae85-0fea6a3b3757"
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_pair_groups")
-    def test_get_sf(self, list_sfc_port_pair_groups):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_pair_groups.return_value = {
-            "port_pair_groups": [
-                {
-                    "port_pairs": ["08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2"],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "port_pair_group_parameters": {},
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "aabba8a6-82d9-11e7-a18a-d3c7719b742d",
-                    "name": "osm_sf1",
-                }
-            ]
-        }
-
-        # call the VIM connector
-        result = self.vimconn.get_sf("b22892fc-82d9-11e7-ae85-0fea6a3b3757")
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_port_pair_groups.assert_called_with(
-            id="b22892fc-82d9-11e7-ae85-0fea6a3b3757"
-        )
-        # assert that VIM connector successfully returned the OpenStack result
-        self.assertEqual(
-            result,
-            {
-                "description": "",
-                "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                "sfis": ["08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2"],
-                "id": "aabba8a6-82d9-11e7-a18a-d3c7719b742d",
-                "name": "osm_sf1",
-            },
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_pair_groups")
-    def test_get_sf_many_results(self, list_sfc_port_pair_groups):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_pair_groups.return_value = {
-            "port_pair_groups": [
-                {
-                    "port_pairs": ["08fbdbb0-82d6-11e7-ad95-9bb52fbec2f2"],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "port_pair_group_parameters": {},
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "aabba8a6-82d9-11e7-a18a-d3c7719b742d",
-                    "name": "osm_sf1",
-                },
-                {
-                    "port_pairs": ["0d63799c-82d6-11e7-8deb-a746bb3ae9f5"],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "port_pair_group_parameters": {},
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "b22892fc-82d9-11e7-ae85-0fea6a3b3757",
-                    "name": "osm_sf2",
-                },
-            ]
-        }
-
-        # call the VIM connector
-        self.assertRaises(
-            vimconn.VimConnConflictException,
-            self.vimconn.get_sf,
-            "b22892fc-82d9-11e7-ae85-0fea6a3b3757",
-        )
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_port_pair_groups.assert_called_with(
-            id="b22892fc-82d9-11e7-ae85-0fea6a3b3757"
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_pair_groups")
-    def test_get_sf_no_results(self, list_sfc_port_pair_groups):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_pair_groups.return_value = {"port_pair_groups": []}
-
-        # call the VIM connector
-        self.assertRaises(
-            vimconn.VimConnNotFoundException,
-            self.vimconn.get_sf,
-            "b22892fc-82d9-11e7-ae85-0fea6a3b3757",
-        )
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_port_pair_groups.assert_called_with(
-            id="b22892fc-82d9-11e7-ae85-0fea6a3b3757"
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_chains")
-    def test_get_sfp(self, list_sfc_port_chains):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_chains.return_value = {
-            "port_chains": [
-                {
-                    "port_pair_groups": ["7d8e3bf8-82d6-11e7-a032-8ff028839d25"],
-                    "flow_classifiers": ["1333c2f4-82d7-11e7-a5df-9327f33d104e"],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "chain_parameters": {"correlation": "nsh"},
-                    "chain_id": 40,
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "821bc9be-82d7-11e7-8ce3-23a08a27ab47",
-                    "name": "osm_sfp1",
-                }
-            ]
-        }
-
-        # call the VIM connector
-        result = self.vimconn.get_sfp("821bc9be-82d7-11e7-8ce3-23a08a27ab47")
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_port_chains.assert_called_with(
-            id="821bc9be-82d7-11e7-8ce3-23a08a27ab47"
-        )
-        # assert that VIM connector successfully returned the OpenStack result
-        self.assertEqual(
-            result,
-            {
-                "service_functions": ["7d8e3bf8-82d6-11e7-a032-8ff028839d25"],
-                "classifications": ["1333c2f4-82d7-11e7-a5df-9327f33d104e"],
-                "description": "",
-                "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                "sfc_encap": True,
-                "spi": 40,
-                "id": "821bc9be-82d7-11e7-8ce3-23a08a27ab47",
-                "name": "osm_sfp1",
-            },
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_chains")
-    def test_get_sfp_many_results(self, list_sfc_port_chains):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_chains.return_value = {
-            "port_chains": [
-                {
-                    "port_pair_groups": ["7d8e3bf8-82d6-11e7-a032-8ff028839d25"],
-                    "flow_classifiers": ["1333c2f4-82d7-11e7-a5df-9327f33d104e"],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "chain_parameters": {"correlation": "nsh"},
-                    "chain_id": 40,
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "821bc9be-82d7-11e7-8ce3-23a08a27ab47",
-                    "name": "osm_sfp1",
-                },
-                {
-                    "port_pair_groups": ["7d8e3bf8-82d6-11e7-a032-8ff028839d25"],
-                    "flow_classifiers": ["1333c2f4-82d7-11e7-a5df-9327f33d104e"],
-                    "description": "",
-                    "tenant_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "chain_parameters": {"correlation": "nsh"},
-                    "chain_id": 50,
-                    "project_id": "8f3019ef06374fa880a0144ad4bc1d7b",
-                    "id": "5d002f38-82de-11e7-a770-f303f11ce66a",
-                    "name": "osm_sfp2",
-                },
-            ]
-        }
-
-        # call the VIM connector
-        self.assertRaises(
-            vimconn.VimConnConflictException,
-            self.vimconn.get_sfp,
-            "5d002f38-82de-11e7-a770-f303f11ce66a",
-        )
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_port_chains.assert_called_with(
-            id="5d002f38-82de-11e7-a770-f303f11ce66a"
-        )
-
-    @mock.patch.object(Client, "list_sfc_port_chains")
-    def test_get_sfp_no_results(self, list_sfc_port_chains):
-        # what OpenStack is assumed to return to the VIM connector
-        list_sfc_port_chains.return_value = {"port_chains": []}
-
-        # call the VIM connector
-        self.assertRaises(
-            vimconn.VimConnNotFoundException,
-            self.vimconn.get_sfp,
-            "5d002f38-82de-11e7-a770-f303f11ce66a",
-        )
-
-        # assert that VIM connector called OpenStack with the expected filter
-        list_sfc_port_chains.assert_called_with(
-            id="5d002f38-82de-11e7-a770-f303f11ce66a"
-        )
-
-    @mock.patch.object(Client, "delete_sfc_flow_classifier")
-    def test_delete_classification(self, delete_sfc_flow_classifier):
-        result = self.vimconn.delete_classification(
-            "638f957c-82df-11e7-b7c8-132706021464"
-        )
-        delete_sfc_flow_classifier.assert_called_with(
-            "638f957c-82df-11e7-b7c8-132706021464"
-        )
-        self.assertEqual(result, "638f957c-82df-11e7-b7c8-132706021464")
-
-    @mock.patch.object(Client, "delete_sfc_port_pair")
-    def test_delete_sfi(self, delete_sfc_port_pair):
-        result = self.vimconn.delete_sfi("638f957c-82df-11e7-b7c8-132706021464")
-        delete_sfc_port_pair.assert_called_with("638f957c-82df-11e7-b7c8-132706021464")
-        self.assertEqual(result, "638f957c-82df-11e7-b7c8-132706021464")
-
-    @mock.patch.object(Client, "delete_sfc_port_pair_group")
-    def test_delete_sf(self, delete_sfc_port_pair_group):
-        result = self.vimconn.delete_sf("638f957c-82df-11e7-b7c8-132706021464")
-        delete_sfc_port_pair_group.assert_called_with(
-            "638f957c-82df-11e7-b7c8-132706021464"
-        )
-        self.assertEqual(result, "638f957c-82df-11e7-b7c8-132706021464")
-
-    @mock.patch.object(Client, "delete_sfc_port_chain")
-    def test_delete_sfp(self, delete_sfc_port_chain):
-        result = self.vimconn.delete_sfp("638f957c-82df-11e7-b7c8-132706021464")
-        delete_sfc_port_chain.assert_called_with("638f957c-82df-11e7-b7c8-132706021464")
-        self.assertEqual(result, "638f957c-82df-11e7-b7c8-132706021464")
 
 
 class Status:
@@ -5946,6 +4921,7 @@ class TestNewFlavor(unittest.TestCase):
         for mocking in mocks:
             mocking.assert_not_called()
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -5962,6 +4938,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, memory, vcpu exist, vim type is VIO,
         paired-threads, cores, threads do not exist in numa.
@@ -5970,21 +4947,17 @@ class TestNewFlavor(unittest.TestCase):
             {"id": 0, "memory": 1, "vcpu": [1, 3]},
             {"id": 1, "memory": 2, "vcpu": [2]},
         ]
-        vcpus = 3
         extra_specs = {}
         expected_extra_specs = {
             "hw:numa_nodes": "2",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-            "vmware:latency_sensitivity_level": "high",
             "hw:cpu_sockets": "2",
         }
         self.vimconn.vim_type = "VIO"
-        result = self.vimconn._process_numa_parameters_of_flavor(
-            numas, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
+
         self.assertEqual(mock_process_numa_memory.call_count, 2)
         self.assertEqual(mock_process_numa_vcpu.call_count, 2)
+        mock_process_vio_numa_nodes.assert_called_once_with(2, {"hw:numa_nodes": "2"})
         _call_mock_process_numa_memory = mock_process_numa_memory.call_args_list
         self.assertEqual(
             _call_mock_process_numa_memory[0].args,
@@ -5993,8 +4966,6 @@ class TestNewFlavor(unittest.TestCase):
                 0,
                 {
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
@@ -6006,8 +4977,6 @@ class TestNewFlavor(unittest.TestCase):
                 {
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
@@ -6019,8 +4988,6 @@ class TestNewFlavor(unittest.TestCase):
                 0,
                 {
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
@@ -6032,8 +4999,6 @@ class TestNewFlavor(unittest.TestCase):
                 {
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
@@ -6046,6 +5011,7 @@ class TestNewFlavor(unittest.TestCase):
             ]
         )
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6062,6 +5028,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, memory, vcpu exist, vim type is openstack,
         paired-threads, cores, threads do not exist in numa.
@@ -6070,17 +5037,14 @@ class TestNewFlavor(unittest.TestCase):
             {"id": 0, "memory": 1, "vcpu": [1, 3]},
             {"id": 1, "memory": 2, "vcpu": [2]},
         ]
-        vcpus = 3
         extra_specs = {}
         expected_extra_specs = {
             "hw:numa_nodes": "2",
             "hw:cpu_sockets": "2",
         }
         self.vimconn.vim_type = "openstack"
-        result = self.vimconn._process_numa_parameters_of_flavor(
-            numas, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
+
         self.assertEqual(mock_process_numa_memory.call_count, 2)
         self.assertEqual(mock_process_numa_vcpu.call_count, 2)
         _call_mock_process_numa_memory = mock_process_numa_memory.call_args_list
@@ -6126,6 +5090,7 @@ class TestNewFlavor(unittest.TestCase):
             ]
         )
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6142,6 +5107,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, paired-threads exist, vim type is openstack.
         vcpus calculation according to paired-threads in numa, there is extra_spec.
@@ -6149,17 +5115,15 @@ class TestNewFlavor(unittest.TestCase):
         numas = [{"id": 0, "paired-threads": 3}, {"id": 1, "paired-threads": 3}]
         extra_specs = {"some-key": "some-value"}
         expected_extra_specs = {
-            "hw:numa_nodes": "2",
             "hw:cpu_sockets": "2",
+            "hw:cpu_threads": "12",
+            "hw:numa_nodes": "2",
             "some-key": "some-value",
         }
         self.vimconn.vim_type = "openstack"
-        vcpus = 6
         mock_process_numa_paired_threads.side_effect = [6, 6]
-        result = self.vimconn._process_numa_parameters_of_flavor(
-            numas, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
+
         self.check_if_assert_not_called(
             [mock_process_numa_threads, mock_process_numa_cores]
         )
@@ -6185,6 +5149,7 @@ class TestNewFlavor(unittest.TestCase):
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6201,26 +5166,22 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, paired-threads exist, vim type is VIO.
         vcpus calculation according to paired-threads in numa, there is extra_spec.
         """
-        numas = [{"id": 0, "paired-threads": 3}, {"id": 1, "paired-threads": 3}]
+        numas = [{"id": 0, "paired-threads": 2}, {"id": 1, "paired-threads": 2}]
         extra_specs = {"some-key": "some-value"}
         expected_extra_specs = {
             "hw:numa_nodes": "2",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-            "vmware:latency_sensitivity_level": "high",
             "hw:cpu_sockets": "2",
+            "hw:cpu_threads": "8",
             "some-key": "some-value",
         }
         self.vimconn.vim_type = "VIO"
-        vcpus = 6
-        mock_process_numa_paired_threads.side_effect = [6, 6]
-        result = self.vimconn._process_numa_parameters_of_flavor(
-            numas, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        mock_process_numa_paired_threads.side_effect = [4, 4]
+        self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
         self.check_if_assert_not_called(
             [mock_process_numa_threads, mock_process_numa_cores]
         )
@@ -6230,34 +5191,34 @@ class TestNewFlavor(unittest.TestCase):
         _call_mock_process_numa_paired_threads = (
             mock_process_numa_paired_threads.call_args_list
         )
+        mock_process_vio_numa_nodes.assert_called_once_with(
+            2, {"some-key": "some-value", "hw:numa_nodes": "2"}
+        )
         self.assertEqual(
             _call_mock_process_numa_paired_threads[0].args,
             (
-                {"id": 0, "paired-threads": 3},
+                {"id": 0, "paired-threads": 2},
                 {
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
                     "some-key": "some-value",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
         self.assertEqual(
             _call_mock_process_numa_paired_threads[1].args,
             (
-                {"id": 1, "paired-threads": 3},
+                {"id": 1, "paired-threads": 2},
                 {
                     "hw:cpu_sockets": "2",
                     "hw:numa_nodes": "2",
                     "some-key": "some-value",
-                    "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-                    "vmware:latency_sensitivity_level": "high",
                 },
             ),
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6274,20 +5235,23 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, cores exist, vim type is openstack.
         vcpus calculation according to cores in numa.
         """
         numas = [{"id": 0, "cores": 1}, {"id": 1, "cores": 2}]
         extra_specs = {}
-        expected_extra_specs = {"hw:numa_nodes": "2", "hw:cpu_sockets": "2"}
+        updated_extra_specs = {"hw:numa_nodes": "2", "hw:cpu_sockets": "2"}
+        expected_extra_specs = {
+            "hw:numa_nodes": "2",
+            "hw:cpu_sockets": "2",
+            "hw:cpu_cores": "3",
+        }
         self.vimconn.vim_type = "openstack"
-        vcpus = 2
         mock_process_numa_cores.side_effect = [1, 2]
-        result = self.vimconn._process_numa_parameters_of_flavor(
-            numas, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
+
         self.check_if_assert_not_called(
             [mock_process_numa_threads, mock_process_numa_paired_threads]
         )
@@ -6297,14 +5261,15 @@ class TestNewFlavor(unittest.TestCase):
         _call_mock_process_numa_cores = mock_process_numa_cores.call_args_list
         self.assertEqual(
             _call_mock_process_numa_cores[0].args,
-            ({"id": 0, "cores": 1}, {"hw:cpu_sockets": "2", "hw:numa_nodes": "2"}),
+            ({"id": 0, "cores": 1}, updated_extra_specs),
         )
         self.assertEqual(
             _call_mock_process_numa_cores[1].args,
-            ({"id": 1, "cores": 2}, {"hw:cpu_sockets": "2", "hw:numa_nodes": "2"}),
+            ({"id": 1, "cores": 2}, updated_extra_specs),
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6321,6 +5286,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, id, cores exist, vim type is VIO.
         vcpus calculation according to cores in numa.
@@ -6328,35 +5294,44 @@ class TestNewFlavor(unittest.TestCase):
         numas = [{"id": 0, "cores": 1}, {"id": 1, "cores": 2}]
         extra_specs = {}
         expected_extra_specs = {
-            "hw:numa_nodes": "2",
+            "hw:cpu_cores": "3",
             "hw:cpu_sockets": "2",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-            "vmware:latency_sensitivity_level": "high",
+            "hw:numa_nodes": "2",
         }
         self.vimconn.vim_type = "VIO"
-        vcpus = 2
         mock_process_numa_cores.side_effect = [1, 2]
-        result = self.vimconn._process_numa_parameters_of_flavor(
-            numas, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
         self.check_if_assert_not_called(
             [mock_process_numa_threads, mock_process_numa_paired_threads]
         )
         self.assertEqual(mock_process_numa_memory.call_count, 2)
         self.assertEqual(mock_process_numa_vcpu.call_count, 2)
         self.assertEqual(mock_process_numa_cores.call_count, 2)
+        mock_process_vio_numa_nodes.assert_called_once_with(2, {"hw:numa_nodes": "2"})
         _call_mock_process_numa_cores = mock_process_numa_cores.call_args_list
         self.assertEqual(
             _call_mock_process_numa_cores[0].args,
-            ({"id": 0, "cores": 1}, expected_extra_specs),
+            (
+                {"id": 0, "cores": 1},
+                {
+                    "hw:cpu_sockets": "2",
+                    "hw:numa_nodes": "2",
+                },
+            ),
         )
         self.assertEqual(
             _call_mock_process_numa_cores[1].args,
-            ({"id": 1, "cores": 2}, expected_extra_specs),
+            (
+                {"id": 1, "cores": 2},
+                {
+                    "hw:cpu_sockets": "2",
+                    "hw:numa_nodes": "2",
+                },
+            ),
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6373,6 +5348,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, memory, vcpu, thread exist, vim type is VIO,
         vcpus calculation according threads in numa, there are not numa ids.
@@ -6384,17 +5360,12 @@ class TestNewFlavor(unittest.TestCase):
         extra_specs = {}
         expected_extra_specs = {
             "hw:numa_nodes": "2",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-            "vmware:latency_sensitivity_level": "high",
             "hw:cpu_sockets": "2",
+            "hw:cpu_threads": "3",
         }
         self.vimconn.vim_type = "VIO"
-        vcpus = 3
-        mock_process_numa_threads.return_value = vcpus
-        result = self.vimconn._process_numa_parameters_of_flavor(
-            numas, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        mock_process_numa_threads.return_value = 3
+        self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
         self.check_if_assert_not_called(
             [
                 mock_process_numa_memory,
@@ -6403,17 +5374,22 @@ class TestNewFlavor(unittest.TestCase):
                 mock_process_numa_paired_threads,
             ]
         )
+        mock_process_vio_numa_nodes.assert_called_once_with(2, {"hw:numa_nodes": "2"})
         self.assertEqual(mock_process_numa_threads.call_count, 1)
         _call_mock_process_numa_threads = mock_process_numa_threads.call_args_list
         self.assertEqual(
             _call_mock_process_numa_threads[0].args,
             (
                 {"memory": 1, "vcpu": [1, 3], "threads": 3},
-                expected_extra_specs,
+                {
+                    "hw:cpu_sockets": "2",
+                    "hw:numa_nodes": "2",
+                },
             ),
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6430,6 +5406,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Process numa parameters, memory, vcpu, thread exist, vim type is openstack,
         vcpus calculation according threads in numa, there are not numa ids.
@@ -6442,20 +5419,19 @@ class TestNewFlavor(unittest.TestCase):
         expected_extra_specs = {
             "hw:numa_nodes": "2",
             "hw:cpu_sockets": "2",
+            "hw:cpu_threads": "3",
         }
         self.vimconn.vim_type = "openstack"
-        vcpus = 3
-        mock_process_numa_threads.return_value = vcpus
-        result = self.vimconn._process_numa_parameters_of_flavor(
-            numas, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        mock_process_numa_threads.return_value = 3
+        self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
+
         self.check_if_assert_not_called(
             [
                 mock_process_numa_memory,
                 mock_process_numa_vcpu,
                 mock_process_numa_cores,
                 mock_process_numa_paired_threads,
+                mock_process_vio_numa_nodes,
             ]
         )
         self.assertEqual(mock_process_numa_threads.call_count, 1)
@@ -6464,11 +5440,12 @@ class TestNewFlavor(unittest.TestCase):
             _call_mock_process_numa_threads[0].args,
             (
                 {"memory": 1, "vcpu": [1, 3], "threads": 3},
-                expected_extra_specs,
+                {"hw:cpu_sockets": "2", "hw:numa_nodes": "2"},
             ),
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6485,22 +5462,14 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Numa list is empty, vim type is VIO."""
         numas = []
         extra_specs = {}
-        expected_extra_specs = {
-            "hw:numa_nodes": "0",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
-            "vmware:latency_sensitivity_level": "high",
-        }
+        expected_extra_specs = {"hw:numa_nodes": "0"}
         self.vimconn.vim_type = "VIO"
-        vcpus = 4
-        mock_process_numa_threads.return_value = None
-        result = self.vimconn._process_numa_parameters_of_flavor(
-            numas, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
         self.check_if_assert_not_called(
             [
                 mock_process_numa_memory,
@@ -6510,8 +5479,10 @@ class TestNewFlavor(unittest.TestCase):
                 mock_process_numa_threads,
             ]
         )
+        mock_process_vio_numa_nodes.assert_called_once_with(0, {"hw:numa_nodes": "0"})
         self.assertDictEqual(extra_specs, expected_extra_specs)
 
+    @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_vcpu", new_callable=CopyingMock())
     @patch.object(
@@ -6528,18 +5499,16 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads,
         mock_process_numa_vcpu,
         mock_process_numa_memory,
+        mock_process_vio_numa_nodes,
     ):
         """Numa list is empty, vim type is openstack."""
         numas = []
         extra_specs = {}
         expected_extra_specs = {"hw:numa_nodes": "0"}
         self.vimconn.vim_type = "openstack"
-        vcpus = 5
         mock_process_numa_threads.return_value = None
-        result = self.vimconn._process_numa_parameters_of_flavor(
-            numas, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
+
         self.check_if_assert_not_called(
             [
                 mock_process_numa_memory,
@@ -6547,6 +5516,7 @@ class TestNewFlavor(unittest.TestCase):
                 mock_process_numa_cores,
                 mock_process_numa_paired_threads,
                 mock_process_numa_threads,
+                mock_process_vio_numa_nodes,
             ]
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
@@ -6571,14 +5541,6 @@ class TestNewFlavor(unittest.TestCase):
         node_id = None
         extra_specs = {}
         expected_extra_spec = {"hw:numa_mem.None": 2048}
-        self.vimconn.process_numa_memory(numa, node_id, extra_specs)
-        self.assertDictEqual(extra_specs, expected_extra_spec)
-
-    def test_process_numa_memory_node_id_is_int(self):
-        numa = {"memory": 2, "vcpu": [2]}
-        node_id = 0
-        extra_specs = {}
-        expected_extra_spec = {"hw:numa_mem.0": 2048}
         self.vimconn.process_numa_memory(numa, node_id, extra_specs)
         self.assertDictEqual(extra_specs, expected_extra_spec)
 
@@ -6887,7 +5849,6 @@ class TestNewFlavor(unittest.TestCase):
             {"memory": 1, "vcpu": [1, 3], "threads": 3},
             {"memory": 2, "vcpu": [2]},
         ]
-        vcpus = 3
         extended = {
             "numas": numas,
             "cpu-quota": {"limit": 3},
@@ -6900,13 +5861,10 @@ class TestNewFlavor(unittest.TestCase):
         expected_extra_specs = {
             "hw:mem_page_size": "large",
         }
-        mock_process_numa_parameters_of_flavor.return_value = vcpus
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
+
         self.assertEqual(mock_process_resource_quota.call_count, 4)
-        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {}, vcpus)
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {})
         self.assertEqual(extra_specs, expected_extra_specs)
 
     @patch.object(
@@ -6923,7 +5881,6 @@ class TestNewFlavor(unittest.TestCase):
             {"memory": 1, "threads": 3},
             {"memory": 2, "vcpu": [2]},
         ]
-        vcpus = 3
         extended = {
             "numas": numas,
             "disk-quota": {"limit": 50},
@@ -6933,13 +5890,9 @@ class TestNewFlavor(unittest.TestCase):
         expected_extra_specs = {
             "hw:mem_page_size": "any",
         }
-        mock_process_numa_parameters_of_flavor.return_value = vcpus
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
         mock_process_resource_quota.assert_not_called()
-        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {}, vcpus)
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {})
         self.assertEqual(extra_specs, expected_extra_specs)
 
     @patch.object(
@@ -6952,7 +5905,6 @@ class TestNewFlavor(unittest.TestCase):
         self, mock_process_resource_quota, mock_process_numa_parameters_of_flavor
     ):
         """Process extended config, extended has cpu, mem, vif and disk-io quota but not numas."""
-        vcpus = 3
         extended = {
             "cpu-quota": {"limit": 3},
             "mem-quota": {"limit": 1},
@@ -6964,11 +5916,7 @@ class TestNewFlavor(unittest.TestCase):
         expected_extra_specs = {
             "hw:mem_page_size": "small",
         }
-        mock_process_numa_parameters_of_flavor.return_value = vcpus
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, vcpus)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
         self.assertEqual(mock_process_resource_quota.call_count, 4)
         mock_process_numa_parameters_of_flavor.assert_not_called()
         self.assertEqual(extra_specs, expected_extra_specs)
@@ -6996,19 +5944,14 @@ class TestNewFlavor(unittest.TestCase):
             "mem-policy": "STRICT",
         }
         extra_specs = {}
-        vcpus = 3
         expected_extra_specs = {
             "hw:mem_page_size": "large",
             "hw:cpu_policy": "dedicated",
             "hw:numa_mempolicy": "strict",
         }
-        mock_process_numa_parameters_of_flavor.return_value = 4
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, 4)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
         self.assertEqual(mock_process_resource_quota.call_count, 2)
-        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {}, vcpus)
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {})
         self.assertEqual(extra_specs, expected_extra_specs)
 
     @patch.object(
@@ -7029,16 +5972,12 @@ class TestNewFlavor(unittest.TestCase):
             "mem-policy": "STRICT",
         }
         extra_specs = {}
-        vcpus = 3
         expected_extra_specs = {
             "hw:mem_page_size": "large",
             "hw:cpu_policy": "dedicated",
             "hw:numa_mempolicy": "strict",
         }
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, 3)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
         self.assertEqual(mock_process_resource_quota.call_count, 2)
         mock_process_numa_parameters_of_flavor.assert_not_called()
         self.assertEqual(extra_specs, expected_extra_specs)
@@ -7061,15 +6000,12 @@ class TestNewFlavor(unittest.TestCase):
             "mem-policy": "STRICT",
         }
         extra_specs = {}
-        vcpus = 6
+
         expected_extra_specs = {
             "hw:cpu_policy": "dedicated",
             "hw:numa_mempolicy": "strict",
         }
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, 6)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
         self.assertEqual(mock_process_resource_quota.call_count, 2)
         mock_process_numa_parameters_of_flavor.assert_not_called()
         self.assertEqual(extra_specs, expected_extra_specs)
@@ -7097,18 +6033,13 @@ class TestNewFlavor(unittest.TestCase):
             "mem-policy": "STRICT",
         }
         extra_specs = {}
-        mock_process_numa_parameters_of_flavor.return_value = 4
-        vcpus = 1
         expected_extra_specs = {
             "hw:cpu_policy": "dedicated",
             "hw:numa_mempolicy": "strict",
         }
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, 4)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
         self.assertEqual(mock_process_resource_quota.call_count, 2)
-        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {}, vcpus)
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {})
         self.assertEqual(extra_specs, expected_extra_specs)
 
     @patch.object(
@@ -7133,19 +6064,14 @@ class TestNewFlavor(unittest.TestCase):
             "cpu-pinning-policy": "DEDICATED",
             "mem-policy": "STRICT",
         }
-        mock_process_numa_parameters_of_flavor.return_value = 1
         extra_specs = {}
-        vcpus = None
         expected_extra_specs = {
             "hw:cpu_policy": "dedicated",
             "hw:numa_mempolicy": "strict",
         }
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, 1)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
         self.assertEqual(mock_process_resource_quota.call_count, 2)
-        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {}, vcpus)
+        mock_process_numa_parameters_of_flavor.assert_called_once_with(numas, {})
         self.assertEqual(extra_specs, expected_extra_specs)
 
     @patch.object(
@@ -7166,16 +6092,12 @@ class TestNewFlavor(unittest.TestCase):
             "mem-policy": "STRICT",
         }
         extra_specs = {"some-key": "some-val"}
-        vcpus = None
         expected_extra_specs = {
             "hw:cpu_policy": "dedicated",
             "hw:numa_mempolicy": "strict",
             "some-key": "some-val",
         }
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, None)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
         self.assertEqual(mock_process_resource_quota.call_count, 2)
         mock_process_numa_parameters_of_flavor.assert_not_called()
         self.assertEqual(extra_specs, expected_extra_specs)
@@ -7202,17 +6124,12 @@ class TestNewFlavor(unittest.TestCase):
             "cpu-pinning-pol": "DEDICATED",
             "mem-pol": "STRICT",
         }
-        mock_process_numa_parameters_of_flavor.return_value = 1
         extra_specs = {}
-        vcpus = ""
         expected_extra_specs = {}
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, 1)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
         self.assertEqual(mock_process_resource_quota.call_count, 2)
         mock_process_numa_parameters_of_flavor.assert_called_once_with(
-            numas, extra_specs, vcpus
+            numas, extra_specs
         )
         self.assertEqual(extra_specs, expected_extra_specs)
 
@@ -7228,11 +6145,7 @@ class TestNewFlavor(unittest.TestCase):
         """Process extended config, extended is empty."""
         extended = {}
         extra_specs = {}
-        vcpus = 2
-        result = self.vimconn._process_extended_config_of_flavor(
-            extended, extra_specs, vcpus
-        )
-        self.assertEqual(result, 2)
+        self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
         self.check_if_assert_not_called(
             [mock_process_resource_quota, mock_process_numa_parameters_of_flavor]
         )
@@ -7292,7 +6205,6 @@ class TestNewFlavor(unittest.TestCase):
         name_suffix = 0
         vcpus = 8
         mock_change_flavor_name.return_value = name1
-        mock_extended_config_of_flavor.return_value = vcpus
         mock_get_flavor_details.return_value = (
             3,
             vcpus,
@@ -7307,7 +6219,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_get_flavor_details.assert_called_once_with(flavor_data)
         mock_change_flavor_name.assert_called_once_with(name1, name_suffix, flavor_data)
         mock_extended_config_of_flavor.assert_called_once_with(
-            extended, {"some-key": "some-value"}, vcpus
+            extended, {"some-key": "some-value"}
         )
         self.vimconn.nova.flavors.create.assert_called_once_with(
             name=name1, ram=3, vcpus=8, disk=50, ephemeral=0, swap=0, is_public=True
@@ -7335,16 +6247,14 @@ class TestNewFlavor(unittest.TestCase):
         name_suffix = 0
         vcpus = 8
         mock_change_flavor_name.return_value = name1
-        mock_extended_config_of_flavor.return_value = vcpus
         mock_get_flavor_details.return_value = (3, vcpus, {}, extended)
         expected_result = self.new_flavor.id
         result = self.vimconn.new_flavor(flavor_data)
         self.assertEqual(result, expected_result)
         mock_reload_connection.assert_called_once()
-
         mock_get_flavor_details.assert_called_once_with(flavor_data)
         mock_change_flavor_name.assert_called_once_with(name1, name_suffix, flavor_data)
-        mock_extended_config_of_flavor.assert_called_once_with(extended, {}, vcpus)
+        mock_extended_config_of_flavor.assert_called_once_with(extended, {})
         self.vimconn.nova.flavors.create.assert_called_once_with(
             name=name1, ram=3, vcpus=vcpus, disk=50, ephemeral=0, swap=0, is_public=True
         )
@@ -7372,15 +6282,14 @@ class TestNewFlavor(unittest.TestCase):
         """Create new flavor, change_name_if_used_false, there is extended."""
         vcpus = 8
         mock_get_flavor_details.return_value = (3, vcpus, {}, extended)
-        mock_extended_config_of_flavor.return_value = 16
         expected_result = self.new_flavor.id
         result = self.vimconn.new_flavor(flavor_data, False)
         self.assertEqual(result, expected_result)
         mock_reload_connection.assert_called_once()
         self.assertEqual(mock_get_flavor_details.call_count, 1)
-        mock_extended_config_of_flavor.assert_called_once_with(extended, {}, vcpus)
+        mock_extended_config_of_flavor.assert_called_once_with(extended, {})
         self.vimconn.nova.flavors.create.assert_called_once_with(
-            name=name1, ram=3, vcpus=16, disk=50, ephemeral=0, swap=0, is_public=True
+            name=name1, ram=3, vcpus=8, disk=50, ephemeral=0, swap=0, is_public=True
         )
         self.check_if_assert_not_called(
             [mock_change_flavor_name, mock_format_exception, self.new_flavor.set_keys]
@@ -7410,13 +6319,11 @@ class TestNewFlavor(unittest.TestCase):
         mock_get_flavor_details.return_value = (3, 8, {}, None)
         result = self.vimconn.new_flavor(flavor_data2)
         self.assertEqual(result, expected_result)
-
         mock_reload_connection.assert_called_once()
         mock_change_flavor_name.assert_called_once_with(
             name1, name_suffix, flavor_data2
         )
         self.assertEqual(mock_get_flavor_details.call_count, 1)
-
         self.vimconn.nova.flavors.create.assert_called_once_with(
             name=name1, ram=3, vcpus=8, disk=50, ephemeral=0, swap=0, is_public=True
         )
@@ -7531,11 +6438,9 @@ class TestNewFlavor(unittest.TestCase):
         mock_change_flavor_name.side_effect = [error2, "sample-flavor-3"]
         expected_result = self.new_flavor.id
         mock_get_flavor_details.return_value = (3, 8, {}, extended)
-        mock_extended_config_of_flavor.return_value = 10
         result = self.vimconn.new_flavor(flavor_data2)
         self.assertEqual(result, expected_result)
         self.assertEqual(mock_reload_connection.call_count, 2)
-
         mock_change_flavor_name.assert_called_with(name1, name_suffix, flavor_data2)
         self.assertEqual(mock_change_flavor_name.call_count, 2)
         self.assertEqual(mock_get_flavor_details.call_count, 1)
@@ -7543,7 +6448,7 @@ class TestNewFlavor(unittest.TestCase):
         self.vimconn.nova.flavors.create.assert_called_once_with(
             name="sample-flavor-3",
             ram=3,
-            vcpus=10,
+            vcpus=8,
             disk=50,
             ephemeral=0,
             swap=0,
@@ -7579,13 +6484,11 @@ class TestNewFlavor(unittest.TestCase):
         expected_result = self.new_flavor.id
         mock_get_flavor_details.return_value = (3, 8, {}, None)
         result = self.vimconn.new_flavor(flavor_data2)
-
         self.assertEqual(result, expected_result)
         self.assertEqual(mock_reload_connection.call_count, 2)
         mock_change_flavor_name.assert_called_with(name1, name_suffix, flavor_data2)
         self.assertEqual(mock_change_flavor_name.call_count, 2)
         self.assertEqual(mock_get_flavor_details.call_count, 1)
-
         self.vimconn.nova.flavors.create.assert_called_once_with(
             name="sample-flavor-3",
             ram=3,
@@ -7798,7 +6701,6 @@ class TestNewFlavor(unittest.TestCase):
                 }
             ),
         )
-
         self.assertEqual(mock_reload_connection.call_count, 3)
         _call_mock_change_flavor = mock_change_flavor_name.call_args_list
         self.assertEqual(
@@ -7832,6 +6734,53 @@ class TestNewFlavor(unittest.TestCase):
             str(call_mock_format_exception[0][0]), str(Conflict(error_msg))
         )
         self.assertEqual(mock_format_exception.call_count, 1)
+
+    def test_process_process_vio_numa_nodes_without_numa_with_extra_spec(self):
+        numa_nodes = 0
+        extra_specs = {"hw:numa_nodes": "0"}
+        expected_extra_spec = {
+            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+            "vmware:latency_sensitivity_level": "high",
+            "hw:numa_nodes": "0",
+        }
+        self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_process_vio_numa_nodes_list_type_numa_nodes_empty_extra_spec(self):
+        numa_nodes = [7, 9, 4]
+        extra_specs = {}
+        expected_extra_spec = {
+            "vmware:latency_sensitivity_level": "high",
+        }
+        self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_process_vio_numa_nodes_with_numa_with_extra_spec(self):
+        numa_nodes = 5
+        extra_specs = {"hw:numa_nodes": "5"}
+        expected_extra_spec = {
+            "vmware:latency_sensitivity_level": "high",
+            "hw:numa_nodes": "5",
+        }
+        self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_process_vio_numa_nodes_none_numa_nodes(self):
+        numa_nodes = None
+        extra_specs = {"hw:numa_nodes": "None"}
+        expected_extra_spec = {
+            "vmware:latency_sensitivity_level": "high",
+            "hw:numa_nodes": "None",
+            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
+        }
+        self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
+        self.assertDictEqual(extra_specs, expected_extra_spec)
+
+    def test_process_process_vio_numa_nodes_invalid_type_extra_specs(self):
+        numa_nodes = 5
+        extra_specs = []
+        with self.assertRaises(TypeError):
+            self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
 
 
 if __name__ == "__main__":

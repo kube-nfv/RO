@@ -1040,7 +1040,6 @@ class VimInteractionSdnNet(VimInteractionBase):
         return self.new(ro_task, task_create_index, None)
 
     def new(self, ro_task, task_index, task_depends):
-
         task = ro_task["tasks"][task_index]
         task_id = task["task_id"]
         target_vim = self.my_vims[ro_task["target_id"]]
@@ -1943,128 +1942,6 @@ class NsWorker(threading.Thread):
 
         return None
 
-    def _get_db_all_tasks(self):
-        """
-        Read all content of table ro_tasks to log it
-        :return: None
-        """
-        try:
-            # Checking the content of the BD:
-
-            # read and return
-            ro_task = self.db.get_list("ro_tasks")
-            for rt in ro_task:
-                self._log_ro_task(rt, None, None, "TASK_WF", "GET_ALL_TASKS")
-            return ro_task
-
-        except DbException as e:
-            self.logger.error("Database exception at _get_db_all_tasks: {}".format(e))
-        except Exception as e:
-            self.logger.critical(
-                "Unexpected exception at _get_db_all_tasks: {}".format(e), exc_info=True
-            )
-
-        return None
-
-    def _log_ro_task(self, ro_task, db_ro_task_update, db_ro_task_delete, mark, event):
-        """
-        Generate a log with the following format:
-
-        Mark;Event;ro_task_id;locked_at;modified_at;created_at;to_check_at;locked_by;
-        target_id;vim_info.refresh_at;vim_info;no_of_tasks;task_status;action_id;
-        task_array_index;task_id;task_action;task_item;task_args
-
-        Example:
-
-        TASK_WF;GET_TASK;888f1864-749a-4fc2-bc1a-97c0fffd6a6f:2;1642158724.8210013;
-        1642158640.7986135;1642158640.7986135;1642158640.7986135;b134c9494e75:0a
-        ;vim:b7ff9e24-8868-4d68-8a57-a59dc11d0327;None;{'created': False,
-        'created_items': None, 'vim_id': None, 'vim_name': None, 'vim_status': None,
-        'vim_details': None, 'vim_message': None, 'refresh_at': None};1;SCHEDULED;
-        888f1864-749a-4fc2-bc1a-97c0fffd6a6f;0;888f1864-749a-4fc2-bc1a-97c0fffd6a6f:2;
-        CREATE;image;{'filter_dict': {'name': 'ubuntu-os-cloud:image-family:ubuntu-1804-lts'}}
-        """
-        try:
-            line = []
-            i = 0
-            if ro_task is not None and isinstance(ro_task, dict):
-                for t in ro_task["tasks"]:
-                    line.clear()
-                    line.append(mark)
-                    line.append(event)
-                    line.append(ro_task.get("_id", ""))
-                    line.append(str(ro_task.get("locked_at", "")))
-                    line.append(str(ro_task.get("modified_at", "")))
-                    line.append(str(ro_task.get("created_at", "")))
-                    line.append(str(ro_task.get("to_check_at", "")))
-                    line.append(str(ro_task.get("locked_by", "")))
-                    line.append(str(ro_task.get("target_id", "")))
-                    line.append(str(ro_task.get("vim_info", {}).get("refresh_at", "")))
-                    line.append(str(ro_task.get("vim_info", "")))
-                    line.append(str(ro_task.get("tasks", "")))
-                    if isinstance(t, dict):
-                        line.append(str(t.get("status", "")))
-                        line.append(str(t.get("action_id", "")))
-                        line.append(str(i))
-                        line.append(str(t.get("task_id", "")))
-                        line.append(str(t.get("action", "")))
-                        line.append(str(t.get("item", "")))
-                        line.append(str(t.get("find_params", "")))
-                        line.append(str(t.get("params", "")))
-                    else:
-                        line.extend([""] * 2)
-                        line.append(str(i))
-                        line.extend([""] * 5)
-
-                    i += 1
-                    self.logger.debug(";".join(line))
-            elif db_ro_task_update is not None and isinstance(db_ro_task_update, dict):
-                i = 0
-                while True:
-                    st = "tasks.{}.status".format(i)
-                    if st not in db_ro_task_update:
-                        break
-                    line.clear()
-                    line.append(mark)
-                    line.append(event)
-                    line.append(db_ro_task_update.get("_id", ""))
-                    line.append(str(db_ro_task_update.get("locked_at", "")))
-                    line.append(str(db_ro_task_update.get("modified_at", "")))
-                    line.append("")
-                    line.append(str(db_ro_task_update.get("to_check_at", "")))
-                    line.append(str(db_ro_task_update.get("locked_by", "")))
-                    line.append("")
-                    line.append(str(db_ro_task_update.get("vim_info.refresh_at", "")))
-                    line.append("")
-                    line.append(str(db_ro_task_update.get("vim_info", "")))
-                    line.append(str(str(db_ro_task_update).count(".status")))
-                    line.append(db_ro_task_update.get(st, ""))
-                    line.append("")
-                    line.append(str(i))
-                    line.extend([""] * 3)
-                    i += 1
-                    self.logger.debug(";".join(line))
-
-            elif db_ro_task_delete is not None and isinstance(db_ro_task_delete, dict):
-                line.clear()
-                line.append(mark)
-                line.append(event)
-                line.append(db_ro_task_delete.get("_id", ""))
-                line.append("")
-                line.append(db_ro_task_delete.get("modified_at", ""))
-                line.extend([""] * 13)
-                self.logger.debug(";".join(line))
-
-            else:
-                line.clear()
-                line.append(mark)
-                line.append(event)
-                line.extend([""] * 16)
-                self.logger.debug(";".join(line))
-
-        except Exception as e:
-            self.logger.error("Error logging ro_task: {}".format(e))
-
     def _delete_task(self, ro_task, task_index, task_depends, db_update):
         """
         Determine if this task need to be done or superseded
@@ -2415,7 +2292,10 @@ class NsWorker(threading.Thread):
                             )
 
                         if task["action"] == "DELETE":
-                            (new_status, db_vim_info_update,) = self._delete_task(
+                            (
+                                new_status,
+                                db_vim_info_update,
+                            ) = self._delete_task(
                                 ro_task, task_index, task_depends, db_ro_task_update
                             )
                             new_status = (
@@ -2463,7 +2343,10 @@ class NsWorker(threading.Thread):
                             else:
                                 refresh_at = ro_task["vim_info"]["refresh_at"]
                                 if refresh_at and refresh_at != -1 and now > refresh_at:
-                                    (new_status, db_vim_info_update,) = self.item2class[
+                                    (
+                                        new_status,
+                                        db_vim_info_update,
+                                    ) = self.item2class[
                                         task["item"]
                                     ].refresh(ro_task)
                                     _update_refresh(new_status)
