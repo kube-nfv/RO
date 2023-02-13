@@ -6739,7 +6739,6 @@ class TestNewFlavor(unittest.TestCase):
         numa_nodes = 0
         extra_specs = {"hw:numa_nodes": "0"}
         expected_extra_spec = {
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
             "vmware:latency_sensitivity_level": "high",
             "hw:numa_nodes": "0",
         }
@@ -6771,7 +6770,6 @@ class TestNewFlavor(unittest.TestCase):
         expected_extra_spec = {
             "vmware:latency_sensitivity_level": "high",
             "hw:numa_nodes": "None",
-            "vmware:extra_config": '{"numa.nodeAffinity":"0"}',
         }
         self.vimconn.process_vio_numa_nodes(numa_nodes, extra_specs)
         self.assertDictEqual(extra_specs, expected_extra_spec)

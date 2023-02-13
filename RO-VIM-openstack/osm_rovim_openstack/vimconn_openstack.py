@@ -1402,10 +1402,6 @@ class vimconnector(vimconn.VimConnector):
             extra_specs     (dict):        Extra specs dict to be updated
 
         """
-        # If there is not any numa, numas_nodes equals to 0.
-        if not numa_nodes:
-            extra_specs["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
-
         # If there are several numas, we do not define specific affinity.
         extra_specs["vmware:latency_sensitivity_level"] = "high"
 
