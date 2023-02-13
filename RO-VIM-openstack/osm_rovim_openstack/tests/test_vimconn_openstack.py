@@ -107,6 +107,9 @@ flavor_data2 = {
 }
 
 
+@unittest.skip(
+    "Test is incomplete as it did not mock reload_connection and SFC methods are not in use."
+)
 class TestSfcOperations(unittest.TestCase):
     @mock.patch("logging.getLogger", autospec=True)
     def setUp(self, mock_logger):
