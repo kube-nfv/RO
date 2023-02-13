@@ -1752,7 +1752,6 @@ class vimconnector(vimconn.VimConnector):
 
         # For VF
         elif net["type"] == "VF" or net["type"] == "SR-IOV":
-
             port_dict["binding:vnic_type"] = "direct"
 
             # VIO specific Changes
@@ -1940,7 +1939,6 @@ class vimconnector(vimconn.VimConnector):
         key_id = "vim_volume_id" if "vim_volume_id" in disk.keys() else "vim_id"
 
         if disk.get(key_id):
-
             block_device_mapping["vd" + chr(base_disk_index)] = disk[key_id]
             existing_vim_volumes.append({"id": disk[key_id]})
 
@@ -2020,7 +2018,6 @@ class vimconnector(vimconn.VimConnector):
         key_id = "vim_volume_id" if "vim_volume_id" in disk.keys() else "vim_id"
 
         if disk.get(key_id):
-
             # Use existing persistent volume
             block_device_mapping["vd" + chr(base_disk_index)] = disk[key_id]
             existing_vim_volumes.append({"id": disk[key_id]})
@@ -2351,7 +2348,6 @@ class vimconnector(vimconn.VimConnector):
                 # In case of RO in HA there can be conflicts, two RO trying to assign same floating IP, so retry
                 # several times
                 while not assigned:
-
                     free_floating_ip = self._get_free_floating_ip(
                         server, floating_network
                     )
@@ -2448,7 +2444,6 @@ class vimconnector(vimconn.VimConnector):
                 self.neutron.update_port(port[0], port_update)
 
             except Exception:
-
                 raise vimconn.VimConnException(
                     "It was not possible to disable port security for port {}".format(
                         port[0]
@@ -2755,7 +2750,6 @@ class vimconnector(vimconn.VimConnector):
             k_id    (str):      Port id in the VIM
         """
         try:
-
             port_dict = self.neutron.list_ports()
             existing_ports = [port["id"] for port in port_dict["ports"] if port_dict]
 
@@ -2763,7 +2757,6 @@ class vimconnector(vimconn.VimConnector):
                 self.neutron.delete_port(k_id)
 
         except Exception as e:
-
             self.logger.error("Error deleting port: {}: {}".format(type(e).__name__, e))
 
     def _delete_volumes_by_id_wth_cinder(
@@ -2845,7 +2838,6 @@ class vimconnector(vimconn.VimConnector):
                 k_item, k_id = self._get_item_name_id(k)
 
                 if k_item == "volume":
-
                     unavailable_vol = self._delete_volumes_by_id_wth_cinder(
                         k, k_id, volumes_to_hold, created_items
                     )
@@ -2854,7 +2846,6 @@ class vimconnector(vimconn.VimConnector):
                         keep_waiting = True
 
                 elif k_item == "floating_ip":
-
                     self._delete_floating_ip_by_id(k, k_id, created_items)
 
             except Exception as e:
@@ -3076,7 +3067,8 @@ class vimconnector(vimconn.VimConnector):
 
     def action_vminstance(self, vm_id, action_dict, created_items={}):
         """Send and action over a VM instance from VIM
-        Returns None or the console dict if the action was successfully sent to the VIM"""
+        Returns None or the console dict if the action was successfully sent to the VIM
+        """
         self.logger.debug("Action over VM '%s': %s", vm_id, str(action_dict))
 
         try:

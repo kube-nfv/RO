@@ -39,7 +39,6 @@ class VimAdminException(Exception):
 
 
 class LockRenew:
-
     renew_list = []
     # ^ static method, common for all RO. Time ordered list of dictionaries with information of locks that needs to
     # be renewed. The time order is achieved as it is appended at the end

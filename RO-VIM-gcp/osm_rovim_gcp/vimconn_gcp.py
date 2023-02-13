@@ -40,7 +40,6 @@ if getenv("OSMRO_PDB_DEBUG"):
 
 
 class vimconnector(vimconn.VimConnector):
-
     # Translate Google Cloud provisioning state to OSM provision state
     # The first three ones are the transitional status once a user initiated action has been requested
     # Once the operation is complete, it will transition into the states Succeeded or Failed
@@ -306,7 +305,6 @@ class vimconnector(vimconn.VimConnector):
         self.logger.debug("create network name %s, ip_profile %s", net_name, ip_profile)
 
         try:
-
             self.logger.debug("creating network_name: {}".format(net_name))
 
             network = "projects/{}/global/networks/default".format(self.project)
@@ -375,7 +373,6 @@ class vimconnector(vimconn.VimConnector):
         )
 
         try:
-
             self.logger.debug("creating subnet_name: {}".format(subnet_name))
 
             subnetwork_body = {
@@ -424,7 +421,6 @@ class vimconnector(vimconn.VimConnector):
         )
 
         try:
-
             if self.reload_client:
                 self._reload_connection()
 
@@ -504,7 +500,6 @@ class vimconnector(vimconn.VimConnector):
         self.logger.debug("Deleting network: {}".format(str(net_id)))
 
         try:
-
             net_name = self._get_resource_name_from_resource_id(net_id)
 
             # Check associated VMs
