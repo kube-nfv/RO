@@ -3803,3 +3803,19 @@ class vimconnector(vimconn.VimConnector):
             self.__wait_for_vm(vm_id, "ACTIVE")
         instance_status = self.get_vdu_state(vm_id)[0]
         return instance_status
+
+    def get_monitoring_data(self):
+        try:
+            self.logger.debug("Getting servers and ports data from Openstack VIMs.")
+            self._reload_connection()
+            all_servers = self.nova.servers.list(detailed=True)
+            all_ports = self.neutron.list_ports()
+            return all_servers, all_ports
+        except (
+            vimconn.VimConnException,
+            vimconn.VimConnNotFoundException,
+            vimconn.VimConnConnectionException,
+        ) as e:
+            raise vimconn.VimConnException(
+                f"Exception in monitoring while getting VMs and ports status: {str(e)}"
+            )

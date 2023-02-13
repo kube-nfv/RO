@@ -103,6 +103,11 @@ flavor_data2 = {
 }
 
 
+def check_if_assert_not_called(mocks: list):
+    for mocking in mocks:
+        mocking.assert_not_called()
+
+
 class Status:
     def __init__(self, s):
         self.status = s
@@ -4777,7 +4782,6 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertDictEqual(result, created_items)
 
     def test_update_block_device_mapping_empty_volume(self):
-        """"""
         volume = ""
         block_device_mapping = {}
         base_disk_index = 100
@@ -4792,7 +4796,6 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertEqual(created_items, {})
 
     def test_update_block_device_mapping_invalid_volume(self):
-        """"""
         volume = "Volume-A"
         block_device_mapping = {}
         base_disk_index = 100
@@ -4809,7 +4812,6 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertEqual(created_items, {})
 
     def test_update_block_device_mapping(self):
-        """"""
         volume = MagicMock(autospec=True)
         volume.id = volume_id
         block_device_mapping = {}
@@ -4827,7 +4829,6 @@ class TestNewVmInstance(unittest.TestCase):
         )
 
     def test_update_block_device_mapping_with_keep_flag(self):
-        """"""
         volume = MagicMock(autospec=True)
         volume.id = volume_id
         block_device_mapping = {}
@@ -4892,6 +4893,67 @@ class TestNewVmInstance(unittest.TestCase):
         with self.assertRaises(AttributeError):
             self.vimconn._extract_items_wth_keep_flag_from_created_items(created_items)
 
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    def test_get_monitoring_data(self, mock_reload_conection):
+        servers = ["server1", "server2"]
+        ports = {"ports": ["port1", "port2"]}
+        self.vimconn.nova.servers.list.return_value = servers
+        self.vimconn.neutron.list_ports.return_value = ports
+        result = self.vimconn.get_monitoring_data()
+        self.assertTupleEqual(result, (servers, ports))
+        mock_reload_conection.assert_called_once()
+        self.vimconn.nova.servers.list.assert_called_once_with(detailed=True)
+        self.vimconn.neutron.list_ports.assert_called_once()
+
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    def test_get_monitoring_data_reload_connection_raises(self, mock_reload_conection):
+        mock_reload_conection.side_effect = VimConnNotFoundException(
+            "Connection object not found."
+        )
+        with self.assertRaises(VimConnException) as err:
+            result = self.vimconn.get_monitoring_data()
+            self.assertTupleEqual(result, None)
+        self.assertEqual(
+            str(err.exception.args[0]),
+            "Exception in monitoring while getting VMs and ports status: Connection object not found.",
+        )
+        mock_reload_conection.assert_called_once()
+        check_if_assert_not_called(
+            [self.vimconn.nova.servers.list, self.vimconn.neutron.list_ports]
+        )
+
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    def test_get_monitoring_data_server_list_raises(self, mock_reload_conection):
+        self.vimconn.nova.servers.list.side_effect = VimConnConnectionException(
+            "Can not connect to Cloud API."
+        )
+        with self.assertRaises(VimConnException) as err:
+            result = self.vimconn.get_monitoring_data()
+            self.assertTupleEqual(result, None)
+        self.assertEqual(
+            str(err.exception.args[0]),
+            "Exception in monitoring while getting VMs and ports status: Can not connect to Cloud API.",
+        )
+        mock_reload_conection.assert_called_once()
+        self.vimconn.nova.servers.list.assert_called_once_with(detailed=True)
+        self.vimconn.neutron.list_ports.assert_not_called()
+
+    @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
+    def test_get_monitoring_data_list_ports_raises(self, mock_reload_conection):
+        self.vimconn.neutron.list_ports.side_effect = VimConnConnectionException(
+            "Can not connect to Cloud API."
+        )
+        with self.assertRaises(VimConnException) as err:
+            result = self.vimconn.get_monitoring_data()
+            self.assertTupleEqual(result, None)
+        self.assertEqual(
+            str(err.exception.args[0]),
+            "Exception in monitoring while getting VMs and ports status: Can not connect to Cloud API.",
+        )
+        mock_reload_conection.assert_called_once()
+        self.vimconn.nova.servers.list.assert_called_once_with(detailed=True)
+        self.vimconn.neutron.list_ports.assert_called_once()
+
 
 class TestNewFlavor(unittest.TestCase):
     @patch("logging.getLogger", autospec=True)
@@ -4915,11 +4977,6 @@ class TestNewFlavor(unittest.TestCase):
         self.new_flavor = CopyingMock(autospec=True, name="new_flavor")
         self.new_flavor.id = "075d2482-5edb-43e3-91b3-234e65b6268a"
         self.vimconn.nova.flavors.create.return_value = self.new_flavor
-
-    @staticmethod
-    def check_if_assert_not_called(mocks: list):
-        for mocking in mocks:
-            mocking.assert_not_called()
 
     @patch.object(vimconnector, "process_vio_numa_nodes", new_callable=CopyingMock())
     @patch.object(vimconnector, "process_numa_memory", new_callable=CopyingMock())
@@ -5003,7 +5060,7 @@ class TestNewFlavor(unittest.TestCase):
             ),
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [
                 mock_process_numa_threads,
                 mock_process_numa_cores,
@@ -5082,7 +5139,7 @@ class TestNewFlavor(unittest.TestCase):
             ),
         )
         self.assertDictEqual(extra_specs, expected_extra_specs)
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [
                 mock_process_numa_threads,
                 mock_process_numa_cores,
@@ -5124,9 +5181,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_paired_threads.side_effect = [6, 6]
         self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
 
-        self.check_if_assert_not_called(
-            [mock_process_numa_threads, mock_process_numa_cores]
-        )
+        check_if_assert_not_called([mock_process_numa_threads, mock_process_numa_cores])
         self.assertEqual(mock_process_numa_memory.call_count, 2)
         self.assertEqual(mock_process_numa_vcpu.call_count, 2)
         self.assertEqual(mock_process_numa_paired_threads.call_count, 2)
@@ -5182,9 +5237,7 @@ class TestNewFlavor(unittest.TestCase):
         self.vimconn.vim_type = "VIO"
         mock_process_numa_paired_threads.side_effect = [4, 4]
         self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
-        self.check_if_assert_not_called(
-            [mock_process_numa_threads, mock_process_numa_cores]
-        )
+        check_if_assert_not_called([mock_process_numa_threads, mock_process_numa_cores])
         self.assertEqual(mock_process_numa_paired_threads.call_count, 2)
         self.assertEqual(mock_process_numa_memory.call_count, 2)
         self.assertEqual(mock_process_numa_vcpu.call_count, 2)
@@ -5252,7 +5305,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_cores.side_effect = [1, 2]
         self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
 
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [mock_process_numa_threads, mock_process_numa_paired_threads]
         )
         self.assertEqual(mock_process_numa_cores.call_count, 2)
@@ -5301,7 +5354,7 @@ class TestNewFlavor(unittest.TestCase):
         self.vimconn.vim_type = "VIO"
         mock_process_numa_cores.side_effect = [1, 2]
         self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [mock_process_numa_threads, mock_process_numa_paired_threads]
         )
         self.assertEqual(mock_process_numa_memory.call_count, 2)
@@ -5366,7 +5419,7 @@ class TestNewFlavor(unittest.TestCase):
         self.vimconn.vim_type = "VIO"
         mock_process_numa_threads.return_value = 3
         self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [
                 mock_process_numa_memory,
                 mock_process_numa_vcpu,
@@ -5425,7 +5478,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_threads.return_value = 3
         self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
 
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [
                 mock_process_numa_memory,
                 mock_process_numa_vcpu,
@@ -5470,7 +5523,7 @@ class TestNewFlavor(unittest.TestCase):
         expected_extra_specs = {"hw:numa_nodes": "0"}
         self.vimconn.vim_type = "VIO"
         self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [
                 mock_process_numa_memory,
                 mock_process_numa_vcpu,
@@ -5509,7 +5562,7 @@ class TestNewFlavor(unittest.TestCase):
         mock_process_numa_threads.return_value = None
         self.vimconn._process_numa_parameters_of_flavor(numas, extra_specs)
 
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [
                 mock_process_numa_memory,
                 mock_process_numa_vcpu,
@@ -6146,7 +6199,7 @@ class TestNewFlavor(unittest.TestCase):
         extended = {}
         extra_specs = {}
         self.vimconn._process_extended_config_of_flavor(extended, extra_specs)
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [mock_process_resource_quota, mock_process_numa_parameters_of_flavor]
         )
         self.assertEqual(extra_specs, {})
@@ -6258,9 +6311,7 @@ class TestNewFlavor(unittest.TestCase):
         self.vimconn.nova.flavors.create.assert_called_once_with(
             name=name1, ram=3, vcpus=vcpus, disk=50, ephemeral=0, swap=0, is_public=True
         )
-        self.check_if_assert_not_called(
-            [self.new_flavor.set_keys, mock_format_exception]
-        )
+        check_if_assert_not_called([self.new_flavor.set_keys, mock_format_exception])
 
     @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
     @patch.object(
@@ -6291,7 +6342,7 @@ class TestNewFlavor(unittest.TestCase):
         self.vimconn.nova.flavors.create.assert_called_once_with(
             name=name1, ram=3, vcpus=8, disk=50, ephemeral=0, swap=0, is_public=True
         )
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [mock_change_flavor_name, mock_format_exception, self.new_flavor.set_keys]
         )
 
@@ -6327,7 +6378,7 @@ class TestNewFlavor(unittest.TestCase):
         self.vimconn.nova.flavors.create.assert_called_once_with(
             name=name1, ram=3, vcpus=8, disk=50, ephemeral=0, swap=0, is_public=True
         )
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [
                 self.new_flavor.set_keys,
                 mock_extended_config_of_flavor,
@@ -6365,7 +6416,7 @@ class TestNewFlavor(unittest.TestCase):
         self.assertEqual(
             str(call_mock_format_exception[0][0]), str(ClientException(error_msg))
         )
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [
                 mock_change_flavor_name,
                 mock_get_flavor_details,
@@ -6404,7 +6455,7 @@ class TestNewFlavor(unittest.TestCase):
         self.assertEqual(
             str(call_mock_format_exception[0][0]), str(KeyError(error_msg))
         )
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [
                 mock_reload_connection,
                 mock_change_flavor_name,
@@ -6454,9 +6505,7 @@ class TestNewFlavor(unittest.TestCase):
             swap=0,
             is_public=True,
         )
-        self.check_if_assert_not_called(
-            [self.new_flavor.set_keys, mock_format_exception]
-        )
+        check_if_assert_not_called([self.new_flavor.set_keys, mock_format_exception])
 
     @patch.object(vimconnector, "_get_flavor_details", new_callable=CopyingMock())
     @patch.object(
@@ -6498,7 +6547,7 @@ class TestNewFlavor(unittest.TestCase):
             swap=0,
             is_public=True,
         )
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [
                 self.new_flavor.set_keys,
                 mock_extended_config_of_flavor,
@@ -6546,7 +6595,7 @@ class TestNewFlavor(unittest.TestCase):
         self.assertEqual(mock_get_flavor_details.call_count, 3)
         self.assertEqual(self.vimconn.nova.flavors.create.call_count, 3)
         self.assertEqual(mock_reload_connection.call_count, 3)
-        self.check_if_assert_not_called(
+        check_if_assert_not_called(
             [mock_change_flavor_name, mock_extended_config_of_flavor]
         )
         _call_mock_format_exception = mock_format_exception.call_args
