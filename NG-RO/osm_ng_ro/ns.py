@@ -1008,12 +1008,10 @@ class Ns(object):
                     == "persistent-storage:persistent-storage"
                 ):
                     for vdu_volume in vdu_instantiation_volumes_list:
-
                         if (
                             vdu_volume["vim-volume-id"]
                             and root_disk["id"] == vdu_volume["name"]
                         ):
-
                             persistent_root_disk[vsd["id"]] = {
                                 "vim_volume_id": vdu_volume["vim-volume-id"],
                                 "image_id": vdu.get("sw-image-desc"),
@@ -1025,7 +1023,6 @@ class Ns(object):
                             return disk_list, persistent_root_disk
 
                     else:
-
                         if root_disk.get("size-of-storage"):
                             persistent_root_disk[vsd["id"]] = {
                                 "image_id": vdu.get("sw-image-desc"),
@@ -1065,9 +1062,7 @@ class Ns(object):
                 and disk["id"] not in persistent_root_disk.keys()
             ):
                 for vdu_volume in vdu_instantiation_volumes_list:
-
                     if vdu_volume["vim-volume-id"] and disk["id"] == vdu_volume["name"]:
-
                         persistent_disk[disk["id"]] = {
                             "vim_volume_id": vdu_volume["vim-volume-id"],
                         }
@@ -1282,9 +1277,11 @@ class Ns(object):
             )
 
         if vdu_instantiation_volumes_list:
-
             # Find the root volumes and add to the disk_list
-            (disk_list, persistent_root_disk,) = Ns.find_persistent_root_volumes(
+            (
+                disk_list,
+                persistent_root_disk,
+            ) = Ns.find_persistent_root_volumes(
                 vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
             )
 
@@ -1298,7 +1295,6 @@ class Ns(object):
             )
 
         else:
-
             # vdu_instantiation_volumes_list is empty
             for vdu in vnfd.get("vdu", ()):
                 if vdu["name"] == target_vdu["vdu-name"]:
@@ -1434,7 +1430,6 @@ class Ns(object):
             vim_details = yaml.safe_load(f"{vim_details_text}")
 
         for iface_index, interface in enumerate(existing_vdu["interfaces"]):
-
             if "port-security-enabled" in interface:
                 interface["port_security"] = interface.pop("port-security-enabled")
 
@@ -2773,7 +2768,6 @@ class Ns(object):
                             task_index += 1
                             break
                 else:
-
                     for vdu_index, vdu in enumerate(db_vnfr["vdur"]):
                         extra_dict["params"] = {
                             "vim_vm_id": vdu["vim-id"],

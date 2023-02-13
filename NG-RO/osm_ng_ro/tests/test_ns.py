@@ -1494,7 +1494,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         target_flavor = {}
         indata = {
             "vnf": [
@@ -1521,7 +1520,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         target_flavor = {
             "no-target-flavor": "here",
         }
@@ -1544,7 +1542,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -1589,7 +1586,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -1747,7 +1743,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         expected_result = {
             "find_params": {
                 "flavor_data": {
@@ -1924,7 +1919,6 @@ class TestNs(unittest.TestCase):
         self,
         epa_params,
     ):
-
         expected_result = {
             "find_params": {
                 "flavor_data": {
