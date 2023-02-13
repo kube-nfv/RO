@@ -192,8 +192,6 @@ msrest==0.6.21
     #   msrestazure
 msrestazure==0.6.4
     # via -r RO-VIM-azure/requirements.in
-munch==2.5.0
-    # via openstacksdk
 netaddr==0.8.0
     # via
     #   -r RO-VIM-aws/requirements.in
@@ -356,6 +354,7 @@ python-neutronclient==7.7.0
     # via -r RO-VIM-openstack/requirements.in
 python-novaclient==17.6.0
     # via
+    #   -r NG-RO/requirements.in
     #   -r RO-VIM-openstack/requirements.in
     #   python-openstackclient
 python-openstackclient==5.7.0

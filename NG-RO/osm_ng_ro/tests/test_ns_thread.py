@@ -14,10 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
-
 import logging
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from osm_common.dbmemory import DbMemory
 from osm_ng_ro.ns_thread import (
@@ -25,6 +24,14 @@ from osm_ng_ro.ns_thread import (
     NsWorker,
     VimInteractionAffinityGroup,
 )
+
+# Variables used in tests
+db_vims_openstack = {
+    "my_target_vim": {"vim_type": "openstack"},
+}
+db_vims_aws = {
+    "my_target_vim": {"vim_type": "aws"},
+}
 
 
 class TestConfigValidate(unittest.TestCase):
@@ -62,9 +69,14 @@ class TestConfigValidate(unittest.TestCase):
 
 
 class TestNsWorker(unittest.TestCase):
-    def setUp(self):
+    @patch("logging.getLogger", autospec=True)
+    def setUp(self, mock_logger):
+        mock_logger = logging.getLogger()
+        mock_logger.disabled = True
         self.task_depends = None
         self.plugins = {}
+        self.db_vims = db_vims_openstack
+        self.db = Mock(DbMemory())
         self.worker_index = "worker-3"
         self.config = {
             "period": {
@@ -82,7 +94,7 @@ class TestNsWorker(unittest.TestCase):
             "_id": "122436:1",
             "locked_by": None,
             "locked_at": 0.0,
-            "target_id": "vim_openstack_1",
+            "target_id": "my_target_vim",
             "vim_info": {
                 "created": False,
                 "created_items": None,
@@ -110,6 +122,9 @@ class TestNsWorker(unittest.TestCase):
                 },
             ],
         }
+        self.instance = NsWorker(self.worker_index, self.config, self.plugins, self.db)
+        self.instance.db_vims = db_vims_openstack
+        self.instance.refresh_config = Mock()
 
     def get_disabled_tasks(self, db, status):
         db_disabled_tasks = db.get_list(
@@ -121,137 +136,139 @@ class TestNsWorker(unittest.TestCase):
         )
         return db_disabled_tasks
 
-    def test_update_vm_refresh(self):
-        with self.subTest(
-            i=1,
-            t="1 disabled task with status BUILD in DB, refresh_active parameter is not equal to -1",
-        ):
-            # Disabled task with status build will not enabled again
-            db = DbMemory()
-            self.ro_task["tasks"][0]["status"] = "BUILD"
-            self.ro_task["to_check_at"] = -1
-            db.create("ro_tasks", self.ro_task)
-            disabled_tasks_count = len(self.get_disabled_tasks(db, "BUILD"))
-            instance = NsWorker(self.worker_index, self.config, self.plugins, db)
-            with patch.object(instance, "logger", logging):
-                instance.update_vm_refresh()
-                self.assertEqual(
-                    len(self.get_disabled_tasks(db, "BUILD")), disabled_tasks_count
-                )
+    def test_update_vm_refresh_disabled_task_with_status_build_vim_openstack_with_refresh(
+        self,
+    ):
+        """1 disabled task with status BUILD in DB, refresh_active parameter is not equal to -1."""
+        # Disabled task with status build is not enabled again
+        db = DbMemory()
+        self.ro_task["tasks"][0]["status"] = "BUILD"
+        self.config["period"]["refresh_active"] = 70
+        self.ro_task["to_check_at"] = -1
+        db.create("ro_tasks", self.ro_task)
+        disabled_tasks_count = len(self.get_disabled_tasks(db, "BUILD"))
+        instance = NsWorker(self.worker_index, self.config, self.plugins, db)
+        instance.update_vm_refresh(self.ro_task)
+        self.assertEqual(
+            len(self.get_disabled_tasks(db, "BUILD")), disabled_tasks_count
+        )
 
-        with self.subTest(
-            i=2,
-            t="1 disabled task with status DONE in DB, refresh_active parameter is equal to -1",
-        ):
-            # As refresh_active parameter is equal to -1, task will not be enabled to process again
-            db = DbMemory()
-            self.config["period"]["refresh_active"] = -1
-            self.ro_task["tasks"][0]["status"] = "DONE"
-            self.ro_task["to_check_at"] = -1
-            db.create("ro_tasks", self.ro_task)
-            disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
-            instance = NsWorker(self.worker_index, self.config, self.plugins, db)
-            with patch.object(instance, "logger", logging):
-                instance.update_vm_refresh()
-                self.assertEqual(
-                    len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count
-                )
+    def test_update_vm_refresh_disabled_task_with_status_done_vim_openstack_no_refresh(
+        self,
+    ):
+        """1 disabled task with status DONE in DB, refresh_active parameter is equal to -1."""
+        # As refresh_active parameter is equal to -1, task is not be enabled to process again
+        db = DbMemory()
+        self.config["period"]["refresh_active"] = -1
+        self.ro_task["tasks"][0]["status"] = "DONE"
+        self.ro_task["to_check_at"] = -1
+        db.create("ro_tasks", self.ro_task)
+        disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
+        instance = NsWorker(self.worker_index, self.config, self.plugins, db)
+        instance.update_vm_refresh(self.ro_task)
+        self.assertEqual(len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count)
 
-        with self.subTest(
-            i=3,
-            t="2 disabled task with status DONE in DB, refresh_active parameter is not equal to -1",
-        ):
-            # Disabled tasks should be enabled to process again
-            db = DbMemory()
-            self.config["period"]["refresh_active"] = 66
-            self.ro_task["tasks"][0]["status"] = "DONE"
-            self.ro_task["to_check_at"] = -1
-            db.create("ro_tasks", self.ro_task)
-            self.ro_task2 = self.ro_task
-            self.ro_task2["_id"] = "122437:1"
-            db.create("ro_tasks", self.ro_task2)
-            disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
-            instance = NsWorker(self.worker_index, self.config, self.plugins, db)
-            with patch.object(instance, "logger", logging):
-                instance.update_vm_refresh()
-                self.assertEqual(
-                    len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count - 2
-                )
+    def test_update_vm_refresh_disabled_task_with_status_done_vim_aws_with_refresh(
+        self,
+    ):
+        """2 disabled task with status DONE in DB, refresh_active parameter is not equal to -1."""
+        # Disabled tasks should be enabled to process again as vim type aws
+        db = DbMemory()
+        self.config["period"]["refresh_active"] = 66
+        self.ro_task["tasks"][0]["status"] = "DONE"
+        self.ro_task["to_check_at"] = -1
+        db.create("ro_tasks", self.ro_task)
+        self.ro_task2 = self.ro_task
+        self.ro_task2["_id"] = "122437:1"
+        db.create("ro_tasks", self.ro_task2)
+        disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
+        instance = NsWorker(self.worker_index, self.config, self.plugins, db)
+        with patch.object(instance, "db_vims", db_vims_aws):
+            instance.update_vm_refresh(self.ro_task)
+            self.assertEqual(
+                len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count - 2
+            )
 
-        with self.subTest(
-            i=4,
-            t="No disabled task with status DONE in DB, refresh_active parameter is not equal to -1",
-        ):
-            # If there is not any disabled task, method will not change anything
-            db = DbMemory()
-            self.config["period"]["refresh_active"] = 66
-            self.ro_task["tasks"][0]["status"] = "DONE"
-            self.ro_task["to_check_at"] = 16373242400.994312
-            db.create("ro_tasks", self.ro_task)
-            self.ro_task2 = self.ro_task
-            self.ro_task2["_id"] = "122437:1"
-            db.create("ro_tasks", self.ro_task2)
-            disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
-            instance = NsWorker(self.worker_index, self.config, self.plugins, db)
-            with patch.object(instance, "logger", logging):
-                instance.update_vm_refresh()
-                self.assertEqual(
-                    len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count
-                )
+    def test_update_vm_refresh_no_disabled_task_with_status_done_vim_openstack_with_refresh(
+        self,
+    ):
+        """No disabled task with status DONE in DB, refresh_active parameter is not equal to -1."""
+        # There is not any disabled task, method does not change anything
+        db = DbMemory()
+        self.config["period"]["refresh_active"] = 66
+        self.ro_task["tasks"][0]["status"] = "DONE"
+        self.ro_task["to_check_at"] = 16373242400.994312
+        db.create("ro_tasks", self.ro_task)
+        self.ro_task2 = self.ro_task
+        self.ro_task2["_id"] = "122437:1"
+        db.create("ro_tasks", self.ro_task2)
+        disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
+        instance = NsWorker(self.worker_index, self.config, self.plugins, db)
+        instance.update_vm_refresh(self.ro_task)
+        self.assertEqual(len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count)
 
-    def test_process_pending_tasks(self):
-        with self.subTest(
-            i=1,
-            t="refresh_active parameter is equal to -1, task status is DONE",
-        ):
-            # Task should be disabled to process again
-            db = DbMemory()
-            self.config["period"]["refresh_active"] = -1
-            self.ro_task["tasks"][0]["status"] = "DONE"
-            self.ro_task["to_check_at"] = 16373242400.994312
-            db.create("ro_tasks", self.ro_task)
-            # Number of disabled tasks in DB
-            disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
-            instance = NsWorker(self.worker_index, self.config, self.plugins, db)
-            with patch.object(instance, "logger", logging):
-                instance._process_pending_tasks(self.ro_task)
-                self.assertEqual(
-                    len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count + 1
-                )
+    def test_update_vm_refresh_disabled_task_with_status_done_vim_openstack_with_refresh(
+        self,
+    ):
+        """1 disabled task with status DONE in DB, refresh_active parameter is equal to -1, vim type is Openstack."""
+        # Disabled task with status done is not enabled again as vim type is openstack
+        db = DbMemory()
+        self.ro_task["tasks"][0]["status"] = "DONE"
+        self.ro_task["to_check_at"] = -1
+        db.create("ro_tasks", self.ro_task)
+        disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
+        instance = NsWorker(self.worker_index, self.config, self.plugins, db)
+        instance.update_vm_refresh(self.ro_task)
+        self.assertEqual(len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count)
 
-        with self.subTest(
-            i=2, t="refresh_active parameter is equal to -1, task status is FAILED"
-        ):
-            # Task will not be disabled to process as task status is not DONE
-            db = DbMemory()
-            self.config["period"]["refresh_active"] = -1
-            self.ro_task["tasks"][0]["status"] = "FAILED"
-            self.ro_task["to_check_at"] = 16373242400.994312
-            db.create("ro_tasks", self.ro_task)
-            disabled_tasks_count = len(self.get_disabled_tasks(db, "FAILED"))
-            instance = NsWorker(self.worker_index, self.config, self.plugins, db)
-            with patch.object(instance, "logger", logging):
-                instance._process_pending_tasks(self.ro_task)
-                self.assertEqual(
-                    len(self.get_disabled_tasks(db, "FAILED")), disabled_tasks_count
-                )
+    def test_process_pending_tasks_status_done_vim_aws_no_refresh(self):
+        """Refresh_active parameter is equal to -1, task status is DONE."""
+        # Task should be disabled to process again
+        db = DbMemory()
+        self.config["period"]["refresh_active"] = -1
+        self.ro_task["tasks"][0]["status"] = "DONE"
+        self.ro_task["to_check_at"] = 16373242400.994312
+        db.create("ro_tasks", self.ro_task)
+        # Number of disabled tasks in DB
+        disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
+        instance = NsWorker(self.worker_index, self.config, self.plugins, db)
+        with patch.object(instance, "db_vims", db_vims_aws):
+            instance._process_pending_tasks(self.ro_task)
+            self.assertEqual(
+                len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count + 1
+            )
 
-        with self.subTest(
-            i=3, t="refresh_active parameter is not equal to -1, task status is DONE"
-        ):
-            # Task will not be disabled to process as refresh_active parameter is not -1
-            db = DbMemory()
-            self.config["period"]["refresh_active"] = 70
-            self.ro_task["tasks"][0]["status"] = "DONE"
-            self.ro_task["to_check_at"] = 16373242400.994312
-            db.create("ro_tasks", self.ro_task)
-            disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
-            instance = NsWorker(self.worker_index, self.config, self.plugins, db)
-            with patch.object(instance, "logger", logging):
-                instance._process_pending_tasks(self.ro_task)
-                self.assertEqual(
-                    len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count
-                )
+    def test_process_pending_tasks_status_failed_vim_aws_no_refresh(self):
+        """Refresh_active parameter is equal to -1, task status is FAILED."""
+        # Task is not disabled to process as task status is not DONE
+        db = DbMemory()
+        self.config["period"]["refresh_active"] = -1
+        self.ro_task["tasks"][0]["status"] = "FAILED"
+        self.ro_task["to_check_at"] = 16373242400.994312
+        db.create("ro_tasks", self.ro_task)
+        disabled_tasks_count = len(self.get_disabled_tasks(db, "FAILED"))
+        instance = NsWorker(self.worker_index, self.config, self.plugins, db)
+        with patch.object(instance, "db_vims", db_vims_aws):
+            instance._process_pending_tasks(self.ro_task)
+            self.assertEqual(
+                len(self.get_disabled_tasks(db, "FAILED")), disabled_tasks_count
+            )
+
+    def test_process_pending_tasks_status_done_vim_aws_with_refresh(self):
+        """Refresh_active parameter is not equal to -1, task status is DONE."""
+        # Task is not disabled to process as refresh_active parameter is not -1
+        db = DbMemory()
+        self.config["period"]["refresh_active"] = 70
+        self.ro_task["tasks"][0]["status"] = "DONE"
+        self.ro_task["to_check_at"] = 16373242400.994312
+        db.create("ro_tasks", self.ro_task)
+        disabled_tasks_count = len(self.get_disabled_tasks(db, "DONE"))
+        instance = NsWorker(self.worker_index, self.config, self.plugins, db)
+        with patch.object(instance, "db_vims", db_vims_aws):
+            instance._process_pending_tasks(self.ro_task)
+            self.assertEqual(
+                len(self.get_disabled_tasks(db, "DONE")), disabled_tasks_count
+            )
 
 
 class TestVimInteractionAffinityGroup(unittest.TestCase):
