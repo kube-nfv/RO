@@ -2211,18 +2211,15 @@ class NsWorker(threading.Thread):
                         return ro_task_dependency, task_index
         raise NsWorkerException("Cannot get depending task {}".format(task_id))
 
-    def update_vm_refresh(self):
+    def update_vm_refresh(self, ro_task):
         """Enables the VM status updates if self.refresh_config.active parameter
-        is not -1 and than updates the DB accordingly
+        is not -1 and then updates the DB accordingly
 
         """
         try:
             self.logger.debug("Checking if VM status update config")
             next_refresh = time.time()
-            if self.refresh_config.active == -1:
-                next_refresh = -1
-            else:
-                next_refresh += self.refresh_config.active
+            next_refresh = self._get_next_refresh(ro_task, next_refresh)
 
             if next_refresh != -1:
                 db_ro_task_update = {}
@@ -2257,6 +2254,23 @@ class NsWorker(threading.Thread):
         except Exception as e:
             self.logger.error(f"Error updating tasks to enable VM status updates: {e}")
 
+    def _get_next_refresh(self, ro_task: dict, next_refresh: float):
+        """Decide the next_refresh according to vim type and refresh config period.
+        Args:
+            ro_task (dict):             ro_task details
+            next_refresh    (float):    next refresh time as epoch format
+
+        Returns:
+            next_refresh    (float)     -1 if vm updates are disabled or vim type is openstack.
+        """
+        target_vim = ro_task["target_id"]
+        vim_type = self.db_vims[target_vim]["vim_type"]
+        if self.refresh_config.active == -1 or vim_type == "openstack":
+            next_refresh = -1
+        else:
+            next_refresh += self.refresh_config.active
+        return next_refresh
+
     def _process_pending_tasks(self, ro_task):
         ro_task_id = ro_task["_id"]
         now = time.time()
@@ -2278,10 +2292,7 @@ class NsWorker(threading.Thread):
             elif new_status == "BUILD":
                 next_refresh += self.refresh_config.build
             elif new_status == "DONE":
-                if self.refresh_config.active == -1:
-                    next_refresh = -1
-                else:
-                    next_refresh += self.refresh_config.active
+                next_refresh = self._get_next_refresh(ro_task, next_refresh)
             else:
                 next_refresh += self.refresh_config.error
 
@@ -2296,7 +2307,7 @@ class NsWorker(threading.Thread):
                 self._log_ro_task(ro_task, None, None, "TASK_WF", "GET_TASK")
             """
             # Check if vim status refresh is enabled again
-            self.update_vm_refresh()
+            self.update_vm_refresh(ro_task)
             # 0: get task_status_create
             lock_object = None
             task_status_create = None

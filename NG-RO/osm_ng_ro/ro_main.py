@@ -35,6 +35,7 @@ from osm_common.fsbase import FsException
 from osm_common.msgbase import MsgException
 from osm_ng_ro import version as ro_version, version_date as ro_version_date
 import osm_ng_ro.html_out as html
+from osm_ng_ro.monitor import start_monitoring, stop_monitoring
 from osm_ng_ro.ns import Ns, NsException
 from osm_ng_ro.validation import ValidationError
 from osm_ng_ro.vim_admin import VimAdminThread
@@ -929,6 +930,8 @@ def _start_service():
     # # start subscriptions thread:
     vim_admin_thread = VimAdminThread(config=engine_config, engine=ro_server.ns)
     vim_admin_thread.start()
+    start_monitoring(config=engine_config)
+
     # # Do not capture except SubscriptionException
 
     # backend = engine_config["authentication"]["backend"]
@@ -946,7 +949,7 @@ def _stop_service():
     # terminate vim_admin_thread
     if vim_admin_thread:
         vim_admin_thread.terminate()
-
+    stop_monitoring()
     vim_admin_thread = None
     cherrypy.tree.apps["/ro"].root.ns.stop()
     cherrypy.log.error("Stopping osm_ng_ro")
