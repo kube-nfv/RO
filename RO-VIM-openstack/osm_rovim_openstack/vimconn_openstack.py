@@ -355,12 +355,21 @@ class vimconnector(vimconn.VimConnector):
                 endpoint_type=self.endpoint_type,
                 region_name=region_name,
             )
-            self.cinder = self.session["cinder"] = cClient.Client(
-                2,
-                session=sess,
-                endpoint_type=self.endpoint_type,
-                region_name=region_name,
-            )
+
+            if sess.get_all_version_data(service_type="volumev2"):
+                self.cinder = self.session["cinder"] = cClient.Client(
+                    2,
+                    session=sess,
+                    endpoint_type=self.endpoint_type,
+                    region_name=region_name,
+                )
+            else:
+                self.cinder = self.session["cinder"] = cClient.Client(
+                    3,
+                    session=sess,
+                    endpoint_type=self.endpoint_type,
+                    region_name=region_name,
+                )
 
             try:
                 self.my_tenant_id = self.session["my_tenant_id"] = sess.get_project_id()
