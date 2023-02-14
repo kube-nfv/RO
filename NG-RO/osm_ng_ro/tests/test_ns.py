@@ -2421,213 +2421,8 @@ class TestNs(unittest.TestCase):
         self.assertTrue(epa_params.called)
         self.assertDictEqual(result, expected_result)
 
-    def test__ip_profile_to_ro_with_none(self):
-        ip_profile = None
-
-        result = Ns._ip_profile_to_ro(
-            ip_profile=ip_profile,
-        )
-
-        self.assertIsNone(result)
-
-    def test__ip_profile_to_ro_with_empty_profile(self):
-        ip_profile = {}
-
-        result = Ns._ip_profile_to_ro(
-            ip_profile=ip_profile,
-        )
-
-        self.assertIsNone(result)
-
-    def test__ip_profile_to_ro_with_wrong_profile(self):
-        ip_profile = {
-            "no-profile": "here",
-        }
-        expected_result = {
-            "ip_version": "IPv4",
-            "subnet_address": None,
-            "gateway_address": None,
-            "dhcp_enabled": False,
-            "dhcp_start_address": None,
-            "dhcp_count": None,
-        }
-
-        result = Ns._ip_profile_to_ro(
-            ip_profile=ip_profile,
-        )
-
-        self.assertDictEqual(expected_result, result)
-
-    def test__ip_profile_to_ro_with_ipv4_profile(self):
-        ip_profile = {
-            "ip-version": "ipv4",
-            "subnet-address": "192.168.0.0/24",
-            "gateway-address": "192.168.0.254",
-            "dhcp-params": {
-                "enabled": True,
-                "start-address": "192.168.0.10",
-                "count": 25,
-            },
-        }
-        expected_result = {
-            "ip_version": "IPv4",
-            "subnet_address": "192.168.0.0/24",
-            "gateway_address": "192.168.0.254",
-            "dhcp_enabled": True,
-            "dhcp_start_address": "192.168.0.10",
-            "dhcp_count": 25,
-        }
-
-        result = Ns._ip_profile_to_ro(
-            ip_profile=ip_profile,
-        )
-
-        self.assertDictEqual(expected_result, result)
-
-    def test__ip_profile_to_ro_with_ipv6_profile(self):
-        ip_profile = {
-            "ip-version": "ipv6",
-            "subnet-address": "2001:0200:0001::/48",
-            "gateway-address": "2001:0200:0001:ffff:ffff:ffff:ffff:fffe",
-            "dhcp-params": {
-                "enabled": True,
-                "start-address": "2001:0200:0001::0010",
-                "count": 25,
-            },
-        }
-        expected_result = {
-            "ip_version": "IPv6",
-            "subnet_address": "2001:0200:0001::/48",
-            "gateway_address": "2001:0200:0001:ffff:ffff:ffff:ffff:fffe",
-            "dhcp_enabled": True,
-            "dhcp_start_address": "2001:0200:0001::0010",
-            "dhcp_count": 25,
-        }
-
-        result = Ns._ip_profile_to_ro(
-            ip_profile=ip_profile,
-        )
-
-        self.assertDictEqual(expected_result, result)
-
-    def test__ip_profile_to_ro_with_dns_server(self):
-        ip_profile = {
-            "ip-version": "ipv4",
-            "subnet-address": "192.168.0.0/24",
-            "gateway-address": "192.168.0.254",
-            "dhcp-params": {
-                "enabled": True,
-                "start-address": "192.168.0.10",
-                "count": 25,
-            },
-            "dns-server": [
-                {
-                    "address": "8.8.8.8",
-                },
-                {
-                    "address": "1.1.1.1",
-                },
-                {
-                    "address": "1.0.0.1",
-                },
-            ],
-        }
-        expected_result = {
-            "ip_version": "IPv4",
-            "subnet_address": "192.168.0.0/24",
-            "gateway_address": "192.168.0.254",
-            "dhcp_enabled": True,
-            "dhcp_start_address": "192.168.0.10",
-            "dhcp_count": 25,
-            "dns_address": "8.8.8.8;1.1.1.1;1.0.0.1",
-        }
-
-        result = Ns._ip_profile_to_ro(
-            ip_profile=ip_profile,
-        )
-
-        self.assertDictEqual(expected_result, result)
-
-    def test__ip_profile_to_ro_with_security_group(self):
-        ip_profile = {
-            "ip-version": "ipv4",
-            "subnet-address": "192.168.0.0/24",
-            "gateway-address": "192.168.0.254",
-            "dhcp-params": {
-                "enabled": True,
-                "start-address": "192.168.0.10",
-                "count": 25,
-            },
-            "security-group": {
-                "some-security-group": "here",
-            },
-        }
-        expected_result = {
-            "ip_version": "IPv4",
-            "subnet_address": "192.168.0.0/24",
-            "gateway_address": "192.168.0.254",
-            "dhcp_enabled": True,
-            "dhcp_start_address": "192.168.0.10",
-            "dhcp_count": 25,
-            "security_group": {
-                "some-security-group": "here",
-            },
-        }
-
-        result = Ns._ip_profile_to_ro(
-            ip_profile=ip_profile,
-        )
-
-        self.assertDictEqual(expected_result, result)
-
-    def test__ip_profile_to_ro(self):
-        ip_profile = {
-            "ip-version": "ipv4",
-            "subnet-address": "192.168.0.0/24",
-            "gateway-address": "192.168.0.254",
-            "dhcp-params": {
-                "enabled": True,
-                "start-address": "192.168.0.10",
-                "count": 25,
-            },
-            "dns-server": [
-                {
-                    "address": "8.8.8.8",
-                },
-                {
-                    "address": "1.1.1.1",
-                },
-                {
-                    "address": "1.0.0.1",
-                },
-            ],
-            "security-group": {
-                "some-security-group": "here",
-            },
-        }
-        expected_result = {
-            "ip_version": "IPv4",
-            "subnet_address": "192.168.0.0/24",
-            "gateway_address": "192.168.0.254",
-            "dhcp_enabled": True,
-            "dhcp_start_address": "192.168.0.10",
-            "dhcp_count": 25,
-            "dns_address": "8.8.8.8;1.1.1.1;1.0.0.1",
-            "security_group": {
-                "some-security-group": "here",
-            },
-        }
-
-        result = Ns._ip_profile_to_ro(
-            ip_profile=ip_profile,
-        )
-
-        self.assertDictEqual(expected_result, result)
-
-    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
     def test__process_net_params_with_empty_params(
         self,
-        ip_profile_to_ro,
     ):
         target_vld = {
             "name": "vld-name",
@@ -2637,6 +2432,9 @@ class TestNs(unittest.TestCase):
         }
         vim_info = {
             "provider_network": "some-profile-here",
+            "ip_profile": {
+                "some_ip_profile": "here",
+            },
         }
         target_record_id = ""
         expected_result = {
@@ -2650,10 +2448,6 @@ class TestNs(unittest.TestCase):
             }
         }
 
-        ip_profile_to_ro.return_value = {
-            "some_ip_profile": "here",
-        }
-
         result = Ns._process_net_params(
             target_vld=target_vld,
             indata=indata,
@@ -2662,12 +2456,9 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(expected_result, result)
-        self.assertTrue(ip_profile_to_ro.called)
 
-    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
     def test__process_net_params_with_vim_info_sdn(
         self,
-        ip_profile_to_ro,
     ):
         target_vld = {
             "name": "vld-name",
@@ -2698,12 +2489,9 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(expected_result, result)
-        self.assertFalse(ip_profile_to_ro.called)
 
-    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
     def test__process_net_params_with_vim_info_sdn_target_vim(
         self,
-        ip_profile_to_ro,
     ):
         target_vld = {
             "name": "vld-name",
@@ -2737,12 +2525,9 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(expected_result, result)
-        self.assertFalse(ip_profile_to_ro.called)
 
-    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
     def test__process_net_params_with_vim_network_name(
         self,
-        ip_profile_to_ro,
     ):
         target_vld = {
             "name": "vld-name",
@@ -2770,12 +2555,9 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(expected_result, result)
-        self.assertFalse(ip_profile_to_ro.called)
 
-    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
     def test__process_net_params_with_vim_network_id(
         self,
-        ip_profile_to_ro,
     ):
         target_vld = {
             "name": "vld-name",
@@ -2803,12 +2585,9 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(expected_result, result)
-        self.assertFalse(ip_profile_to_ro.called)
 
-    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
     def test__process_net_params_with_mgmt_network(
         self,
-        ip_profile_to_ro,
     ):
         target_vld = {
             "id": "vld-id",
@@ -2835,12 +2614,9 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(expected_result, result)
-        self.assertFalse(ip_profile_to_ro.called)
 
-    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
     def test__process_net_params_with_underlay_eline(
         self,
-        ip_profile_to_ro,
     ):
         target_vld = {
             "name": "vld-name",
@@ -2852,6 +2628,9 @@ class TestNs(unittest.TestCase):
         }
         vim_info = {
             "provider_network": "some-profile-here",
+            "ip_profile": {
+                "some_ip_profile": "here",
+            },
         }
         target_record_id = ""
         expected_result = {
@@ -2865,10 +2644,6 @@ class TestNs(unittest.TestCase):
             }
         }
 
-        ip_profile_to_ro.return_value = {
-            "some_ip_profile": "here",
-        }
-
         result = Ns._process_net_params(
             target_vld=target_vld,
             indata=indata,
@@ -2877,12 +2652,9 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(expected_result, result)
-        self.assertTrue(ip_profile_to_ro.called)
 
-    @patch("osm_ng_ro.ns.Ns._ip_profile_to_ro")
     def test__process_net_params_with_underlay_elan(
         self,
-        ip_profile_to_ro,
     ):
         target_vld = {
             "name": "vld-name",
@@ -2894,6 +2666,9 @@ class TestNs(unittest.TestCase):
         }
         vim_info = {
             "provider_network": "some-profile-here",
+            "ip_profile": {
+                "some_ip_profile": "here",
+            },
         }
         target_record_id = ""
         expected_result = {
@@ -2907,10 +2682,6 @@ class TestNs(unittest.TestCase):
             }
         }
 
-        ip_profile_to_ro.return_value = {
-            "some_ip_profile": "here",
-        }
-
         result = Ns._process_net_params(
             target_vld=target_vld,
             indata=indata,
@@ -2919,7 +2690,6 @@ class TestNs(unittest.TestCase):
         )
 
         self.assertDictEqual(expected_result, result)
-        self.assertTrue(ip_profile_to_ro.called)
 
     def test__get_cloud_init_exception(self):
         db_mock = MagicMock(name="database mock")
