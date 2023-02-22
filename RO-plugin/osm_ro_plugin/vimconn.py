@@ -293,13 +293,32 @@ class VimConnector:
         userdata = None
         userdata_list = []
 
+        # For more information, check https://cloudinit.readthedocs.io/en/latest/reference/merging.html
+        # Basically, with this, we don't override the provider's cloud config
+        merge_how = yaml.safe_dump(
+            {
+                "merge_how": [
+                    {
+                        "name": "list",
+                        "settings": ["append", "recurse_dict", "recurse_list"],
+                    },
+                    {
+                        "name": "dict",
+                        "settings": ["no_replace", "recurse_list", "recurse_dict"],
+                    },
+                ]
+            },
+            indent=4,
+            default_flow_style=False,
+        )
+
         if isinstance(cloud_config, dict):
             if cloud_config.get("user-data"):
                 if isinstance(cloud_config["user-data"], str):
-                    userdata_list.append(cloud_config["user-data"])
+                    userdata_list.append(cloud_config["user-data"] + f"\n{merge_how}")
                 else:
                     for u in cloud_config["user-data"]:
-                        userdata_list.append(u)
+                        userdata_list.append(u + f"\n{merge_how}")
 
             if cloud_config.get("boot-data-drive") is not None:
                 config_drive = cloud_config["boot-data-drive"]
@@ -314,12 +333,12 @@ class VimConnector:
                 # default user
                 if cloud_config.get("key-pairs"):
                     userdata_dict["ssh-authorized-keys"] = cloud_config["key-pairs"]
-                    userdata_dict["users"] = [
-                        {
-                            "default": None,
-                            "ssh-authorized-keys": cloud_config["key-pairs"],
+                    userdata_dict["system_info"] = {
+                        "default_user": {
+                            "ssh_authorized_keys": cloud_config["key-pairs"],
                         }
-                    ]
+                    }
+                    userdata_dict["users"] = ["default"]
 
                 if cloud_config.get("users"):
                     if "users" not in userdata_dict:
@@ -358,6 +377,7 @@ class VimConnector:
                 userdata_list.append(
                     "#cloud-config\n"
                     + yaml.safe_dump(userdata_dict, indent=4, default_flow_style=False)
+                    + f"\n{merge_how}"
                 )
             userdata = self._create_mimemultipart(userdata_list)
             self.logger.debug("userdata: %s", userdata)
