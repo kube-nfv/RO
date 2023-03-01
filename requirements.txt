@@ -70,7 +70,7 @@ cheroot==9.0.0
     # via cherrypy
 cherrypy==18.1.2
     # via -r NG-RO/requirements.in
-cliff==4.1.0
+cliff==4.2.0
     # via
     #   osc-lib
     #   python-neutronclient
@@ -107,9 +107,9 @@ flufl-enum==5.0.1
     # via pyvcloud
 google-api-core==2.11.0
     # via google-api-python-client
-google-api-python-client==2.77.0
+google-api-python-client==2.80.0
     # via -r RO-VIM-gcp/requirements.in
-google-auth==2.16.0
+google-auth==2.16.1
     # via
     #   -r RO-VIM-gcp/requirements.in
     #   google-api-core
@@ -133,7 +133,7 @@ importlib-metadata==6.0.0
     # via
     #   -r NG-RO/requirements.in
     #   cliff
-importlib-resources==5.10.2
+importlib-resources==5.12.0
     # via jsonschema
 ipconflict==0.5.0
     # via -r RO-VIM-aws/requirements.in
@@ -147,7 +147,7 @@ iso8601==1.1.0
     #   python-openstackclient
 isodate==0.6.1
     # via msrest
-jaraco-functools==3.5.2
+jaraco-functools==3.6.0
     # via
     #   cheroot
     #   tempora
@@ -163,7 +163,7 @@ jsonpointer==2.3
     # via jsonpatch
 jsonschema==4.17.3
     # via warlock
-keystoneauth1==5.1.1
+keystoneauth1==5.1.2
     # via
     #   openstacksdk
     #   osc-lib
@@ -178,7 +178,7 @@ lxml==4.9.2
     # via pyvcloud
 markupsafe==2.1.2
     # via jinja2
-more-itertools==9.0.0
+more-itertools==9.1.0
     # via
     #   cheroot
     #   cherrypy
@@ -218,7 +218,7 @@ netifaces==0.11.0
     #   oslo-utils
 oauthlib==3.2.2
     # via requests-oauthlib
-openstacksdk==1.0.0
+openstacksdk==1.0.1
     # via
     #   os-client-config
     #   osc-lib
@@ -229,17 +229,17 @@ os-service-types==1.7.0
     # via
     #   keystoneauth1
     #   openstacksdk
-osc-lib==2.6.2
+osc-lib==2.7.0
     # via
     #   python-neutronclient
     #   python-openstackclient
-oslo-config==9.1.0
+oslo-config==9.1.1
     # via
     #   oslo-log
     #   python-keystoneclient
-oslo-context==5.0.0
+oslo-context==5.1.1
     # via oslo-log
-oslo-i18n==5.1.0
+oslo-i18n==6.0.0
     # via
     #   osc-lib
     #   oslo-config
@@ -251,9 +251,9 @@ oslo-i18n==5.1.0
     #   python-neutronclient
     #   python-novaclient
     #   python-openstackclient
-oslo-log==5.0.2
+oslo-log==5.1.0
     # via python-neutronclient
-oslo-serialization==5.0.0
+oslo-serialization==5.1.1
     # via
     #   oslo-log
     #   python-keystoneclient
@@ -311,8 +311,9 @@ prettytable==3.6.0
     #   python-novaclient
 progressbar==2.5
     # via -r RO-VIM-vmware/requirements.in
-protobuf==4.21.12
+protobuf==3.20.3
     # via
+    #   -r requirements.in
     #   google-api-core
     #   googleapis-common-protos
 py-radix==0.10.0
@@ -353,20 +354,20 @@ python-dateutil==2.8.2
     # via
     #   adal
     #   oslo-log
-python-glanceclient==4.2.0
+python-glanceclient==4.3.0
     # via -r RO-VIM-openstack/requirements.in
-python-keystoneclient==5.0.1
+python-keystoneclient==5.1.0
     # via
     #   -r RO-VIM-openstack/requirements.in
     #   python-neutronclient
     #   python-openstackclient
-python-neutronclient==8.2.1
+python-neutronclient==9.0.0
     # via -r RO-VIM-openstack/requirements.in
-python-novaclient==18.2.0
+python-novaclient==18.3.0
     # via
     #   -r RO-VIM-openstack/requirements.in
     #   python-openstackclient
-python-openstackclient==6.0.0
+python-openstackclient==6.1.0
     # via -r RO-VIM-openstack/requirements.in
 pytz==2022.7.1
     # via
@@ -449,7 +450,7 @@ six==1.16.0
     #   python-dateutil
     #   python-keystoneclient
     #   pyvmomi
-stevedore==4.1.1
+stevedore==5.0.0
     # via
     #   cliff
     #   dogpile-cache
@@ -464,7 +465,7 @@ tempora==5.2.1
     # via portend
 tqdm==4.64.1
     # via ipconflict
-typing-extensions==4.4.0
+typing-extensions==4.5.0
     # via azure-core
 uritemplate==4.1.1
     # via google-api-python-client
@@ -478,13 +479,13 @@ wcwidth==0.2.6
     # via
     #   cmd2
     #   prettytable
-wrapt==1.14.1
+wrapt==1.15.0
     # via
     #   debtcollector
     #   python-glanceclient
-zc-lockfile==2.0
+zc-lockfile==3.0.post1
     # via cherrypy
-zipp==3.13.0
+zipp==3.15.0
     # via
     #   importlib-metadata
     #   importlib-resources

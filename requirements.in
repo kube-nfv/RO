@@ -33,3 +33,4 @@
 -r RO-VIM-gcp/requirements.in
 
 pyyaml<6
+protobuf<4 # Required by Juju
