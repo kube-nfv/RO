@@ -934,6 +934,15 @@ class vimconnector(vimconn.VimConnector):
                 ip_str = str(netaddr.IPAddress(ip_int))
                 subnet["allocation_pools"][0]["end"] = ip_str
 
+            if (
+                ip_profile.get("ipv6_address_mode")
+                and ip_profile["ip_version"] != "IPv4"
+            ):
+                subnet["ipv6_address_mode"] = ip_profile["ipv6_address_mode"]
+                # ipv6_ra_mode can be set to the same value for most use cases, see documentation:
+                # https://docs.openstack.org/neutron/latest/admin/config-ipv6.html#ipv6-ra-mode-and-ipv6-address-mode-combinations
+                subnet["ipv6_ra_mode"] = ip_profile["ipv6_address_mode"]
+
             # self.logger.debug(">>>>>>>>>>>>>>>>>> Subnet: %s", str(subnet))
             self.neutron.create_subnet({"subnet": subnet})
 
