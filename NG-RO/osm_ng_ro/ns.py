@@ -1484,13 +1484,13 @@ class Ns(object):
         vnf_preffix = "vnfrs:{}".format(vnfr_id)
         ns_preffix = "nsrs:{}".format(nsr_id)
         image_text = ns_preffix + ":image." + target_vdu["ns-image-id"]
-        flavor_text = ns_preffix + ":flavor." + target_vdu["ns-flavor-id"]
-        extra_dict = {"depends_on": [image_text, flavor_text]}
+        extra_dict = {"depends_on": [image_text]}
         net_list = []
 
         persistent_root_disk = {}
         persistent_ordinary_disk = {}
         vdu_instantiation_volumes_list = []
+        vdu_instantiation_flavor_id = None
         disk_list = []
         vnfd_id = vnfr["vnfd-id"]
         vnfd = db.get_one("vnfds", {"_id": vnfd_id})
@@ -1528,8 +1528,19 @@ class Ns(object):
 
         if target_vdu.get("additionalParams"):
             vdu_instantiation_volumes_list = (
-                target_vdu.get("additionalParams").get("OSM").get("vdu_volumes")
+                target_vdu.get("additionalParams").get("OSM", {}).get("vdu_volumes")
             )
+            vdu_instantiation_flavor_id = (
+                target_vdu.get("additionalParams").get("OSM", {}).get("vim_flavor_id")
+            )
+
+        # flavor id
+        if vdu_instantiation_flavor_id:
+            flavor_id = vdu_instantiation_flavor_id
+        else:
+            flavor_text = ns_preffix + ":flavor." + target_vdu["ns-flavor-id"]
+            flavor_id = "TASK-" + flavor_text
+            extra_dict["depends_on"].append(flavor_text)
 
         if vdu_instantiation_volumes_list:
             # Find the root volumes and add to the disk_list
@@ -1571,7 +1582,7 @@ class Ns(object):
             "description": target_vdu["vdu-name"],
             "start": True,
             "image_id": "TASK-" + image_text,
-            "flavor_id": "TASK-" + flavor_text,
+            "flavor_id": flavor_id,
             "affinity_group_list": affinity_group_list,
             "net_list": net_list,
             "cloud_config": cloud_config or None,

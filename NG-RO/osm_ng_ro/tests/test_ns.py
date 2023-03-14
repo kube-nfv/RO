@@ -206,6 +206,25 @@ expected_extra_dict2 = {
         "start": True,
     },
 }
+
+expected_extra_dict3 = {
+    "depends_on": [
+        f"{ns_preffix}:image.0",
+    ],
+    "params": {
+        "affinity_group_list": [],
+        "availability_zone_index": None,
+        "availability_zone_list": None,
+        "cloud_config": None,
+        "description": "without_volumes-VM",
+        "disk_list": [],
+        "flavor_id": "flavor_test",
+        "image_id": f"TASK-{ns_preffix}:image.0",
+        "name": "sample_name-vnf-several-volu-without_volumes-VM-0",
+        "net_list": [],
+        "start": True,
+    },
+}
 tasks_by_target_record_id = {
     "nsrs:th47f48-9870-4169-b758-9732e1ff40f3": {
         "extra_dict": {
@@ -4738,6 +4757,76 @@ class TestProcessVduParams(unittest.TestCase):
         mock_find_persistent_volumes.assert_called_once_with(
             persistent_root_disk, target_vdu, vdu_instantiation_vol_list, []
         )
+
+    @patch("osm_ng_ro.ns.Ns._sort_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._partially_locate_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_interfaces")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_cloud_init")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_ssh_keys")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_root_volumes")
+    @patch("osm_ng_ro.ns.Ns.find_persistent_volumes")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_root_disk_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._add_persistent_ordinary_disks_to_disk_list")
+    @patch("osm_ng_ro.ns.Ns._prepare_vdu_affinity_group_list")
+    def test_process_vdu_params_with_inst_flavor_id(
+        self,
+        mock_prepare_vdu_affinity_group_list,
+        mock_add_persistent_ordinary_disks_to_disk_list,
+        mock_add_persistent_root_disk_to_disk_list,
+        mock_find_persistent_volumes,
+        mock_find_persistent_root_volumes,
+        mock_prepare_vdu_ssh_keys,
+        mock_prepare_vdu_cloud_init,
+        mock_prepare_vdu_interfaces,
+        mock_locate_vdu_interfaces,
+        mock_sort_vdu_interfaces,
+    ):
+        """Instantiation volume list is empty."""
+        target_vdu = deepcopy(target_vdu_wthout_persistent_storage)
+
+        target_vdu["interfaces"] = interfaces_wth_all_positions
+
+        vdu_instantiation_flavor_id = "flavor_test"
+
+        target_vdu["additionalParams"] = {
+            "OSM": {"vim_flavor_id": vdu_instantiation_flavor_id}
+        }
+        mock_prepare_vdu_cloud_init.return_value = {}
+        mock_prepare_vdu_affinity_group_list.return_value = []
+
+        new_kwargs = deepcopy(kwargs)
+        new_kwargs.update(
+            {
+                "vnfr_id": vnfr_id,
+                "nsr_id": nsr_id,
+                "tasks_by_target_record_id": {},
+                "logger": "logger",
+            }
+        )
+        expected_extra_dict_copy = deepcopy(expected_extra_dict3)
+        vnfd = deepcopy(vnfd_wth_persistent_storage)
+        db.get_one.return_value = vnfd
+        result = Ns._process_vdu_params(
+            target_vdu, indata, vim_info=None, target_record_id=None, **new_kwargs
+        )
+        mock_sort_vdu_interfaces.assert_called_once_with(target_vdu)
+        mock_locate_vdu_interfaces.assert_not_called()
+        mock_prepare_vdu_cloud_init.assert_called_once()
+        mock_add_persistent_root_disk_to_disk_list.assert_called_once()
+        mock_add_persistent_ordinary_disks_to_disk_list.assert_called_once()
+        mock_prepare_vdu_interfaces.assert_called_once_with(
+            target_vdu,
+            expected_extra_dict_copy,
+            ns_preffix,
+            vnf_preffix,
+            "logger",
+            {},
+            [],
+        )
+        self.assertDictEqual(result, expected_extra_dict_copy)
+        mock_prepare_vdu_ssh_keys.assert_called_once_with(target_vdu, None, {})
+        mock_prepare_vdu_affinity_group_list.assert_called_once()
+        mock_find_persistent_volumes.assert_not_called()
 
     @patch("osm_ng_ro.ns.Ns._sort_vdu_interfaces")
     @patch("osm_ng_ro.ns.Ns._partially_locate_vdu_interfaces")
