@@ -117,6 +117,7 @@ class Ns(object):
             "flavor": Ns._process_flavor_params,
             "vdu": Ns._process_vdu_params,
             "affinity-or-anti-affinity-group": Ns._process_affinity_group_params,
+            "shared-volumes": Ns._process_shared_volumes_params,
         }
         self.db_path_map = {
             "net": "vld",
@@ -124,6 +125,7 @@ class Ns(object):
             "flavor": "flavor",
             "vdu": "vdur",
             "affinity-or-anti-affinity-group": "affinity-or-anti-affinity-group",
+            "shared-volumes": "shared-volumes",
         }
 
     def init_db(self, target_version):
@@ -859,7 +861,6 @@ class Ns(object):
         flavor_data_name = flavor_data.copy()
         flavor_data_name["name"] = target_flavor["name"]
         extra_dict["params"] = {"flavor_data": flavor_data_name}
-
         return extra_dict
 
     @staticmethod
@@ -1053,9 +1054,36 @@ class Ns(object):
         if not virtual_storage_desc.get("vdu-storage-requirements"):
             return False
         for item in virtual_storage_desc.get("vdu-storage-requirements", {}):
-            if item.get("key") == "keep-volume" and item.get("value") == "true":
+            if item.get("key") == "keep-volume" and item.get("value").lower() == "true":
                 return True
         return False
+
+    @staticmethod
+    def is_shared_volume(
+        virtual_storage_desc: Dict[str, Any], vnfd_id: str
+    ) -> (str, bool):
+        """Function to decide if the volume type is multi attached or not .
+
+        Args:
+            virtual_storage_desc (Dict[str, Any]): virtual storage description dictionary
+            vnfd_id (str): vnfd id
+
+        Returns:
+            bool (True/False)
+            name (str) New name if it is a multiattach disk
+        """
+
+        if vdu_storage_requirements := virtual_storage_desc.get(
+            "vdu-storage-requirements", {}
+        ):
+            for item in vdu_storage_requirements:
+                if (
+                    item.get("key") == "multiattach"
+                    and item.get("value").lower() == "true"
+                ):
+                    name = f"shared-{virtual_storage_desc['id']}-{vnfd_id}"
+                    return name, True
+        return virtual_storage_desc["id"], False
 
     @staticmethod
     def _sort_vdu_interfaces(target_vdu: dict) -> None:
@@ -1385,7 +1413,6 @@ class Ns(object):
                         "size": root_disk["size-of-storage"],
                         "keep": Ns.is_volume_keeping_required(root_disk),
                     }
-
                     disk_list.append(persistent_root_disk[vsd["id"]])
                     break
 
@@ -1395,6 +1422,7 @@ class Ns(object):
         persistent_root_disk: dict,
         persistent_ordinary_disk: dict,
         disk_list: list,
+        vnf_id: str = None,
     ) -> None:
         """Fill the disk list by adding persistent ordinary disks.
 
@@ -1412,9 +1440,12 @@ class Ns(object):
                     == "persistent-storage:persistent-storage"
                     and disk["id"] not in persistent_root_disk.keys()
                 ):
+                    name, multiattach = Ns.is_shared_volume(disk, vnf_id)
                     persistent_ordinary_disk[disk["id"]] = {
+                        "name": name,
                         "size": disk["size-of-storage"],
                         "keep": Ns.is_volume_keeping_required(disk),
+                        "multiattach": multiattach,
                     }
                     disk_list.append(persistent_ordinary_disk[disk["id"]])
 
@@ -1486,7 +1517,6 @@ class Ns(object):
         image_text = ns_preffix + ":image." + target_vdu["ns-image-id"]
         extra_dict = {"depends_on": [image_text]}
         net_list = []
-
         persistent_root_disk = {}
         persistent_ordinary_disk = {}
         vdu_instantiation_volumes_list = []
@@ -1494,7 +1524,6 @@ class Ns(object):
         disk_list = []
         vnfd_id = vnfr["vnfd-id"]
         vnfd = db.get_one("vnfds", {"_id": vnfd_id})
-
         # If the position info is provided for all the interfaces, it will be sorted
         # according to position number ascendingly.
         if all(
@@ -1565,7 +1594,11 @@ class Ns(object):
             )
             # Add the persistent non-root disks to disk_list
             Ns._add_persistent_ordinary_disks_to_disk_list(
-                target_vdu, persistent_root_disk, persistent_ordinary_disk, disk_list
+                target_vdu,
+                persistent_root_disk,
+                persistent_ordinary_disk,
+                disk_list,
+                vnfd["id"],
             )
 
         affinity_group_list = Ns._prepare_vdu_affinity_group_list(
@@ -1590,7 +1623,23 @@ class Ns(object):
             "availability_zone_index": None,  # TODO
             "availability_zone_list": None,  # TODO
         }
+        return extra_dict
 
+    @staticmethod
+    def _process_shared_volumes_params(
+        target_shared_volume: Dict[str, Any],
+        indata: Dict[str, Any],
+        vim_info: Dict[str, Any],
+        target_record_id: str,
+        **kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        extra_dict = {}
+        shared_volume_data = {
+            "size": target_shared_volume["size-of-storage"],
+            "name": target_shared_volume["id"],
+            "type": target_shared_volume["type-of-storage"],
+        }
+        extra_dict["params"] = shared_volume_data
         return extra_dict
 
     @staticmethod
@@ -1628,7 +1677,6 @@ class Ns(object):
         extra_dict["params"] = {
             "affinity_group_data": affinity_group_data,
         }
-
         return extra_dict
 
     @staticmethod
@@ -1664,6 +1712,7 @@ class Ns(object):
 
         vim_details = {}
         vim_details_text = existing_vdu["vim_info"][target_id].get("vim_details", None)
+
         if vim_details_text:
             vim_details = yaml.safe_load(f"{vim_details_text}")
 
@@ -1857,7 +1906,6 @@ class Ns(object):
         process_params = None
         vdu2cloud_init = indata.get("cloud_init_content") or {}
         ro_nsr_public_key = db_ro_nsr["public_key"]
-
         # According to the type of item, the path, the target_list,
         # the existing_list and the method to process params are set
         db_path = self.db_path_map[item]
@@ -1877,27 +1925,29 @@ class Ns(object):
                 )
                 target_list = target_vnf.get(db_path, []) if target_vnf else []
                 existing_list = vnfr.get(db_path, [])
-        elif item in ("image", "flavor", "affinity-or-anti-affinity-group"):
+        elif item in (
+            "image",
+            "flavor",
+            "affinity-or-anti-affinity-group",
+            "shared-volumes",
+        ):
             db_record = "nsrs:{}:{}".format(nsr_id, db_path)
             target_list = indata.get(item, [])
             existing_list = db_nsr.get(item, [])
         else:
             raise NsException("Item not supported: {}", item)
-
         # ensure all the target_list elements has an "id". If not assign the index as id
         if target_list is None:
             target_list = []
         for target_index, tl in enumerate(target_list):
             if tl and not tl.get("id"):
                 tl["id"] = str(target_index)
-
         # step 1 items (networks,vdus,...) to be deleted/updated
         for item_index, existing_item in enumerate(existing_list):
             target_item = next(
                 (t for t in target_list if t["id"] == existing_item["id"]),
                 None,
             )
-
             for target_vim, existing_viminfo in existing_item.get(
                 "vim_info", {}
             ).items():
@@ -1941,7 +1991,6 @@ class Ns(object):
         # step 2 items (networks,vdus,...) to be created
         for target_item in target_list:
             item_index = -1
-
             for item_index, existing_item in enumerate(existing_list):
                 if existing_item["id"] == target_item["id"]:
                     break
@@ -1998,7 +2047,6 @@ class Ns(object):
                         }
                     )
                     self.logger.debug("calculate_diff_items kwargs={}".format(kwargs))
-
                 extra_dict = process_params(
                     target_item,
                     indata,
@@ -2068,7 +2116,13 @@ class Ns(object):
         changes_list = []
 
         # NS vld, image and flavor
-        for item in ["net", "image", "flavor", "affinity-or-anti-affinity-group"]:
+        for item in [
+            "net",
+            "image",
+            "flavor",
+            "affinity-or-anti-affinity-group",
+            "shared-volumes",
+        ]:
             self.logger.debug("process NS={} {}".format(nsr_id, item))
             diff_items, task_index = self.calculate_diff_items(
                 indata=indata,

@@ -339,7 +339,7 @@ class vimconnector(vimconn.VimConnector):
             version = self.config.get("microversion")
 
             if not version:
-                version = "2.1"
+                version = "2.60"
 
             # addedd region_name to keystone, nova, neutron and cinder to support distributed cloud for Wind River
             # Titanium cloud and StarlingX
@@ -2151,6 +2151,38 @@ class vimconnector(vimconn.VimConnector):
         created_items[volume_txt] = True
         block_device_mapping["vd" + chr(base_disk_index)] = volume.id
 
+    def new_shared_volumes(self, shared_volume_data) -> (str, str):
+        try:
+            volume = self.cinder.volumes.create(
+                size=shared_volume_data["size"],
+                name=shared_volume_data["name"],
+                volume_type="multiattach",
+            )
+            return (volume.name, volume.id)
+        except (ConnectionError, KeyError) as e:
+            self._format_exception(e)
+
+    def _prepare_shared_volumes(
+        self,
+        name: str,
+        disk: dict,
+        base_disk_index: int,
+        block_device_mapping: dict,
+        existing_vim_volumes: list,
+        created_items: dict,
+    ):
+        volumes = {volume.name: volume.id for volume in self.cinder.volumes.list()}
+        if volumes.get(disk["name"]):
+            sv_id = volumes[disk["name"]]
+            volume = self.cinder.volumes.get(sv_id)
+            self.update_block_device_mapping(
+                volume=volume,
+                block_device_mapping=block_device_mapping,
+                base_disk_index=base_disk_index,
+                disk=disk,
+                created_items=created_items,
+            )
+
     def _prepare_non_root_persistent_volumes(
         self,
         name: str,
@@ -2175,17 +2207,15 @@ class vimconnector(vimconn.VimConnector):
         # Non-root persistent volumes
         # Disk may include only vim_volume_id or only vim_id."
         key_id = "vim_volume_id" if "vim_volume_id" in disk.keys() else "vim_id"
-
         if disk.get(key_id):
             # Use existing persistent volume
             block_device_mapping["vd" + chr(base_disk_index)] = disk[key_id]
             existing_vim_volumes.append({"id": disk[key_id]})
-
         else:
-            # Create persistent volume
+            volume_name = f"{name}vd{chr(base_disk_index)}"
             volume = self.cinder.volumes.create(
                 size=disk["size"],
-                name=name + "vd" + chr(base_disk_index),
+                name=volume_name,
                 # Make sure volume is in the same AZ as the VM to be attached to
                 availability_zone=vm_av_zone,
             )
@@ -2210,7 +2240,6 @@ class vimconnector(vimconn.VimConnector):
             elapsed_time    (int):          Time spent while waiting
 
         """
-
         while elapsed_time < volume_timeout:
             for created_item in created_items:
                 v, volume_id = (
@@ -2218,7 +2247,13 @@ class vimconnector(vimconn.VimConnector):
                     created_item.split(":")[1],
                 )
                 if v == "volume":
-                    if self.cinder.volumes.get(volume_id).status != "available":
+                    volume = self.cinder.volumes.get(volume_id)
+                    if (
+                        volume.volume_type == "multiattach"
+                        and volume.status == "in-use"
+                    ):
+                        return elapsed_time
+                    elif volume.status != "available":
                         break
             else:
                 # All ready: break from while
@@ -2245,7 +2280,10 @@ class vimconnector(vimconn.VimConnector):
 
         while elapsed_time < volume_timeout:
             for volume in existing_vim_volumes:
-                if self.cinder.volumes.get(volume["id"]).status != "available":
+                v = self.cinder.volumes.get(volume["id"])
+                if v.volume_type == "multiattach" and v.status == "in-use":
+                    return elapsed_time
+                elif v.status != "available":
                     break
             else:  # all ready: break from while
                 break
@@ -2279,7 +2317,6 @@ class vimconnector(vimconn.VimConnector):
         base_disk_index = ord("b")
         boot_volume_id = None
         elapsed_time = 0
-
         for disk in disk_list:
             if "image_id" in disk:
                 # Root persistent volume
@@ -2287,6 +2324,15 @@ class vimconnector(vimconn.VimConnector):
                 boot_volume_id = self._prepare_persistent_root_volumes(
                     name=name,
                     vm_av_zone=vm_av_zone,
+                    disk=disk,
+                    base_disk_index=base_disk_index,
+                    block_device_mapping=block_device_mapping,
+                    existing_vim_volumes=existing_vim_volumes,
+                    created_items=created_items,
+                )
+            elif disk.get("multiattach"):
+                self._prepare_shared_volumes(
+                    name=name,
                     disk=disk,
                     base_disk_index=base_disk_index,
                     block_device_mapping=block_device_mapping,
@@ -2748,7 +2794,6 @@ class vimconnector(vimconn.VimConnector):
                     server_group_id,
                 )
             )
-
             # Create VM
             server = self.nova.servers.create(
                 name=name,
@@ -2918,6 +2963,23 @@ class vimconnector(vimconn.VimConnector):
         except Exception as e:
             self.logger.error("Error deleting port: {}: {}".format(type(e).__name__, e))
 
+    def delete_shared_volumes(self, shared_volume_vim_id: str) -> bool:
+        """Cinder delete volume by id.
+        Args:
+            shared_volume_vim_id    (str):                  ID of shared volume in VIM
+        """
+        try:
+            if self.cinder.volumes.get(shared_volume_vim_id).status != "available":
+                return True
+
+            else:
+                self.cinder.volumes.delete(shared_volume_vim_id)
+
+        except Exception as e:
+            self.logger.error(
+                "Error deleting volume: {}: {}".format(type(e).__name__, e)
+            )
+
     def _delete_volumes_by_id_wth_cinder(
         self, k: str, k_id: str, volumes_to_hold: list, created_items: dict
     ) -> bool:
@@ -2995,7 +3057,6 @@ class vimconnector(vimconn.VimConnector):
 
             try:
                 k_item, k_id = self._get_item_name_id(k)
-
                 if k_item == "volume":
                     unavailable_vol = self._delete_volumes_by_id_wth_cinder(
                         k, k_id, volumes_to_hold, created_items

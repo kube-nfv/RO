@@ -4547,6 +4547,8 @@ class TestProcessVduParams(unittest.TestCase):
             {
                 "size": "10",
                 "keep": False,
+                "multiattach": False,
+                "name": "persistent-volume2",
             }
         ]
         self.ns._add_persistent_ordinary_disks_to_disk_list(
