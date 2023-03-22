@@ -46,7 +46,6 @@ server_other_info = {
 deleted_externally = {
     "vim_status": "DELETED",
     "vim_message": "Deleted externally",
-    "vim_details": None,
     "vim_id": None,
     "vim_name": None,
     "interfaces": None,
