@@ -1153,7 +1153,6 @@ class TestMonitorVms(unittest.TestCase):
         vdur_vim_info_update = {
             "vim_status": "ACTIVE",
             "vim_message": None,
-            "vim_details": None,
             "vim_id": vm1_id,
             "vim_name": "test7-vnf-hackfest_basic-VM-000000",
         }
