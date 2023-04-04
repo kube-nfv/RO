@@ -36,9 +36,8 @@ dist_ro_vim_openvim
 dist_ro_vim_vmware"
 
 TOX_ENV_LIST="$(echo $PACKAGES | sed "s/ /,/g")"
-PROCESSES=$(expr `nproc --a` / 2)
 
-TOX_PARALLEL_NO_SPINNER=1 tox -e $TOX_ENV_LIST --parallel $PROCESSES
+tox -e $TOX_ENV_LIST
 
 # Copying packages
 # RO plugin
