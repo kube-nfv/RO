@@ -25,6 +25,7 @@
 -r RO-SDN-odl_openflow/requirements.in
 -r RO-SDN-onos_openflow/requirements.in
 -r RO-SDN-onos_vpls/requirements.in
+-r RO-SDN-tapi/requirements.in
 -r RO-VIM-aws/requirements.in
 -r RO-VIM-azure/requirements.in
 -r RO-VIM-openstack/requirements.in
