@@ -359,11 +359,72 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn._prepare_port_dict_mac_ip_addr(net, port_dict)
         self.assertDictEqual(port_dict, result_dict)
 
-    def test_prepare_port_dict_mac_ip_addr_no_mac_and_ip(self):
+    def test_prepare_port_dict_mac_ip_addr_empty_net(self):
         """mac address and ip address does not exist."""
         net = {}
         port_dict = {}
         result_dict = {}
+        self.vimconn._prepare_port_dict_mac_ip_addr(net, port_dict)
+        self.assertDictEqual(port_dict, result_dict)
+
+    def test_prepare_port_dict_mac_ip_addr_dual(self):
+        """mac address, ipv4 and ipv6 addresses exist."""
+        net = {
+            "mac_address": mac_address,
+            "ip_address": ["10.0.1.5", "2345:0425:2CA1:0000:0000:0567:5673:23b5"],
+        }
+        port_dict = {}
+        result_dict = {
+            "mac_address": mac_address,
+            "fixed_ips": [
+                {"ip_address": "10.0.1.5"},
+                {"ip_address": "2345:0425:2CA1:0000:0000:0567:5673:23b5"},
+            ],
+        }
+        self.vimconn._prepare_port_dict_mac_ip_addr(net, port_dict)
+        self.assertDictEqual(port_dict, result_dict)
+
+    def test_prepare_port_dict_mac_ip_addr_dual_ip_addr_is_not_list(self):
+        """mac address, ipv4 and ipv6 addresses exist."""
+        net = {
+            "mac_address": mac_address,
+            "ip_address": "10.0.1.5",
+        }
+        port_dict = {}
+        result_dict = {
+            "mac_address": mac_address,
+            "fixed_ips": [
+                {"ip_address": "10.0.1.5"},
+            ],
+        }
+        self.vimconn._prepare_port_dict_mac_ip_addr(net, port_dict)
+        self.assertDictEqual(port_dict, result_dict)
+
+    def test_prepare_port_dict_mac_ip_addr_dual_net_without_ip_addr(self):
+        """mac address, ipv4 and ipv6 addresses exist."""
+        net = {
+            "mac_address": mac_address,
+            "ip_address": [],
+        }
+        port_dict = {}
+        result_dict = {
+            "mac_address": mac_address,
+        }
+        self.vimconn._prepare_port_dict_mac_ip_addr(net, port_dict)
+        self.assertDictEqual(port_dict, result_dict)
+
+    def test_prepare_port_dict_mac_ip_addr_dual_net_without_mac_addr(self):
+        """mac address, ipv4 and ipv6 addresses exist."""
+        net = {
+            "ip_address": ["10.0.1.5", "2345:0425:2CA1:0000:0000:0567:5673:23b5"],
+        }
+        port_dict = {}
+        result_dict = {
+            "fixed_ips": [
+                {"ip_address": "10.0.1.5"},
+                {"ip_address": "2345:0425:2CA1:0000:0000:0567:5673:23b5"},
+            ],
+        }
         self.vimconn._prepare_port_dict_mac_ip_addr(net, port_dict)
         self.assertDictEqual(port_dict, result_dict)
 

@@ -1946,8 +1946,14 @@ class vimconnector(vimconn.VimConnector):
         if net.get("mac_address"):
             port_dict["mac_address"] = net["mac_address"]
 
-        if net.get("ip_address"):
-            port_dict["fixed_ips"] = [{"ip_address": net["ip_address"]}]
+        ip_dual_list = []
+        if ip_list := net.get("ip_address"):
+            if not isinstance(ip_list, list):
+                ip_list = [ip_list]
+            for ip in ip_list:
+                ip_dict = {"ip_address": ip}
+                ip_dual_list.append(ip_dict)
+            port_dict["fixed_ips"] = ip_dual_list
             # TODO add "subnet_id": <subnet_id>
 
     def _create_new_port(self, port_dict: dict, created_items: dict, net: dict) -> Dict:
