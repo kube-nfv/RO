@@ -2370,7 +2370,7 @@ class Ns(object):
         for target_vnf in target_list:
             # Find this VNF in the list from DB, raise exception if vnfInstanceId is not found
             vnfr_id = target_vnf["vnfInstanceId"]
-            existing_vnf = db_vnfrs.get(vnfr_id)
+            existing_vnf = db_vnfrs.get(vnfr_id, {})
             db_record = "vnfrs:{}:{}".format(vnfr_id, db_path)
             # vim_account_id = existing_vnf.get("vim-account-id", "")
 
@@ -2390,16 +2390,17 @@ class Ns(object):
                 # For single session VDU count-indes is 0
                 count_index = target_vdu.get("count-index", 0)
                 item_index = 0
-                existing_instance = None
-                for instance in existing_vnf.get("vdur", None):
-                    if (
-                        instance["vdu-name"] == vdu_name
-                        and instance["count-index"] == count_index
-                    ):
-                        existing_instance = instance
-                        break
-                    else:
-                        item_index += 1
+                existing_instance = {}
+                if existing_vnf:
+                    for instance in existing_vnf.get("vdur", {}):
+                        if (
+                            instance["vdu-name"] == vdu_name
+                            and instance["count-index"] == count_index
+                        ):
+                            existing_instance = instance
+                            break
+                        else:
+                            item_index += 1
 
                 target_record_id = "{}.{}".format(db_record, existing_instance["id"])
 

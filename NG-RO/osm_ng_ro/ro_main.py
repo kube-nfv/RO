@@ -687,7 +687,7 @@ class Server(object):
         **kwargs,
     ):
         token_info = None
-        outdata = None
+        outdata = {}
         _format = None
         method = "DONE"
         rollback = []
