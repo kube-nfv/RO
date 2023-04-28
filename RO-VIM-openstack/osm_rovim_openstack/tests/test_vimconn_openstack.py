@@ -379,7 +379,7 @@ class TestNewVmInstance(unittest.TestCase):
         net, port_dict, created_items = {}, {}, {}
         expected_result = new_port
         expected_net = {
-            "mac_adress": mac_address,
+            "mac_address": mac_address,
             "vim_id": port_id,
         }
         expected_created_items = {f"port:{port_id}": True}

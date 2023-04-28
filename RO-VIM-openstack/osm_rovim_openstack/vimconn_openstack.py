@@ -1964,7 +1964,7 @@ class vimconnector(vimconn.VimConnector):
         """
         new_port = self.neutron.create_port({"port": port_dict})
         created_items["port:" + str(new_port["port"]["id"])] = True
-        net["mac_adress"] = new_port["port"]["mac_address"]
+        net["mac_address"] = new_port["port"]["mac_address"]
         net["vim_id"] = new_port["port"]["id"]
 
         return new_port
