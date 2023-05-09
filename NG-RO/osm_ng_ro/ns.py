@@ -16,6 +16,7 @@
 # limitations under the License.
 ##
 
+from copy import deepcopy
 from http import HTTPStatus
 from itertools import product
 import logging
@@ -116,6 +117,10 @@ class Ns(object):
             "image": Ns._process_image_params,
             "flavor": Ns._process_flavor_params,
             "vdu": Ns._process_vdu_params,
+            "classification": Ns._process_classification_params,
+            "sfi": Ns._process_sfi_params,
+            "sf": Ns._process_sf_params,
+            "sfp": Ns._process_sfp_params,
             "affinity-or-anti-affinity-group": Ns._process_affinity_group_params,
             "shared-volumes": Ns._process_shared_volumes_params,
         }
@@ -124,6 +129,10 @@ class Ns(object):
             "image": "image",
             "flavor": "flavor",
             "vdu": "vdur",
+            "classification": "classification",
+            "sfi": "sfi",
+            "sf": "sf",
+            "sfp": "sfp",
             "affinity-or-anti-affinity-group": "affinity-or-anti-affinity-group",
             "shared-volumes": "shared-volumes",
         }
@@ -867,6 +876,221 @@ class Ns(object):
         flavor_data_name = flavor_data.copy()
         flavor_data_name["name"] = target_flavor["name"]
         extra_dict["params"] = {"flavor_data": flavor_data_name}
+        return extra_dict
+
+    @staticmethod
+    def _prefix_ip_address(ip_address):
+        if "/" not in ip_address:
+            ip_address += "/32"
+        return ip_address
+
+    @staticmethod
+    def _process_ip_proto(ip_proto):
+        if ip_proto:
+            if ip_proto == 1:
+                ip_proto = "icmp"
+            elif ip_proto == 6:
+                ip_proto = "tcp"
+            elif ip_proto == 17:
+                ip_proto = "udp"
+        return ip_proto
+
+    @staticmethod
+    def _process_classification_params(
+        target_classification: Dict[str, Any],
+        indata: Dict[str, Any],
+        vim_info: Dict[str, Any],
+        target_record_id: str,
+        **kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """[summary]
+
+        Args:
+            target_classification (Dict[str, Any]): Classification dictionary parameters that needs to be processed to create resource on VIM
+            indata (Dict[str, Any]): Deployment info
+            vim_info (Dict[str, Any]):To add items created by OSM on the VIM.
+            target_record_id (str): Task record ID.
+            **kwargs (Dict[str, Any]): Used to send additional information to the task.
+
+        Returns:
+            Dict[str, Any]: Return parameters required to create classification and Items on which classification is dependent.
+        """
+        vnfr_id = target_classification["vnfr_id"]
+        vdur_id = target_classification["vdur_id"]
+        port_index = target_classification["ingress_port_index"]
+        extra_dict = {}
+
+        classification_data = {
+            "name": target_classification["id"],
+            "source_port_range_min": target_classification["source-port"],
+            "source_port_range_max": target_classification["source-port"],
+            "destination_port_range_min": target_classification["destination-port"],
+            "destination_port_range_max": target_classification["destination-port"],
+        }
+
+        classification_data["source_ip_prefix"] = Ns._prefix_ip_address(
+            target_classification["source-ip-address"]
+        )
+
+        classification_data["destination_ip_prefix"] = Ns._prefix_ip_address(
+            target_classification["destination-ip-address"]
+        )
+
+        classification_data["protocol"] = Ns._process_ip_proto(
+            int(target_classification["ip-proto"])
+        )
+
+        db = kwargs.get("db")
+        vdu_text = Ns._get_vnfr_vdur_text(db, vnfr_id, vdur_id)
+
+        extra_dict = {"depends_on": [vdu_text]}
+
+        extra_dict = {"depends_on": [vdu_text]}
+        classification_data["logical_source_port"] = "TASK-" + vdu_text
+        classification_data["logical_source_port_index"] = port_index
+
+        extra_dict["params"] = classification_data
+
+        return extra_dict
+
+    @staticmethod
+    def _process_sfi_params(
+        target_sfi: Dict[str, Any],
+        indata: Dict[str, Any],
+        vim_info: Dict[str, Any],
+        target_record_id: str,
+        **kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """[summary]
+
+        Args:
+            target_sfi (Dict[str, Any]): SFI dictionary parameters that needs to be processed to create resource on VIM
+            indata (Dict[str, Any]): deployment info
+            vim_info (Dict[str, Any]): To add items created by OSM on the VIM.
+            target_record_id (str): Task record ID.
+            **kwargs (Dict[str, Any]): Used to send additional information to the task.
+
+        Returns:
+            Dict[str, Any]: Return parameters required to create SFI and Items on which SFI is dependent.
+        """
+
+        vnfr_id = target_sfi["vnfr_id"]
+        vdur_id = target_sfi["vdur_id"]
+
+        sfi_data = {
+            "name": target_sfi["id"],
+            "ingress_port_index": target_sfi["ingress_port_index"],
+            "egress_port_index": target_sfi["egress_port_index"],
+        }
+
+        db = kwargs.get("db")
+        vdu_text = Ns._get_vnfr_vdur_text(db, vnfr_id, vdur_id)
+
+        extra_dict = {"depends_on": [vdu_text]}
+        sfi_data["ingress_port"] = "TASK-" + vdu_text
+        sfi_data["egress_port"] = "TASK-" + vdu_text
+
+        extra_dict["params"] = sfi_data
+
+        return extra_dict
+
+    @staticmethod
+    def _get_vnfr_vdur_text(db, vnfr_id, vdur_id):
+        vnf_preffix = "vnfrs:{}".format(vnfr_id)
+        db_vnfr = db.get_one("vnfrs", {"_id": vnfr_id})
+        vdur_list = []
+        vdu_text = ""
+
+        if db_vnfr:
+            vdur_list = [
+                vdur["id"] for vdur in db_vnfr["vdur"] if vdur["vdu-id-ref"] == vdur_id
+            ]
+
+        if vdur_list:
+            vdu_text = vnf_preffix + ":vdur." + vdur_list[0]
+
+        return vdu_text
+
+    @staticmethod
+    def _process_sf_params(
+        target_sf: Dict[str, Any],
+        indata: Dict[str, Any],
+        vim_info: Dict[str, Any],
+        target_record_id: str,
+        **kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """[summary]
+
+        Args:
+            target_sf (Dict[str, Any]): SF dictionary parameters that needs to be processed to create resource on VIM
+            indata (Dict[str, Any]): Deployment info.
+            vim_info (Dict[str, Any]):To add items created by OSM on the VIM.
+            target_record_id (str): Task record ID.
+            **kwargs (Dict[str, Any]): Used to send additional information to the task.
+
+        Returns:
+            Dict[str, Any]: Return parameters required to create SF and Items on which SF is dependent.
+        """
+
+        nsr_id = kwargs.get("nsr_id", "")
+        sfis = target_sf["sfis"]
+        ns_preffix = "nsrs:{}".format(nsr_id)
+        extra_dict = {"depends_on": [], "params": []}
+        sf_data = {"name": target_sf["id"], "sfis": sfis}
+
+        for count, sfi in enumerate(sfis):
+            sfi_text = ns_preffix + ":sfi." + sfi
+            sfis[count] = "TASK-" + sfi_text
+            extra_dict["depends_on"].append(sfi_text)
+
+        extra_dict["params"] = sf_data
+
+        return extra_dict
+
+    @staticmethod
+    def _process_sfp_params(
+        target_sfp: Dict[str, Any],
+        indata: Dict[str, Any],
+        vim_info: Dict[str, Any],
+        target_record_id: str,
+        **kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """[summary]
+
+        Args:
+            target_sfp (Dict[str, Any]): SFP dictionary parameters that needs to be processed to create resource on VIM.
+            indata (Dict[str, Any]): Deployment info
+            vim_info (Dict[str, Any]):To add items created by OSM on the VIM.
+            target_record_id (str): Task record ID.
+            **kwargs (Dict[str, Any]): Used to send additional information to the task.
+
+        Returns:
+            Dict[str, Any]: Return parameters required to create SFP and Items on which SFP is dependent.
+        """
+
+        nsr_id = kwargs.get("nsr_id")
+        sfs = target_sfp["sfs"]
+        classifications = target_sfp["classifications"]
+        ns_preffix = "nsrs:{}".format(nsr_id)
+        extra_dict = {"depends_on": [], "params": []}
+        sfp_data = {
+            "name": target_sfp["id"],
+            "sfs": sfs,
+            "classifications": classifications,
+        }
+
+        for count, sf in enumerate(sfs):
+            sf_text = ns_preffix + ":sf." + sf
+            sfs[count] = "TASK-" + sf_text
+            extra_dict["depends_on"].append(sf_text)
+
+        for count, classi in enumerate(classifications):
+            classi_text = ns_preffix + ":classification." + classi
+            classifications[count] = "TASK-" + classi_text
+            extra_dict["depends_on"].append(classi_text)
+
+        extra_dict["params"] = sfp_data
+
         return extra_dict
 
     @staticmethod
@@ -1915,7 +2139,13 @@ class Ns(object):
         # the existing_list and the method to process params are set
         db_path = self.db_path_map[item]
         process_params = self.process_params_function_map[item]
-        if item in ("net", "vdu"):
+
+        if item in ("sfp", "classification", "sf", "sfi"):
+            db_record = "nsrs:{}:{}".format(nsr_id, db_path)
+            target_vnffg = indata.get("vnffg", [])[0]
+            target_list = target_vnffg[item]
+            existing_list = db_nsr.get(item, [])
+        elif item in ("net", "vdu"):
             # This case is specific for the NS VLD (not applied to VDU)
             if vnfr is None:
                 db_record = "nsrs:{}:{}".format(nsr_id, db_path)
@@ -2052,6 +2282,16 @@ class Ns(object):
                         }
                     )
                     self.logger.debug("calculate_diff_items kwargs={}".format(kwargs))
+                if (
+                    process_params == Ns._process_sfi_params
+                    or Ns._process_sf_params
+                    or Ns._process_classification_params
+                    or Ns._process_sfp_params
+                ):
+                    kwargs.update({"nsr_id": nsr_id, "db": self.db})
+
+                    self.logger.debug("calculate_diff_items kwargs={}".format(kwargs))
+
                 extra_dict = process_params(
                     target_item,
                     indata,
@@ -2084,6 +2324,253 @@ class Ns(object):
                 db_nsr_update[db_path + ".{}".format(item_index)] = target_item
 
         return diff_items, task_index
+
+    def _process_vnfgd_sfp(self, sfp):
+        processed_sfp = {}
+        # getting sfp name, sfs and classifications in sfp to store it in processed_sfp
+        processed_sfp["id"] = sfp["id"]
+        sfs_in_sfp = [
+            sf["id"] for sf in sfp.get("position-desc-id", [])[0].get("cp-profile-id")
+        ]
+        classifications_in_sfp = [
+            classi["id"]
+            for classi in sfp.get("position-desc-id", [])[0].get("match-attributes")
+        ]
+
+        # creating a list of sfp with sfs and classifications
+        processed_sfp["sfs"] = sfs_in_sfp
+        processed_sfp["classifications"] = classifications_in_sfp
+
+        return processed_sfp
+
+    def _process_vnfgd_sf(self, sf):
+        processed_sf = {}
+        # getting name of sf
+        processed_sf["id"] = sf["id"]
+        # getting sfis in sf
+        sfis_in_sf = sf.get("constituent-profile-elements")
+        sorted_sfis = sorted(sfis_in_sf, key=lambda i: i["order"])
+        # getting sfis names
+        processed_sf["sfis"] = [sfi["id"] for sfi in sorted_sfis]
+
+        return processed_sf
+
+    def _process_vnfgd_sfi(self, sfi, db_vnfrs):
+        processed_sfi = {}
+        # getting name of sfi
+        processed_sfi["id"] = sfi["id"]
+
+        # getting ports in sfi
+        ingress_port = sfi["ingress-constituent-cpd-id"]
+        egress_port = sfi["egress-constituent-cpd-id"]
+        sfi_vnf_member_index = sfi["constituent-base-element-id"]
+
+        processed_sfi["ingress_port"] = ingress_port
+        processed_sfi["egress_port"] = egress_port
+
+        all_vnfrs = db_vnfrs.values()
+
+        sfi_vnfr = [
+            element
+            for element in all_vnfrs
+            if element["member-vnf-index-ref"] == sfi_vnf_member_index
+        ]
+        processed_sfi["vnfr_id"] = sfi_vnfr[0]["id"]
+
+        sfi_vnfr_cp = sfi_vnfr[0]["connection-point"]
+
+        ingress_port_index = [
+            c for c, element in enumerate(sfi_vnfr_cp) if element["id"] == ingress_port
+        ]
+        ingress_port_index = ingress_port_index[0]
+
+        processed_sfi["vdur_id"] = sfi_vnfr_cp[ingress_port_index][
+            "connection-point-vdu-id"
+        ]
+        processed_sfi["ingress_port_index"] = ingress_port_index
+        processed_sfi["egress_port_index"] = ingress_port_index
+
+        if egress_port != ingress_port:
+            egress_port_index = [
+                c
+                for c, element in enumerate(sfi_vnfr_cp)
+                if element["id"] == egress_port
+            ]
+            processed_sfi["egress_port_index"] = egress_port_index
+
+        return processed_sfi
+
+    def _process_vnfgd_classification(self, classification, db_vnfrs):
+        processed_classification = {}
+
+        processed_classification = deepcopy(classification)
+        classi_vnf_member_index = processed_classification[
+            "constituent-base-element-id"
+        ]
+        logical_source_port = processed_classification["constituent-cpd-id"]
+
+        all_vnfrs = db_vnfrs.values()
+
+        classi_vnfr = [
+            element
+            for element in all_vnfrs
+            if element["member-vnf-index-ref"] == classi_vnf_member_index
+        ]
+        processed_classification["vnfr_id"] = classi_vnfr[0]["id"]
+
+        classi_vnfr_cp = classi_vnfr[0]["connection-point"]
+
+        ingress_port_index = [
+            c
+            for c, element in enumerate(classi_vnfr_cp)
+            if element["id"] == logical_source_port
+        ]
+        ingress_port_index = ingress_port_index[0]
+
+        processed_classification["ingress_port_index"] = ingress_port_index
+        processed_classification["vdur_id"] = classi_vnfr_cp[ingress_port_index][
+            "connection-point-vdu-id"
+        ]
+
+        return processed_classification
+
+    def _update_db_nsr_with_vnffg(self, processed_vnffg, vim_info, nsr_id):
+        """This method used to add viminfo dict to sfi, sf sfp and classification in indata and count info in db_nsr.
+
+        Args:
+            processed_vnffg (Dict[str, Any]): deployment info
+            vim_info (Dict): dictionary to store VIM resource information
+            nsr_id (str): NSR id
+
+        Returns: None
+        """
+
+        nsr_sfi = {}
+        nsr_sf = {}
+        nsr_sfp = {}
+        nsr_classification = {}
+        db_nsr_vnffg = deepcopy(processed_vnffg)
+
+        for count, sfi in enumerate(processed_vnffg["sfi"]):
+            sfi["vim_info"] = vim_info
+            sfi_count = "sfi.{}".format(count)
+            nsr_sfi[sfi_count] = db_nsr_vnffg["sfi"][count]
+
+        self.db.set_list("nsrs", {"_id": nsr_id}, nsr_sfi)
+
+        for count, sf in enumerate(processed_vnffg["sf"]):
+            sf["vim_info"] = vim_info
+            sf_count = "sf.{}".format(count)
+            nsr_sf[sf_count] = db_nsr_vnffg["sf"][count]
+
+        self.db.set_list("nsrs", {"_id": nsr_id}, nsr_sf)
+
+        for count, sfp in enumerate(processed_vnffg["sfp"]):
+            sfp["vim_info"] = vim_info
+            sfp_count = "sfp.{}".format(count)
+            nsr_sfp[sfp_count] = db_nsr_vnffg["sfp"][count]
+
+        self.db.set_list("nsrs", {"_id": nsr_id}, nsr_sfp)
+
+        for count, classi in enumerate(processed_vnffg["classification"]):
+            classi["vim_info"] = vim_info
+            classification_count = "classification.{}".format(count)
+            nsr_classification[classification_count] = db_nsr_vnffg["classification"][
+                count
+            ]
+
+            self.db.set_list("nsrs", {"_id": nsr_id}, nsr_classification)
+
+    def process_vnffgd_descriptor(
+        self,
+        indata: dict,
+        nsr_id: str,
+        db_nsr: dict,
+        db_vnfrs: dict,
+    ) -> dict:
+        """This method used to process vnffgd parameters from descriptor.
+
+        Args:
+            indata (Dict[str, Any]): deployment info
+            nsr_id (str): NSR id
+            db_nsr: NSR record from DB
+            db_vnfrs: VNFRS record from DB
+
+        Returns:
+            Dict: Processed vnffg parameters.
+        """
+
+        processed_vnffg = {}
+        vnffgd = db_nsr.get("nsd", {}).get("vnffgd")
+        vnf_list = indata.get("vnf", [])
+        vim_text = ""
+
+        if vnf_list:
+            vim_text = "vim:" + vnf_list[0].get("vim-account-id", "")
+
+        vim_info = {}
+        vim_info[vim_text] = {}
+        processed_sfps = []
+        processed_classifications = []
+        processed_sfs = []
+        processed_sfis = []
+
+        # setting up intial empty entries for vnffg items in mongodb.
+        self.db.set_list(
+            "nsrs",
+            {"_id": nsr_id},
+            {
+                "sfi": [],
+                "sf": [],
+                "sfp": [],
+                "classification": [],
+            },
+        )
+
+        vnffg = vnffgd[0]
+        # getting sfps
+        sfps = vnffg.get("nfpd")
+        for sfp in sfps:
+            processed_sfp = self._process_vnfgd_sfp(sfp)
+            # appending the list of processed sfps
+            processed_sfps.append(processed_sfp)
+
+            # getting sfs in sfp
+            sfs = sfp.get("position-desc-id")[0].get("cp-profile-id")
+            for sf in sfs:
+                processed_sf = self._process_vnfgd_sf(sf)
+
+                # appending the list of processed sfs
+                processed_sfs.append(processed_sf)
+
+                # getting sfis in sf
+                sfis_in_sf = sf.get("constituent-profile-elements")
+                sorted_sfis = sorted(sfis_in_sf, key=lambda i: i["order"])
+
+                for sfi in sorted_sfis:
+                    processed_sfi = self._process_vnfgd_sfi(sfi, db_vnfrs)
+
+                    processed_sfis.append(processed_sfi)
+
+            classifications = sfp.get("position-desc-id")[0].get("match-attributes")
+            # getting classifications from sfp
+            for classification in classifications:
+                processed_classification = self._process_vnfgd_classification(
+                    classification, db_vnfrs
+                )
+
+                processed_classifications.append(processed_classification)
+
+        processed_vnffg["sfi"] = processed_sfis
+        processed_vnffg["sf"] = processed_sfs
+        processed_vnffg["classification"] = processed_classifications
+        processed_vnffg["sfp"] = processed_sfps
+
+        # adding viminfo dict to sfi, sf sfp and classification
+        self._update_db_nsr_with_vnffg(processed_vnffg, vim_info, nsr_id)
+
+        # updating indata with vnffg porcessed parameters
+        indata["vnffg"].append(processed_vnffg)
 
     def calculate_all_differences_to_deploy(
         self,
@@ -2119,6 +2606,55 @@ class Ns(object):
         task_index = 0
         # set list with diffs:
         changes_list = []
+
+        # processing vnffg from descriptor parameter
+        vnffgd = db_nsr.get("nsd").get("vnffgd")
+        if vnffgd is not None:
+            indata["vnffg"] = []
+            vnf_list = indata["vnf"]
+            processed_vnffg = {}
+
+            # in case of ns-delete
+            if not vnf_list:
+                processed_vnffg["sfi"] = []
+                processed_vnffg["sf"] = []
+                processed_vnffg["classification"] = []
+                processed_vnffg["sfp"] = []
+
+                indata["vnffg"].append(processed_vnffg)
+
+            else:
+                self.process_vnffgd_descriptor(
+                    indata=indata,
+                    nsr_id=nsr_id,
+                    db_nsr=db_nsr,
+                    db_vnfrs=db_vnfrs,
+                )
+
+                # getting updated db_nsr having vnffg parameters
+                db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
+
+                self.logger.debug(
+                    "After processing vnffd parameters indata={} nsr={}".format(
+                        indata, db_nsr
+                    )
+                )
+
+            for item in ["sfp", "classification", "sf", "sfi"]:
+                self.logger.debug("process NS={} {}".format(nsr_id, item))
+                diff_items, task_index = self.calculate_diff_items(
+                    indata=indata,
+                    db_nsr=db_nsr,
+                    db_ro_nsr=db_ro_nsr,
+                    db_nsr_update=db_nsr_update,
+                    item=item,
+                    tasks_by_target_record_id=tasks_by_target_record_id,
+                    action_id=action_id,
+                    nsr_id=nsr_id,
+                    task_index=task_index,
+                    vnfr_id=None,
+                )
+                changes_list += diff_items
 
         # NS vld, image and flavor
         for item in [

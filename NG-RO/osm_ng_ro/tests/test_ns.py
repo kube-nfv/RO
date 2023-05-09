@@ -5600,3 +5600,234 @@ class TestProcessVduParams(unittest.TestCase):
         vsd = deepcopy(vnfd_wth_persistent_storage)["virtual-storage-desc"]
         with self.assertRaises(AttributeError):
             Ns._select_persistent_root_disk(vsd, vdu)
+
+
+class TestSFC(unittest.TestCase):
+    def setUp(self):
+        self.ns = Ns()
+        self.logger = CopyingMock(autospec=True)
+
+    @patch("osm_ng_ro.ns.Ns._prefix_ip_address")
+    @patch("osm_ng_ro.ns.Ns._process_ip_proto")
+    @patch("osm_ng_ro.ns.Ns._get_vnfr_vdur_text")
+    def test_process_classification_params(
+        self, mock_get_vnfr_vdur_text, mock_process_ip_proto, mock_prefix_ip_address
+    ):
+        db = Mock()
+        mock_prefix_ip_address.side_effect = ["10.10.10.10/32", "20.20.20.20/32"]
+        mock_process_ip_proto.return_value = "tcp"
+        mock_get_vnfr_vdur_text.return_value = "vdur_text"
+        vim_info, indata, target_record_id = {}, {}, ""
+        target_classification = {
+            "vnfr_id": "1234",
+            "source-ip-address": "10.10.10.10",
+            "destination-ip-address": "20.20.20.20",
+            "ip-proto": "6",
+            "id": "rule1",
+            "source-port": "0",
+            "destination-port": 5555,
+            "vdur_id": "5678",
+            "ingress_port_index": 0,
+            "vim_info": vim_info,
+        }
+        kwargs = {"db": db}
+
+        expected_result = {
+            "depends_on": ["vdur_text"],
+            "params": {
+                "destination_ip_prefix": "20.20.20.20/32",
+                "destination_port_range_max": 5555,
+                "destination_port_range_min": 5555,
+                "logical_source_port": "TASK-vdur_text",
+                "logical_source_port_index": 0,
+                "name": "rule1",
+                "protocol": "tcp",
+                "source_ip_prefix": "10.10.10.10/32",
+                "source_port_range_max": "0",
+                "source_port_range_min": "0",
+            },
+        }
+
+        result = self.ns._process_classification_params(
+            target_classification, indata, vim_info, target_record_id, **kwargs
+        )
+        self.assertEqual(expected_result, result)
+
+    def test_process_sfp_params(self):
+        sf_text = "nsrs:1234:sf.sf1"
+        classi_text = "nsrs:1234:classification.rule1"
+        vim_info, indata, target_record_id = {}, {}, ""
+        target_sfp = {
+            "id": "sfp1",
+            "sfs": ["sf1"],
+            "classifications": ["rule1"],
+            "vim_info": vim_info,
+        }
+
+        kwargs = {"nsr_id": "1234"}
+
+        expected_result = {
+            "depends_on": [sf_text, classi_text],
+            "params": {
+                "name": "sfp1",
+                "sfs": ["TASK-" + sf_text],
+                "classifications": ["TASK-" + classi_text],
+            },
+        }
+
+        result = self.ns._process_sfp_params(
+            target_sfp, indata, vim_info, target_record_id, **kwargs
+        )
+        self.assertEqual(expected_result, result)
+
+    def test_process_sf_params(self):
+        sfi_text = "nsrs::sfi.sfi1"
+        vim_info, indata, target_record_id = {}, {}, ""
+        target_sf = {"id": "sf1", "sfis": ["sfi1"], "vim_info": vim_info}
+
+        kwargs = {"ns_id": "1234"}
+
+        expected_result = {
+            "depends_on": [sfi_text],
+            "params": {
+                "name": "sf1",
+                "sfis": ["TASK-" + sfi_text],
+            },
+        }
+
+        result = self.ns._process_sf_params(
+            target_sf, indata, vim_info, target_record_id, **kwargs
+        )
+        self.assertEqual(expected_result, result)
+
+    @patch("osm_ng_ro.ns.Ns._get_vnfr_vdur_text")
+    def test_process_sfi_params(self, mock_get_vnfr_vdur_text):
+        db = Mock()
+        mock_get_vnfr_vdur_text.return_value = "vdur_text"
+        vim_info, indata, target_record_id = {}, {}, ""
+        target_sfi = {
+            "id": "sfi1",
+            "ingress_port": "vnf-cp0-ext",
+            "egress_port": "vnf-cp0-ext",
+            "vnfr_id": "1234",
+            "vdur_id": "5678",
+            "ingress_port_index": 0,
+            "egress_port_index": 0,
+            "vim_info": {},
+        }
+        kwargs = {"db": db}
+
+        expected_result = {
+            "depends_on": ["vdur_text"],
+            "params": {
+                "name": "sfi1",
+                "ingress_port": "TASK-vdur_text",
+                "egress_port": "TASK-vdur_text",
+                "ingress_port_index": 0,
+                "egress_port_index": 0,
+            },
+        }
+
+        result = self.ns._process_sfi_params(
+            target_sfi, indata, vim_info, target_record_id, **kwargs
+        )
+        self.assertEqual(expected_result, result)
+
+    def test_process_vnfgd_sfp(self):
+        sfp = {
+            "id": "sfp1",
+            "position-desc-id": [
+                {
+                    "id": "position1",
+                    "cp-profile-id": [{"id": "sf1"}],
+                    "match-attributes": [{"id": "rule1"}],
+                }
+            ],
+        }
+        expected_result = {"id": "sfp1", "sfs": ["sf1"], "classifications": ["rule1"]}
+
+        result = self.ns._process_vnfgd_sfp(sfp)
+        self.assertEqual(expected_result, result)
+
+    def test_process_vnfgd_sf(self):
+        sf = {"id": "sf1", "constituent-profile-elements": [{"id": "sfi1", "order": 0}]}
+        expected_result = {"id": "sf1", "sfis": ["sfi1"]}
+
+        result = self.ns._process_vnfgd_sf(sf)
+        self.assertEqual(expected_result, result)
+
+    def test_process_vnfgd_sfi(self):
+        sfi = {
+            "id": "sfi1",
+            "constituent-base-element-id": "vnf",
+            "order": 0,
+            "ingress-constituent-cpd-id": "vnf-cp0-ext",
+            "egress-constituent-cpd-id": "vnf-cp0-ext",
+        }
+        db_vnfrs = {
+            "1234": {
+                "id": "1234",
+                "member-vnf-index-ref": "vnf",
+                "connection-point": [
+                    {
+                        "name": "vnf-cp0-ext",
+                        "connection-point-id": "vdu-eth0-int",
+                        "connection-point-vdu-id": "5678",
+                        "id": "vnf-cp0-ext",
+                    }
+                ],
+            }
+        }
+        expected_result = {
+            "id": "sfi1",
+            "ingress_port": "vnf-cp0-ext",
+            "egress_port": "vnf-cp0-ext",
+            "vnfr_id": "1234",
+            "vdur_id": "5678",
+            "ingress_port_index": 0,
+            "egress_port_index": 0,
+        }
+
+        result = self.ns._process_vnfgd_sfi(sfi, db_vnfrs)
+        self.assertEqual(expected_result, result)
+
+    def test_process_vnfgd_classification(self):
+        classification = {
+            "id": "rule1",
+            "ip-proto": 6,
+            "source-ip-address": "10.10.10.10",
+            "destination-ip-address": "20.20.20.20",
+            "constituent-base-element-id": "vnf",
+            "constituent-cpd-id": "vnf-cp0-ext",
+            "destination-port": 5555,
+        }
+        db_vnfrs = {
+            "1234": {
+                "id": "1234",
+                "member-vnf-index-ref": "vnf",
+                "connection-point": [
+                    {
+                        "name": "vnf-cp0-ext",
+                        "connection-point-id": "vdu-eth0-int",
+                        "connection-point-vdu-id": "5678",
+                        "id": "vnf-cp0-ext",
+                    }
+                ],
+            }
+        }
+
+        expected_result = {
+            "id": "rule1",
+            "ip-proto": 6,
+            "source-ip-address": "10.10.10.10",
+            "destination-ip-address": "20.20.20.20",
+            "destination-port": 5555,
+            "vnfr_id": "1234",
+            "vdur_id": "5678",
+            "ingress_port_index": 0,
+            "constituent-base-element-id": "vnf",
+            "constituent-cpd-id": "vnf-cp0-ext",
+        }
+
+        result = self.ns._process_vnfgd_classification(classification, db_vnfrs)
+        self.assertEqual(expected_result, result)
