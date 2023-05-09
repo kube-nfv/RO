@@ -14,11 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
--e RO-plugin
-    # via -r requirements-test.in
-coverage==7.2.5
-    # via -r requirements-test.in
-mock==5.0.2
-    # via -r requirements-test.in
-nose2==0.13.0
-    # via -r requirements-test.in
+---
+upgrade:
+  - |
+    Upgrade Ubuntu from 20.04 to 22.04 and Python from 3.8 to 3.10.
+

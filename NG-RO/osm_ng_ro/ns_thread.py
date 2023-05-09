@@ -2349,7 +2349,6 @@ class NsWorker(threading.Thread):
                                     new_status, db_vim_info_update = self.item2class[
                                         task["item"]
                                     ].new(ro_task, task_index, task_depends)
-                                    # self._create_task(ro_task, task_index, task_depends, db_ro_task_update)
                                     _update_refresh(new_status)
                             else:
                                 refresh_at = ro_task["vim_info"]["refresh_at"]
