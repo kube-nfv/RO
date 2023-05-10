@@ -38,10 +38,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         python3-all \
         python3-dev \
         python3-setuptools \
-        python3-pip
-
-RUN python3 -m pip install -U pip==23.1
-RUN pip install tox
+        python3-pip \
+        tox
 
 ENV LC_ALL C.UTF-8
 ENV LANG C.UTF-8
