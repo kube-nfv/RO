@@ -380,7 +380,7 @@ class VimAdminThread(threading.Thread):
         self.logger.info("Starting")
         while not self.to_terminate:
             try:
-                asyncio.run_coroutine_threadsafe(self.main_task(), self.loop)
+                asyncio.run(self.main_task())
             except Exception as e:
                 if not self.to_terminate:
                     self.logger.exception(
@@ -458,12 +458,12 @@ class VimAdminThread(threading.Thread):
         self.lock_renew.to_terminate = True
 
         if self.aiomain_task_kafka:
-            self.aiomain_task_kafka.cancel()
+            self.loop.call_soon_threadsafe(self.aiomain_task_kafka.cancel())
 
         if self.aiomain_task_vim:
-            self.aiomain_task_vim.cancel()
+            self.loop.call_soon_threadsafe(self.aiomain_task_vim.cancel())
 
         if self.aiomain_task_renew_lock:
-            self.aiomain_task_renew_lock.cancel()
+            self.loop.call_soon_threadsafe(self.aiomain_task_renew_lock.cancel())
 
         self.lock_renew.stop()
