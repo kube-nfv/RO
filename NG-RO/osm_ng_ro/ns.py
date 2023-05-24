@@ -863,44 +863,6 @@ class Ns(object):
         return extra_dict
 
     @staticmethod
-    def _ip_profile_to_ro(
-        ip_profile: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """[summary]
-
-        Args:
-            ip_profile (Dict[str, Any]): [description]
-
-        Returns:
-            Dict[str, Any]: [description]
-        """
-        if not ip_profile:
-            return None
-
-        ro_ip_profile = {
-            "ip_version": "IPv4"
-            if "v4" in ip_profile.get("ip-version", "ipv4")
-            else "IPv6",
-            "subnet_address": ip_profile.get("subnet-address"),
-            "gateway_address": ip_profile.get("gateway-address"),
-            "dhcp_enabled": ip_profile.get("dhcp-params", {}).get("enabled", False),
-            "dhcp_start_address": ip_profile.get("dhcp-params", {}).get(
-                "start-address", None
-            ),
-            "dhcp_count": ip_profile.get("dhcp-params", {}).get("count", None),
-        }
-
-        if ip_profile.get("dns-server"):
-            ro_ip_profile["dns_address"] = ";".join(
-                [v["address"] for v in ip_profile["dns-server"] if v.get("address")]
-            )
-
-        if ip_profile.get("security-group"):
-            ro_ip_profile["security_group"] = ip_profile["security-group"]
-
-        return ro_ip_profile
-
-    @staticmethod
     def _process_net_params(
         target_vld: Dict[str, Any],
         indata: Dict[str, Any],
@@ -963,7 +925,7 @@ class Ns(object):
                 "net_name": (
                     f"{indata.get('name')[:16]}-{target_vld.get('name', target_vld.get('id'))[:16]}"
                 ),
-                "ip_profile": Ns._ip_profile_to_ro(vim_info.get("ip_profile")),
+                "ip_profile": vim_info.get("ip_profile"),
                 "provider_network_profile": vim_info.get("provider_network"),
             }
 
@@ -1522,13 +1484,13 @@ class Ns(object):
         vnf_preffix = "vnfrs:{}".format(vnfr_id)
         ns_preffix = "nsrs:{}".format(nsr_id)
         image_text = ns_preffix + ":image." + target_vdu["ns-image-id"]
-        flavor_text = ns_preffix + ":flavor." + target_vdu["ns-flavor-id"]
-        extra_dict = {"depends_on": [image_text, flavor_text]}
+        extra_dict = {"depends_on": [image_text]}
         net_list = []
 
         persistent_root_disk = {}
         persistent_ordinary_disk = {}
         vdu_instantiation_volumes_list = []
+        vdu_instantiation_flavor_id = None
         disk_list = []
         vnfd_id = vnfr["vnfd-id"]
         vnfd = db.get_one("vnfds", {"_id": vnfd_id})
@@ -1566,8 +1528,19 @@ class Ns(object):
 
         if target_vdu.get("additionalParams"):
             vdu_instantiation_volumes_list = (
-                target_vdu.get("additionalParams").get("OSM").get("vdu_volumes")
+                target_vdu.get("additionalParams").get("OSM", {}).get("vdu_volumes")
             )
+            vdu_instantiation_flavor_id = (
+                target_vdu.get("additionalParams").get("OSM", {}).get("vim_flavor_id")
+            )
+
+        # flavor id
+        if vdu_instantiation_flavor_id:
+            flavor_id = vdu_instantiation_flavor_id
+        else:
+            flavor_text = ns_preffix + ":flavor." + target_vdu["ns-flavor-id"]
+            flavor_id = "TASK-" + flavor_text
+            extra_dict["depends_on"].append(flavor_text)
 
         if vdu_instantiation_volumes_list:
             # Find the root volumes and add to the disk_list
@@ -1609,7 +1582,7 @@ class Ns(object):
             "description": target_vdu["vdu-name"],
             "start": True,
             "image_id": "TASK-" + image_text,
-            "flavor_id": "TASK-" + flavor_text,
+            "flavor_id": flavor_id,
             "affinity_group_list": affinity_group_list,
             "net_list": net_list,
             "cloud_config": cloud_config or None,
@@ -2341,15 +2314,23 @@ class Ns(object):
 
         # Check each VNF of the target
         for target_vnf in target_list:
-            # Find this VNF in the list from DB
-            vnfr_id = target_vnf.get("vnfInstanceId", None)
-            if vnfr_id:
-                existing_vnf = db_vnfrs.get(vnfr_id)
-                db_record = "vnfrs:{}:{}".format(vnfr_id, db_path)
-                # vim_account_id = existing_vnf.get("vim-account-id", "")
+            # Find this VNF in the list from DB, raise exception if vnfInstanceId is not found
+            vnfr_id = target_vnf["vnfInstanceId"]
+            existing_vnf = db_vnfrs.get(vnfr_id)
+            db_record = "vnfrs:{}:{}".format(vnfr_id, db_path)
+            # vim_account_id = existing_vnf.get("vim-account-id", "")
 
+            target_vdus = target_vnf.get("additionalParams", {}).get("vdu", [])
             # Check each VDU of this VNF
-            for target_vdu in target_vnf["additionalParams"].get("vdu", None):
+            if not target_vdus:
+                # Create target_vdu_list from DB, if VDUs are not specified
+                target_vdus = []
+                for existing_vdu in existing_vnf.get("vdur"):
+                    vdu_name = existing_vdu.get("vdu-name", None)
+                    vdu_index = existing_vdu.get("count-index", 0)
+                    vdu_to_be_healed = {"vdu-id": vdu_name, "count-index": vdu_index}
+                    target_vdus.append(vdu_to_be_healed)
+            for target_vdu in target_vdus:
                 vdu_name = target_vdu.get("vdu-id", None)
                 # For multi instance VDU count-index is mandatory
                 # For single session VDU count-indes is 0

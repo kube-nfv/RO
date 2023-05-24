@@ -14,11 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
--e RO-plugin
-    # via -r requirements-test.in
-coverage==7.2.5
-    # via -r requirements-test.in
-mock==5.0.2
-    # via -r requirements-test.in
-nose2==0.13.0
-    # via -r requirements-test.in
+---
+fixes:
+  - |
+    Fix Bug 2216 All deployments with EPA in VIO land in NUMA node 0
+    This fix removes the hardcoded decision that makes all deployments
+    withe EPA land in NUMA node 0.
+    The fix removes the extra_spec "vmware:extra_config" that was previously
+    set to '{"numa.nodeAffinity":"0"}'.
+    It maintains the extra_spec "vmware:latency_sensitivity_level", set to "high"
+    for deployments with EPA.
+
+

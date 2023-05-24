@@ -1,3 +1,4 @@
+#######################################################################################
 # Copyright ETSI Contributors and Others.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,13 +13,8 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-##
-
-PyYAML
-CherryPy==18.1.2
-requests
-cryptography
-logutils
-importlib-metadata
-Jinja2
-python-novaclient
+#######################################################################################
+---
+other:
+  - |
+     ip_profile is received ready to use from LCM, so the method to translate it and its unit tests are removed 

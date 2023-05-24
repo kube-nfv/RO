@@ -355,12 +355,21 @@ class vimconnector(vimconn.VimConnector):
                 endpoint_type=self.endpoint_type,
                 region_name=region_name,
             )
-            self.cinder = self.session["cinder"] = cClient.Client(
-                2,
-                session=sess,
-                endpoint_type=self.endpoint_type,
-                region_name=region_name,
-            )
+
+            if sess.get_all_version_data(service_type="volumev2"):
+                self.cinder = self.session["cinder"] = cClient.Client(
+                    2,
+                    session=sess,
+                    endpoint_type=self.endpoint_type,
+                    region_name=region_name,
+                )
+            else:
+                self.cinder = self.session["cinder"] = cClient.Client(
+                    3,
+                    session=sess,
+                    endpoint_type=self.endpoint_type,
+                    region_name=region_name,
+                )
 
             try:
                 self.my_tenant_id = self.session["my_tenant_id"] = sess.get_project_id()
@@ -880,7 +889,7 @@ class vimconnector(vimconn.VimConnector):
 
             if not ip_profile.get("subnet_address"):
                 # Fake subnet is required
-                subnet_rand = random.randint(0, 255)
+                subnet_rand = random.SystemRandom().randint(0, 255)
                 ip_profile["subnet_address"] = "192.168.{}.0/24".format(subnet_rand)
 
             if "ip_version" not in ip_profile:
@@ -924,6 +933,15 @@ class vimconnector(vimconn.VimConnector):
                 ip_int += ip_profile["dhcp_count"] - 1
                 ip_str = str(netaddr.IPAddress(ip_int))
                 subnet["allocation_pools"][0]["end"] = ip_str
+
+            if (
+                ip_profile.get("ipv6_address_mode")
+                and ip_profile["ip_version"] != "IPv4"
+            ):
+                subnet["ipv6_address_mode"] = ip_profile["ipv6_address_mode"]
+                # ipv6_ra_mode can be set to the same value for most use cases, see documentation:
+                # https://docs.openstack.org/neutron/latest/admin/config-ipv6.html#ipv6-ra-mode-and-ipv6-address-mode-combinations
+                subnet["ipv6_ra_mode"] = ip_profile["ipv6_address_mode"]
 
             # self.logger.debug(">>>>>>>>>>>>>>>>>> Subnet: %s", str(subnet))
             self.neutron.create_subnet({"subnet": subnet})
@@ -1393,10 +1411,6 @@ class vimconnector(vimconn.VimConnector):
             extra_specs     (dict):        Extra specs dict to be updated
 
         """
-        # If there is not any numa, numas_nodes equals to 0.
-        if not numa_nodes:
-            extra_specs["vmware:extra_config"] = '{"numa.nodeAffinity":"0"}'
-
         # If there are several numas, we do not define specific affinity.
         extra_specs["vmware:latency_sensitivity_level"] = "high"
 
@@ -1932,8 +1946,14 @@ class vimconnector(vimconn.VimConnector):
         if net.get("mac_address"):
             port_dict["mac_address"] = net["mac_address"]
 
-        if net.get("ip_address"):
-            port_dict["fixed_ips"] = [{"ip_address": net["ip_address"]}]
+        ip_dual_list = []
+        if ip_list := net.get("ip_address"):
+            if not isinstance(ip_list, list):
+                ip_list = [ip_list]
+            for ip in ip_list:
+                ip_dict = {"ip_address": ip}
+                ip_dual_list.append(ip_dict)
+            port_dict["fixed_ips"] = ip_dual_list
             # TODO add "subnet_id": <subnet_id>
 
     def _create_new_port(self, port_dict: dict, created_items: dict, net: dict) -> Dict:
@@ -1950,7 +1970,7 @@ class vimconnector(vimconn.VimConnector):
         """
         new_port = self.neutron.create_port({"port": port_dict})
         created_items["port:" + str(new_port["port"]["id"])] = True
-        net["mac_adress"] = new_port["port"]["mac_address"]
+        net["mac_address"] = new_port["port"]["mac_address"]
         net["vim_id"] = new_port["port"]["id"]
 
         return new_port
@@ -3798,3 +3818,19 @@ class vimconnector(vimconn.VimConnector):
             self.__wait_for_vm(vm_id, "ACTIVE")
         instance_status = self.get_vdu_state(vm_id)[0]
         return instance_status
+
+    def get_monitoring_data(self):
+        try:
+            self.logger.debug("Getting servers and ports data from Openstack VIMs.")
+            self._reload_connection()
+            all_servers = self.nova.servers.list(detailed=True)
+            all_ports = self.neutron.list_ports()
+            return all_servers, all_ports
+        except (
+            vimconn.VimConnException,
+            vimconn.VimConnNotFoundException,
+            vimconn.VimConnConnectionException,
+        ) as e:
+            raise vimconn.VimConnException(
+                f"Exception in monitoring while getting VMs and ports status: {str(e)}"
+            )

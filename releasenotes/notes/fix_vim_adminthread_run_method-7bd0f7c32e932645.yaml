@@ -1,3 +1,4 @@
+#######################################################################################
 # Copyright ETSI Contributors and Others.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,13 +13,10 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-##
+#######################################################################################
+---
+fixes:
+  - |
+    The run_coroutine_threadsafe() function is used to schedule a coroutine object from a different thread and returns a concurrent.futures.Future.
+    run_coroutine_threadsafe is unnecessary to run the main task and replaced with asyncio.run().
 
-PyYAML
-CherryPy==18.1.2
-requests
-cryptography
-logutils
-importlib-metadata
-Jinja2
-python-novaclient
