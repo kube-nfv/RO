@@ -68,6 +68,7 @@ ip_addr1 = "20.3.4.5"
 volume_id = "ac408b73-b9cc-4a6a-a270-82cc4811bd4a"
 volume_id2 = "o4e0e83-b9uu-4akk-a234-89cc4811bd4a"
 volume_id3 = "44e0e83-t9uu-4akk-a234-p9cc4811bd4a"
+volume_id4 = "91bf5674-5b85-41d1-aa3b-4848e2691088"
 virtual_mac_id = "64e0e83-t9uu-4akk-a234-p9cc4811bd4a"
 created_items_all_true = {
     f"floating_ip:{floating_network_vim_id}": True,
@@ -108,12 +109,12 @@ def check_if_assert_not_called(mocks: list):
         mocking.assert_not_called()
 
 
-class Status:
-    def __init__(self, s):
+class Volume:
+    def __init__(self, s, type="__DEFAULT__", name="", id=""):
         self.status = s
-
-    def __str__(self):
-        return self.status
+        self.volume_type = type
+        self.name = name
+        self.id = id
 
 
 class CopyingMock(MagicMock):
@@ -1313,6 +1314,43 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.cinder.volumes.create.assert_not_called()
 
     @patch.object(vimconnector, "update_block_device_mapping")
+    def test__prepare_shared_volumes_vim_using_volume_id(
+        self, mock_update_block_device_mapping
+    ):
+        """Existing persistent non root volume with vim_volume_id.
+        class Volume:
+            def __init__(self, s, type="__DEFAULT__", name="", id=""):
+                self.status = s
+                self.volume_type = type
+                self.name = name
+                self.id = id
+        volumes = {"shared-volume": volume_id4}
+
+        The device mappeing BEFORE is: {}
+        The device mappeing AFTER is: {'vdb': '8ca50cc6-a779-4513-a1f3-900b8b3987d2'}
+        """
+        base_disk_index = ord("b")
+        disk = {"name": "shared-volume"}
+        block_device_mapping = {}
+        existing_vim_volumes = []
+        created_items = {}
+        expected_block_device_mapping = {}
+        self.vimconn.cinder.volumes.list.return_value = [
+            Volume("avaible", "multiattach", "shared-volume", volume_id4)
+        ]
+        self.vimconn.cinder.volumes.get.return_value.id = volume_id4
+        self.vimconn._prepare_shared_volumes(
+            name,
+            disk,
+            base_disk_index,
+            block_device_mapping,
+            existing_vim_volumes,
+            created_items,
+        )
+        self.vimconn.cinder.volumes.get.assert_called_with(volume_id4)
+        self.assertDictEqual(block_device_mapping, expected_block_device_mapping)
+
+    @patch.object(vimconnector, "update_block_device_mapping")
     def test_prepare_persistent_non_root_volumes_vim_using_volume_id(
         self, mock_update_block_device_mapping
     ):
@@ -1578,6 +1616,22 @@ class TestNewVmInstance(unittest.TestCase):
         )
 
     @patch.object(vimconnector, "update_block_device_mapping")
+    def test_new_shared_volumes(self, mock_update_block_device_mapping):
+        """Create shared volume."""
+        self.vimconn.cinder = CopyingMock()
+        self.vimconn.cinder.volumes.create.return_value.id = volume_id4
+        shared_volume_data = {"size": 10, "name": "shared-volume"}
+        self.vimconn.cinder.volumes.create.side_effect = [
+            Volume("avaible", "multiattach", "shared-volume", volume_id4)
+        ]
+        result = self.vimconn.new_shared_volumes(shared_volume_data)
+        self.vimconn.cinder.volumes.create.assert_called_once_with(
+            size=10, name="shared-volume", volume_type="multiattach"
+        )
+        self.assertEqual(result[0], "shared-volume")
+        self.assertEqual(result[1], volume_id4)
+
+    @patch.object(vimconnector, "update_block_device_mapping")
     def test_prepare_persistent_root_volumes_create_raise_exception(
         self, mock_update_block_device_mapping
     ):
@@ -1689,9 +1743,9 @@ class TestNewVmInstance(unittest.TestCase):
             f"volume:{volume_id3}": True,
         }
         self.vimconn.cinder.volumes.get.side_effect = [
-            Status("processing"),
-            Status("available"),
-            Status("available"),
+            Volume("processing"),
+            Volume("available"),
+            Volume("available"),
         ]
 
         result = self.vimconn._wait_for_created_volumes_availability(
@@ -1716,9 +1770,9 @@ class TestNewVmInstance(unittest.TestCase):
             {"id": "44e0e83-b9uu-4akk-t234-p9cc4811bd4a"},
         ]
         self.vimconn.cinder.volumes.get.side_effect = [
-            Status("processing"),
-            Status("available"),
-            Status("available"),
+            Volume("processing"),
+            Volume("available", "multiattach"),
+            Volume("available"),
         ]
 
         result = self.vimconn._wait_for_existing_volumes_availability(
@@ -1742,8 +1796,8 @@ class TestNewVmInstance(unittest.TestCase):
         elapsed_time = 1805
         created_items = {f"volume:{volume_id2}": True}
         self.vimconn.cinder.volumes.get.side_effect = [
-            Status("processing"),
-            Status("processing"),
+            Volume("processing"),
+            Volume("processing"),
         ]
         with patch("time.sleep", mock_sleep):
             result = self.vimconn._wait_for_created_volumes_availability(
@@ -1761,8 +1815,8 @@ class TestNewVmInstance(unittest.TestCase):
         elapsed_time = 1805
         existing_vim_volumes = [{"id": volume_id2}]
         self.vimconn.cinder.volumes.get.side_effect = [
-            Status("processing"),
-            Status("processing"),
+            Volume("processing"),
+            Volume("processing"),
         ]
 
         result = self.vimconn._wait_for_existing_volumes_availability(
@@ -3949,6 +4003,15 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn.cinder.volumes.delete.assert_called_once_with(k_id)
         self.vimconn.logger.error.assert_not_called()
         self.assertEqual(created_items, expected_created_items)
+
+    def test_delete_shared_volumes(self):
+        """cinder delete shared volumes"""
+        shared_volume_vim_id = volume_id4
+        self.vimconn.cinder.volumes.get.return_value.status = "available"
+        self.vimconn.delete_shared_volumes(shared_volume_vim_id)
+        self.vimconn.cinder.volumes.get.assert_called_once_with(shared_volume_vim_id)
+        self.vimconn.cinder.volumes.delete.assert_called_once_with(shared_volume_vim_id)
+        self.vimconn.logger.error.assert_not_called()
 
     def test_delete_volumes_by_id_with_cinder_get_volume_raise_exception(self):
         """cinder get volume raises exception."""

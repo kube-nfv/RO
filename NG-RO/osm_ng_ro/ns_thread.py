@@ -347,7 +347,6 @@ class VimInteractionVdu(VimInteractionBase):
         created = False
         created_items = {}
         target_vim = self.my_vims[ro_task["target_id"]]
-
         try:
             created = True
             params = task["params"]
@@ -389,7 +388,6 @@ class VimInteractionVdu(VimInteractionBase):
                         )
 
                     affinity_group["affinity_group_id"] = affinity_group_id
-
             vim_vm_id, created_items = target_vim.new_vminstance(**params_copy)
             interfaces = [iface["vim_id"] for iface in params_copy["net_list"]]
 
@@ -691,6 +689,102 @@ class VimInteractionImage(VimInteractionBase):
             return "FAILED", ro_vim_item_update
 
 
+class VimInteractionSharedVolume(VimInteractionBase):
+    def delete(self, ro_task, task_index):
+        task = ro_task["tasks"][task_index]
+        task_id = task["task_id"]
+        shared_volume_vim_id = ro_task["vim_info"]["vim_id"]
+        ro_vim_item_update_ok = {
+            "vim_status": "DELETED",
+            "created": False,
+            "vim_message": "DELETED",
+            "vim_id": None,
+        }
+        try:
+            if shared_volume_vim_id:
+                target_vim = self.my_vims[ro_task["target_id"]]
+                target_vim.delete_shared_volumes(shared_volume_vim_id)
+        except vimconn.VimConnNotFoundException:
+            ro_vim_item_update_ok["vim_message"] = "already deleted"
+        except vimconn.VimConnException as e:
+            self.logger.error(
+                "ro_task={} vim={} del-shared-volume={}: {}".format(
+                    ro_task["_id"], ro_task["target_id"], shared_volume_vim_id, e
+                )
+            )
+            ro_vim_item_update = {
+                "vim_status": "VIM_ERROR",
+                "vim_message": "Error while deleting: {}".format(e),
+            }
+
+            return "FAILED", ro_vim_item_update
+
+        self.logger.debug(
+            "task={} {} del-shared-volume={} {}".format(
+                task_id,
+                ro_task["target_id"],
+                shared_volume_vim_id,
+                ro_vim_item_update_ok.get("vim_message", ""),
+            )
+        )
+
+        return "DONE", ro_vim_item_update_ok
+
+    def new(self, ro_task, task_index, task_depends):
+        task = ro_task["tasks"][task_index]
+        task_id = task["task_id"]
+        created = False
+        created_items = {}
+        target_vim = self.my_vims[ro_task["target_id"]]
+
+        try:
+            shared_volume_name = None
+            shared_volume_vim_id = None
+            shared_volume_data = None
+
+            if task.get("params"):
+                shared_volume_data = task["params"]
+
+            if shared_volume_data:
+                self.logger.info(
+                    f"Creating the new shared_volume for {shared_volume_data}\n"
+                )
+                (
+                    shared_volume_name,
+                    shared_volume_vim_id,
+                ) = target_vim.new_shared_volumes(shared_volume_data)
+                created = True
+                created_items[shared_volume_vim_id] = shared_volume_name
+
+            ro_vim_item_update = {
+                "vim_id": shared_volume_vim_id,
+                "vim_status": "DONE",
+                "created": created,
+                "created_items": created_items,
+                "vim_details": None,
+                "vim_message": None,
+            }
+            self.logger.debug(
+                "task={} {} new-shared-volume={} created={}".format(
+                    task_id, ro_task["target_id"], shared_volume_vim_id, created
+                )
+            )
+
+            return "DONE", ro_vim_item_update
+        except (vimconn.VimConnException, NsWorkerException) as e:
+            self.logger.error(
+                "task={} vim={} new-shared-volume:"
+                " {}".format(task_id, ro_task["target_id"], e)
+            )
+            ro_vim_item_update = {
+                "vim_status": "VIM_ERROR",
+                "created": created,
+                "vim_message": str(e),
+            }
+
+            return "FAILED", ro_vim_item_update
+
+
 class VimInteractionFlavor(VimInteractionBase):
     def delete(self, ro_task, task_index):
         task = ro_task["tasks"][task_index]
@@ -739,7 +833,6 @@ class VimInteractionFlavor(VimInteractionBase):
         created = False
         created_items = {}
         target_vim = self.my_vims[ro_task["target_id"]]
-
         try:
             # FIND
             vim_flavor_id = None
@@ -1540,6 +1633,9 @@ class NsWorker(threading.Thread):
         self.db = db
         self.item2class = {
             "net": VimInteractionNet(self.db, self.my_vims, self.db_vims, self.logger),
+            "shared-volumes": VimInteractionSharedVolume(
+                self.db, self.my_vims, self.db_vims, self.logger
+            ),
             "vdu": VimInteractionVdu(self.db, self.my_vims, self.db_vims, self.logger),
             "image": VimInteractionImage(
                 self.db, self.my_vims, self.db_vims, self.logger
@@ -2301,7 +2397,6 @@ class NsWorker(threading.Thread):
                             lock_object = LockRenew.add_lock_object(
                                 "ro_tasks", ro_task, self
                             )
-
                         if task["action"] == "DELETE":
                             (
                                 new_status,

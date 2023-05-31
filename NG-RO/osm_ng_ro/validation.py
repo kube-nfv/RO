@@ -101,6 +101,7 @@ deploy_schema = {
         },
         "image": deploy_item_list,
         "flavor": deploy_item_list,
+        "shared-volumes": deploy_item_list,
         "ns": {
             "type": "object",
             "properties": {

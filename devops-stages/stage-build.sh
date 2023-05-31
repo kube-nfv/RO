@@ -29,6 +29,7 @@ dist_ro_sdn_juniper_contrail
 dist_ro_sdn_odl_of
 dist_ro_sdn_onos_of
 dist_ro_sdn_onos_vpls
+dist_ro_sdn_tapi
 dist_ro_vim_aws
 dist_ro_vim_azure
 dist_ro_vim_openstack
@@ -53,7 +54,7 @@ do
     cp ${vim_plugin}/deb_dist/python3-osm-rovim*.deb deb_dist/
 done
 
-# SDN plugins: DynPac, Ietfl2vpn, Onosof Floodlightof
+# SDN plugins: DynPac, Ietfl2vpn, Onosof Floodlightof, Transport API (TAPI)
 for sdn_plugin in RO-SDN-*
 do
     cp ${sdn_plugin}/deb_dist/python3-osm-rosdn*.deb deb_dist/

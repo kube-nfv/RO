@@ -82,6 +82,9 @@ RUN python3 -m build /build/RO-SDN-juniper_contrail && \
 RUN python3 -m build /build/RO-VIM-gcp && \
     python3 -m pip install /build/RO-VIM-gcp/dist/*.whl
 
+RUN python3 -m build /build/RO-SDN-tapi && \
+    python3 -m pip install /build/RO-SDN-tapi/dist/*.whl
+
 FROM ubuntu:20.04
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get --yes update && \
