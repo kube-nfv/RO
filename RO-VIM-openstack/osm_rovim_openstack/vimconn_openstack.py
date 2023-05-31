@@ -339,7 +339,7 @@ class vimconnector(vimconn.VimConnector):
             version = self.config.get("microversion")
 
             if not version:
-                version = "2.60"
+                version = "2.1"
 
             # addedd region_name to keystone, nova, neutron and cinder to support distributed cloud for Wind River
             # Titanium cloud and StarlingX
