@@ -117,6 +117,14 @@ class Volume:
         self.id = id
 
 
+class Server:
+    def __init__(self, name="", status="", flavor="", id=""):
+        self.id = id
+        self.name = name
+        self.status = status
+        self.flavor = flavor
+
+
 class CopyingMock(MagicMock):
     def __call__(self, *args, **kwargs):
         args = deepcopy(args)
@@ -5019,7 +5027,18 @@ class TestNewVmInstance(unittest.TestCase):
 
     @patch.object(vimconnector, "_reload_connection", new_callable=CopyingMock())
     def test_get_monitoring_data(self, mock_reload_conection):
-        servers = ["server1", "server2"]
+        flavors = [
+            {"original_name": "flavor1", "id": "367fc1eb-bd22-40f8-a519-ed2fb4e5976b"},
+            {"original_name": "flavor2", "id": "5dcf9732-d17d-40b3-910d-37fc4c5aacc0"},
+        ]
+        servers = [
+            Server(
+                "server1", "ACTIVE", flavors[0], "312200db-42e3-4772-9518-d5db85468392"
+            ),
+            Server(
+                "server2", "ACTIVE", flavors[1], "39a166cf-e4e6-479c-b88c-9ad558cf2cbf"
+            ),
+        ]
         ports = {"ports": ["port1", "port2"]}
         self.vimconn.nova.servers.list.return_value = servers
         self.vimconn.neutron.list_ports.return_value = ports

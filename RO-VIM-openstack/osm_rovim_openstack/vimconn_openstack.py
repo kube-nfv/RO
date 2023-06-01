@@ -339,7 +339,7 @@ class vimconnector(vimconn.VimConnector):
             version = self.config.get("microversion")
 
             if not version:
-                version = "2.1"
+                version = "2.60"
 
             # addedd region_name to keystone, nova, neutron and cinder to support distributed cloud for Wind River
             # Titanium cloud and StarlingX
@@ -627,6 +627,31 @@ class vimconnector(vimconn.VimConnector):
                     raise vimconn.VimConnConnectionException(
                         "Not found security group {} for this tenant".format(sg)
                     )
+
+    def _find_nova_server(self, vm_id):
+        """
+        Returns the VM instance from Openstack and completes it with flavor ID
+        Do not call nova.servers.find directly, as it does not return flavor ID with microversion>=2.47
+        """
+        try:
+            self._reload_connection()
+            server = self.nova.servers.find(id=vm_id)
+            # TODO parse input and translate to VIM format (openmano_schemas.new_vminstance_response_schema)
+            server_dict = server.to_dict()
+            try:
+                server_dict["flavor"]["id"] = self.nova.flavors.find(
+                    name=server_dict["flavor"]["original_name"]
+                ).id
+            except nClient.exceptions.NotFound as e:
+                self.logger.warning(str(e.message))
+            return server_dict
+        except (
+            ksExceptions.ClientException,
+            nvExceptions.ClientException,
+            nvExceptions.NotFound,
+            ConnectionError,
+        ) as e:
+            self._format_exception(e)
 
     def check_vim_connectivity(self):
         # just get network list to check connectivity and credentials
@@ -2857,20 +2882,7 @@ class vimconnector(vimconn.VimConnector):
 
     def get_vminstance(self, vm_id):
         """Returns the VM instance information from VIM"""
-        # self.logger.debug("Getting VM from VIM")
-        try:
-            self._reload_connection()
-            server = self.nova.servers.find(id=vm_id)
-            # TODO parse input and translate to VIM format (openmano_schemas.new_vminstance_response_schema)
-
-            return server.to_dict()
-        except (
-            ksExceptions.ClientException,
-            nvExceptions.ClientException,
-            nvExceptions.NotFound,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
+        return self._find_nova_server(vm_id)
 
     def get_vminstance_console(self, vm_id, console_type="vnc"):
         """
@@ -3671,8 +3683,7 @@ class vimconnector(vimconn.VimConnector):
         self.logger.debug("Getting the status of VM")
         self.logger.debug("VIM VM ID %s", vm_id)
         self._reload_connection()
-        server = self.nova.servers.find(id=vm_id)
-        server_dict = server.to_dict()
+        server_dict = self._find_nova_server(vm_id)
         vdu_data = [
             server_dict["status"],
             server_dict["flavor"]["id"],
@@ -3885,6 +3896,13 @@ class vimconnector(vimconn.VimConnector):
             self.logger.debug("Getting servers and ports data from Openstack VIMs.")
             self._reload_connection()
             all_servers = self.nova.servers.list(detailed=True)
+            try:
+                for server in all_servers:
+                    server.flavor["id"] = self.nova.flavors.find(
+                        name=server.flavor["original_name"]
+                    ).id
+            except nClient.exceptions.NotFound as e:
+                self.logger.warning(str(e.message))
             all_ports = self.neutron.list_ports()
             return all_servers, all_ports
         except (
