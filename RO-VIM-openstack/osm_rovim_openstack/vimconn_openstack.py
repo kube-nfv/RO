@@ -2170,11 +2170,13 @@ class vimconnector(vimconn.VimConnector):
                 "Created volume is not valid, does not have id attribute."
             )
 
+        block_device_mapping["vd" + chr(base_disk_index)] = volume.id
+        if disk.get("multiattach"):  # multiattach volumes do not belong to VDUs
+            return
         volume_txt = "volume:" + str(volume.id)
         if disk.get("keep"):
             volume_txt += ":keep"
         created_items[volume_txt] = True
-        block_device_mapping["vd" + chr(base_disk_index)] = volume.id
 
     def new_shared_volumes(self, shared_volume_data) -> (str, str):
         try:
@@ -2199,13 +2201,27 @@ class vimconnector(vimconn.VimConnector):
         volumes = {volume.name: volume.id for volume in self.cinder.volumes.list()}
         if volumes.get(disk["name"]):
             sv_id = volumes[disk["name"]]
-            volume = self.cinder.volumes.get(sv_id)
-            self.update_block_device_mapping(
-                volume=volume,
-                block_device_mapping=block_device_mapping,
-                base_disk_index=base_disk_index,
-                disk=disk,
-                created_items=created_items,
+            max_retries = 3
+            vol_status = ""
+            # If this is not the first VM to attach the volume, volume status may be "reserved" for a short time
+            while max_retries:
+                max_retries -= 1
+                volume = self.cinder.volumes.get(sv_id)
+                vol_status = volume.status
+                if volume.status not in ("in-use", "available"):
+                    time.sleep(5)
+                    continue
+                self.update_block_device_mapping(
+                    volume=volume,
+                    block_device_mapping=block_device_mapping,
+                    base_disk_index=base_disk_index,
+                    disk=disk,
+                    created_items=created_items,
+                )
+                return
+            raise vimconn.VimConnException(
+                "Shared volume is not prepared, status is: {}".format(vol_status),
+                http_code=vimconn.HTTP_Internal_Server_Error,
             )
 
     def _prepare_non_root_persistent_volumes(
@@ -2980,17 +2996,30 @@ class vimconnector(vimconn.VimConnector):
         Args:
             shared_volume_vim_id    (str):                  ID of shared volume in VIM
         """
+        elapsed_time = 0
         try:
-            if self.cinder.volumes.get(shared_volume_vim_id).status != "available":
-                return True
+            while elapsed_time < server_timeout:
+                vol_status = self.cinder.volumes.get(shared_volume_vim_id).status
+                if vol_status == "available":
+                    self.cinder.volumes.delete(shared_volume_vim_id)
+                    return True
 
-            else:
-                self.cinder.volumes.delete(shared_volume_vim_id)
+                time.sleep(5)
+                elapsed_time += 5
+
+            if elapsed_time >= server_timeout:
+                raise vimconn.VimConnException(
+                    "Timeout waiting for volume "
+                    + shared_volume_vim_id
+                    + " to be available",
+                    http_code=vimconn.HTTP_Request_Timeout,
+                )
 
         except Exception as e:
             self.logger.error(
                 "Error deleting volume: {}: {}".format(type(e).__name__, e)
             )
+            self._format_exception(e)
 
     def _delete_volumes_by_id_wth_cinder(
         self, k: str, k_id: str, volumes_to_hold: list, created_items: dict

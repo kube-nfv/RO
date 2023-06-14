@@ -694,12 +694,20 @@ class VimInteractionSharedVolume(VimInteractionBase):
         task = ro_task["tasks"][task_index]
         task_id = task["task_id"]
         shared_volume_vim_id = ro_task["vim_info"]["vim_id"]
+        created_items = ro_task["vim_info"]["created_items"]
         ro_vim_item_update_ok = {
             "vim_status": "DELETED",
             "created": False,
             "vim_message": "DELETED",
             "vim_id": None,
         }
+        if created_items and created_items.get(shared_volume_vim_id).get("keep"):
+            ro_vim_item_update_ok = {
+                "vim_status": "ACTIVE",
+                "created": False,
+                "vim_message": None,
+            }
+            return "DONE", ro_vim_item_update_ok
         try:
             if shared_volume_vim_id:
                 target_vim = self.my_vims[ro_task["target_id"]]
@@ -738,7 +746,6 @@ class VimInteractionSharedVolume(VimInteractionBase):
         target_vim = self.my_vims[ro_task["target_id"]]
 
         try:
-            shared_volume_name = None
             shared_volume_vim_id = None
             shared_volume_data = None
 
@@ -754,11 +761,14 @@ class VimInteractionSharedVolume(VimInteractionBase):
                     shared_volume_vim_id,
                 ) = target_vim.new_shared_volumes(shared_volume_data)
                 created = True
-                created_items[shared_volume_vim_id] = shared_volume_name
+                created_items[shared_volume_vim_id] = {
+                    "name": shared_volume_name,
+                    "keep": shared_volume_data.get("keep"),
+                }
 
             ro_vim_item_update = {
                 "vim_id": shared_volume_vim_id,
-                "vim_status": "DONE",
+                "vim_status": "ACTIVE",
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,

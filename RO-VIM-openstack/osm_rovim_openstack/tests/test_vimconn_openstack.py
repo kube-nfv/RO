@@ -1344,9 +1344,10 @@ class TestNewVmInstance(unittest.TestCase):
         created_items = {}
         expected_block_device_mapping = {}
         self.vimconn.cinder.volumes.list.return_value = [
-            Volume("avaible", "multiattach", "shared-volume", volume_id4)
+            Volume("available", "multiattach", "shared-volume", volume_id4)
         ]
         self.vimconn.cinder.volumes.get.return_value.id = volume_id4
+        self.vimconn.cinder.volumes.get.return_value.status = "available"
         self.vimconn._prepare_shared_volumes(
             name,
             disk,

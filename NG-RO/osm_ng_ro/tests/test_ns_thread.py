@@ -1513,7 +1513,7 @@ class TestVimInteractionSharedVolume(unittest.TestCase):
             self.assertEqual(result[0], "DONE")
             self.assertEqual(result[1].get("vim_id"), "shared-volume")
             self.assertEqual(result[1].get("created"), True)
-            self.assertEqual(result[1].get("vim_status"), "DONE")
+            self.assertEqual(result[1].get("vim_status"), "ACTIVE")
 
     def test__new_shared_volume_failed(self):
         """

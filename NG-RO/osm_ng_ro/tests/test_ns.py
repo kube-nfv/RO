@@ -4543,6 +4543,7 @@ class TestProcessVduParams(unittest.TestCase):
         }
         persistent_ordinary_disk = {}
         disk_list = []
+        extra_dict = {}
         expected_disk_list = [
             {
                 "size": "10",
@@ -4552,7 +4553,11 @@ class TestProcessVduParams(unittest.TestCase):
             }
         ]
         self.ns._add_persistent_ordinary_disks_to_disk_list(
-            target_vdu, persistent_root_disk, persistent_ordinary_disk, disk_list
+            target_vdu,
+            persistent_root_disk,
+            persistent_ordinary_disk,
+            disk_list,
+            extra_dict,
         )
         self.assertEqual(disk_list, expected_disk_list)
         mock_volume_keeping_required.assert_called_once_with(ordinary_disk)
@@ -4576,9 +4581,14 @@ class TestProcessVduParams(unittest.TestCase):
         }
         persistent_ordinary_disk = {}
         disk_list = []
+        extra_dict = {}
 
         self.ns._add_persistent_ordinary_disks_to_disk_list(
-            target_vdu, persistent_root_disk, persistent_ordinary_disk, disk_list
+            target_vdu,
+            persistent_root_disk,
+            persistent_ordinary_disk,
+            disk_list,
+            extra_dict,
         )
         self.assertEqual(disk_list, [])
         mock_volume_keeping_required.assert_not_called()

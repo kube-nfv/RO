@@ -1422,7 +1422,9 @@ class Ns(object):
         persistent_root_disk: dict,
         persistent_ordinary_disk: dict,
         disk_list: list,
+        extra_dict: dict,
         vnf_id: str = None,
+        nsr_id: str = None,
     ) -> None:
         """Fill the disk list by adding persistent ordinary disks.
 
@@ -1448,6 +1450,10 @@ class Ns(object):
                         "multiattach": multiattach,
                     }
                     disk_list.append(persistent_ordinary_disk[disk["id"]])
+                    if multiattach:  # VDU creation has to wait for shared volumes
+                        extra_dict["depends_on"].append(
+                            f"nsrs:{nsr_id}:shared-volumes.{name}"
+                        )
 
     @staticmethod
     def _prepare_vdu_affinity_group_list(
@@ -1598,7 +1604,9 @@ class Ns(object):
                 persistent_root_disk,
                 persistent_ordinary_disk,
                 disk_list,
+                extra_dict,
                 vnfd["id"],
+                nsr_id,
             )
 
         affinity_group_list = Ns._prepare_vdu_affinity_group_list(
@@ -1638,6 +1646,7 @@ class Ns(object):
             "size": target_shared_volume["size-of-storage"],
             "name": target_shared_volume["id"],
             "type": target_shared_volume["type-of-storage"],
+            "keep": Ns.is_volume_keeping_required(target_shared_volume),
         }
         extra_dict["params"] = shared_volume_data
         return extra_dict
@@ -2121,7 +2130,6 @@ class Ns(object):
             "image",
             "flavor",
             "affinity-or-anti-affinity-group",
-            "shared-volumes",
         ]:
             self.logger.debug("process NS={} {}".format(nsr_id, item))
             diff_items, task_index = self.calculate_diff_items(
@@ -2141,7 +2149,7 @@ class Ns(object):
         # VNF vlds and vdus
         for vnfr_id, vnfr in db_vnfrs.items():
             # vnfr_id need to be set as global variable for among others nested method _process_vdu_params
-            for item in ["net", "vdu"]:
+            for item in ["net", "vdu", "shared-volumes"]:
                 self.logger.debug("process VNF={} {}".format(vnfr_id, item))
                 diff_items, task_index = self.calculate_diff_items(
                     indata=indata,
