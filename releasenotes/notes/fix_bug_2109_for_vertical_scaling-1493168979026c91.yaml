@@ -1,0 +1,27 @@
+#######################################################################################
+# Copyright ETSI Contributors and Others.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#######################################################################################
+---
+fixes:
+  - |
+    Fix Bug 2109
+
+    Fix VIM info DB update after vertical scaling, migrate and operate VNF.
+    Fix the path of the VDU record to update.
+    Fix unexpected keyword argument 'disk_over_commit' in live_migrate method because of Nova microversion change (Bug 2262)
+    Handle the OS-EXT-SRV-ATTR:host KeyError as this key is raised if the VIM account does not have admin credentials
+    Expand unit tests for vertical_scale, migrate and operate task creations
+

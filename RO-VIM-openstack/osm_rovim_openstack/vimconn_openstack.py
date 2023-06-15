@@ -567,9 +567,15 @@ class vimconnector(vimconn.VimConnector):
                 ksExceptions.BadRequest,
             ),
         ):
+            if message_error == "OS-EXT-SRV-ATTR:host":
+                tip = " (If the user does not have non-admin credentials, this attribute will be missing)"
+                raise vimconn.VimConnInsufficientCredentials(
+                    type(exception).__name__ + ": " + message_error + tip
+                )
             raise vimconn.VimConnException(
                 type(exception).__name__ + ": " + message_error
             )
+
         elif isinstance(
             exception,
             (
@@ -3703,24 +3709,35 @@ class vimconnector(vimconn.VimConnector):
         ) as e:
             self._format_exception(e)
 
-    def get_vdu_state(self, vm_id):
-        """
-        Getting the state of a vdu
-        param:
-            vm_id: ID of an instance
+    def get_vdu_state(self, vm_id, host_is_required=False) -> list:
+        """Getting the state of a VDU.
+        Args:
+            vm_id   (str): ID of an instance
+            host_is_required    (Boolean): If the VIM account is non-admin, host info does not appear in server_dict
+                                           and if this is set to True, it raises KeyError.
+        Returns:
+            vdu_data    (list): VDU details including state, flavor, host_info, AZ
         """
         self.logger.debug("Getting the status of VM")
         self.logger.debug("VIM VM ID %s", vm_id)
-        self._reload_connection()
-        server_dict = self._find_nova_server(vm_id)
-        vdu_data = [
-            server_dict["status"],
-            server_dict["flavor"]["id"],
-            server_dict["OS-EXT-SRV-ATTR:host"],
-            server_dict["OS-EXT-AZ:availability_zone"],
-        ]
-        self.logger.debug("vdu_data %s", vdu_data)
-        return vdu_data
+        try:
+            self._reload_connection()
+            server_dict = self._find_nova_server(vm_id)
+            srv_attr = "OS-EXT-SRV-ATTR:host"
+            host_info = (
+                server_dict[srv_attr] if host_is_required else server_dict.get(srv_attr)
+            )
+            vdu_data = [
+                server_dict["status"],
+                server_dict["flavor"]["id"],
+                host_info,
+                server_dict["OS-EXT-AZ:availability_zone"],
+            ]
+            self.logger.debug("vdu_data %s", vdu_data)
+            return vdu_data
+
+        except Exception as e:
+            self._format_exception(e)
 
     def check_compute_availability(self, host, server_flavor_details):
         self._reload_connection()
@@ -3787,7 +3804,7 @@ class vimconnector(vimconn.VimConnector):
         """
         self._reload_connection()
         vm_state = False
-        instance_state = self.get_vdu_state(vm_id)
+        instance_state = self.get_vdu_state(vm_id, host_is_required=True)
         server_flavor_id = instance_state[1]
         server_hypervisor_name = instance_state[2]
         server_availability_zone = instance_state[3]
@@ -3822,17 +3839,19 @@ class vimconnector(vimconn.VimConnector):
                     http_code=vimconn.HTTP_Bad_Request,
                 )
             if available_compute_id is not None:
+                # disk_over_commit parameter for live_migrate method is not valid for Nova API version >= 2.25
                 self.nova.servers.live_migrate(
                     server=vm_id,
                     host=available_compute_id,
                     block_migration=True,
-                    disk_over_commit=False,
                 )
                 state = "MIGRATING"
                 changed_compute_host = ""
                 if state == "MIGRATING":
                     vm_state = self.__wait_for_vm(vm_id, "ACTIVE")
-                    changed_compute_host = self.get_vdu_state(vm_id)[2]
+                    changed_compute_host = self.get_vdu_state(
+                        vm_id, host_is_required=True
+                    )[2]
                 if vm_state and changed_compute_host == available_compute_id:
                     self.logger.debug(
                         "Instance '{}' migrated to the new compute host '{}'".format(

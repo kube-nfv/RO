@@ -123,9 +123,16 @@ class VimConnNotSupportedException(VimConnException):
 
 
 class VimConnNotImplemented(VimConnException):
-    """The method is not implemented by the connected"""
+    """The method is not implemented by the connector"""
 
     def __init__(self, message, http_code=HTTP_Not_Implemented):
+        VimConnException.__init__(self, message, http_code)
+
+
+class VimConnInsufficientCredentials(VimConnException):
+    """The VIM account does not have efficient permissions to perform the requested operation."""
+
+    def __init__(self, message, http_code=HTTP_Unauthorized):
         VimConnException.__init__(self, message, http_code)
 
 

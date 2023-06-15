@@ -2897,7 +2897,9 @@ class Ns(object):
         extra_dict,
     ):
         self._assign_vim(target_vim)
-        target_record = "vnfrs:{}:vdur.{}".format(vnf_id, vdu_index)
+        target_record = "vnfrs:{}:vdur.{}.vim_info.{}".format(
+            vnf_id, vdu_index, target_vim
+        )
         target_record_id = "vnfrs:{}:vdur.{}".format(vnf_id, vdu_id)
         deployment_info = {
             "action_id": action_id,
@@ -3003,7 +3005,9 @@ class Ns(object):
     ):
         target_vim, vim_info = next(k_v for k_v in vdu["vim_info"].items())
         self._assign_vim(target_vim)
-        target_record = "vnfrs:{}:vdur.{}".format(vnf["_id"], vdu_index)
+        target_record = "vnfrs:{}:vdur.{}.vim_info.{}".format(
+            vnf["_id"], vdu_index, target_vim
+        )
         target_record_id = "vnfrs:{}:vdur.{}".format(vnf["_id"], vdu["id"])
         deployment_info = {
             "action_id": action_id,
@@ -3117,7 +3121,9 @@ class Ns(object):
     ):
         target_vim, vim_info = next(k_v for k_v in vdu["vim_info"].items())
         self._assign_vim(target_vim)
-        target_record = "vnfrs:{}:vdur.{}".format(vnf["_id"], vdu_index)
+        target_record = "vnfrs:{}:vdur.{}.vim_info.{}".format(
+            vnf["_id"], vdu_index, target_vim
+        )
         target_record_id = "vnfrs:{}:vdur.{}".format(vnf["_id"], vdu["id"])
         deployment_info = {
             "action_id": action_id,

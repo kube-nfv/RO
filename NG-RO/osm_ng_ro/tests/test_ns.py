@@ -326,6 +326,77 @@ runcmd:
      - [ ls, -l, / ]
      - [ sh, -xc, "echo $(date) '& rm -rf /'" ]
 """
+vdu_id = "bb9c43f9-10a2-4569-a8a8-957c3528b6d1"
+vnf_id = "665b4165-ce24-4320-bf19-b9a45bade49f"
+target_vim = "vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+action_id = "bb937f49-3870-4169-b758-9732e1ff40f3"
+nsr_id_2 = "993166fe-723e-4680-ac4b-b1af2541ae31"
+target_record_1 = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.1.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+target_record_id = (
+    "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:"
+    "vdur.bb9c43f9-10a2-4569-a8a8-957c3528b6d1"
+)
+expected_result_vertical_scale = {
+    "target_id": target_vim,
+    "action_id": "bb937f49-3870-4169-b758-9732e1ff40f3",
+    "nsr_id": "993166fe-723e-4680-ac4b-b1af2541ae31",
+    "task_id": "bb937f49-3870-4169-b758-9732e1ff40f3:1",
+    "status": "SCHEDULED",
+    "action": "EXEC",
+    "item": "verticalscale",
+    "target_record": target_record_1,
+    "target_record_id": target_record_id,
+    "params": {
+        "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+        "flavor_dict": "flavor_dict",
+    },
+}
+vdu = {
+    "id": vdu_id,
+    "vim_info": {target_vim: {"interfaces": []}},
+}
+vnf = {"_id": vnf_id}
+extra_dict_vertical_scale = {
+    "params": {
+        "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+        "flavor_dict": "flavor_dict",
+    },
+}
+extra_dict_migrate = {
+    "params": {
+        "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+        "migrate_host": "migrateToHost",
+    },
+}
+expected_result_migrate = {
+    "target_id": target_vim,
+    "action_id": "bb937f49-3870-4169-b758-9732e1ff40f3",
+    "nsr_id": "993166fe-723e-4680-ac4b-b1af2541ae31",
+    "task_id": "bb937f49-3870-4169-b758-9732e1ff40f3:1",
+    "status": "SCHEDULED",
+    "action": "EXEC",
+    "item": "migrate",
+    "target_record": "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.1.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35",
+    "target_record_id": target_record_id,
+    "params": {
+        "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+        "migrate_host": "migrateToHost",
+    },
+}
+expected_result_rebuild_start_stop = {
+    "target_id": target_vim,
+    "action_id": "bb937f49-3870-4169-b758-9732e1ff40f3",
+    "nsr_id": "993166fe-723e-4680-ac4b-b1af2541ae31",
+    "task_id": "bb937f49-3870-4169-b758-9732e1ff40f3:0",
+    "status": "SCHEDULED",
+    "action": "EXEC",
+    "item": "update",
+    "target_record_id": "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.bb9c43f9-10a2-4569-a8a8-957c3528b6d1",
+}
+
+
+class TestException(Exception):
+    pass
 
 
 class CopyingMock(MagicMock):
@@ -2921,142 +2992,277 @@ class TestNs(unittest.TestCase):
             self.assertEqual(result, expected_result)
 
     @patch("osm_ng_ro.ns.Ns._assign_vim")
-    def test__rebuild_start_stop_task(self, assign_vim):
+    def test__rebuild_start_stop_task__successful(self, assign_vim):
         self.ns = Ns()
         extra_dict = {}
         actions = ["start", "stop", "rebuild"]
-        vdu_id = "bb9c43f9-10a2-4569-a8a8-957c3528b6d1"
-        vnf_id = "665b4165-ce24-4320-bf19-b9a45bade49f"
         vdu_index = "0"
-        action_id = "bb937f49-3870-4169-b758-9732e1ff40f3"
-        nsr_id = "993166fe-723e-4680-ac4b-b1af2541ae31"
         task_index = 0
-        target_vim = "vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
-        t = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.bb9c43f9-10a2-4569-a8a8-957c3528b6d1"
         for action in actions:
-            expected_result = {
-                "target_id": "vim:f9f370ac-0d44-41a7-9000-457f2332bc35",
-                "action_id": "bb937f49-3870-4169-b758-9732e1ff40f3",
-                "nsr_id": "993166fe-723e-4680-ac4b-b1af2541ae31",
-                "task_id": "bb937f49-3870-4169-b758-9732e1ff40f3:0",
-                "status": "SCHEDULED",
-                "action": "EXEC",
-                "item": "update",
-                "target_record": "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0",
-                "target_record_id": t,
-                "params": {
-                    "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
-                    "action": action,
-                },
-            }
-            extra_dict["params"] = {
+            params = {
                 "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
                 "action": action,
             }
+            extra_dict["params"] = params
+            expected_result = deepcopy(expected_result_rebuild_start_stop)
+            expected_result[
+                "target_record"
+            ] = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+            expected_result["params"] = params
             task = self.ns.rebuild_start_stop_task(
                 vdu_id,
                 vnf_id,
                 vdu_index,
                 action_id,
-                nsr_id,
+                nsr_id_2,
                 task_index,
                 target_vim,
                 extra_dict,
             )
-            self.assertEqual(task.get("action_id"), action_id)
-            self.assertEqual(task.get("nsr_id"), nsr_id)
-            self.assertEqual(task.get("target_id"), target_vim)
             self.assertDictEqual(task, expected_result)
 
     @patch("osm_ng_ro.ns.Ns._assign_vim")
-    def test_verticalscale_task(self, assign_vim):
+    def test__rebuild_start_stop_task__empty_extra_dict__task_without_params(
+        self, assign_vim
+    ):
         self.ns = Ns()
         extra_dict = {}
-        vdu_index = "1"
-        action_id = "bb937f49-3870-4169-b758-9732e1ff40f3"
-        nsr_id = "993166fe-723e-4680-ac4b-b1af2541ae31"
-        task_index = 1
-        target_record_id = (
-            "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:"
-            "vdur.bb9c43f9-10a2-4569-a8a8-957c3528b6d1"
-        )
+        actions = ["start", "stop", "rebuild"]
+        vdu_index = "0"
+        task_index = 0
+        expected_result = deepcopy(expected_result_rebuild_start_stop)
+        expected_result[
+            "target_record"
+        ] = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+        for _ in actions:
+            task = self.ns.rebuild_start_stop_task(
+                vdu_id,
+                vnf_id,
+                vdu_index,
+                action_id,
+                nsr_id_2,
+                task_index,
+                target_vim,
+                extra_dict,
+            )
+            self.assertDictEqual(task, expected_result)
 
-        expected_result = {
-            "target_id": "vim:f9f370ac-0d44-41a7-9000-457f2332bc35",
-            "action_id": "bb937f49-3870-4169-b758-9732e1ff40f3",
-            "nsr_id": "993166fe-723e-4680-ac4b-b1af2541ae31",
-            "task_id": "bb937f49-3870-4169-b758-9732e1ff40f3:1",
-            "status": "SCHEDULED",
-            "action": "EXEC",
-            "item": "verticalscale",
-            "target_record": "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.1",
-            "target_record_id": target_record_id,
-            "params": {
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test__rebuild_start_stop_task__different_vdu_index__target_record_changes(
+        self, assign_vim
+    ):
+        self.ns = Ns()
+        extra_dict = {}
+        actions = ["start", "stop", "rebuild"]
+        vdu_index = "4"
+        task_index = 0
+        for action in actions:
+            params = {
                 "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
-                "flavor_dict": "flavor_dict",
-            },
-        }
-        vdu = {
-            "id": "bb9c43f9-10a2-4569-a8a8-957c3528b6d1",
-            "vim_info": {
-                "vim:f9f370ac-0d44-41a7-9000-457f2332bc35": {"interfaces": []}
-            },
-        }
-        vnf = {"_id": "665b4165-ce24-4320-bf19-b9a45bade49f"}
-        extra_dict["params"] = {
-            "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
-            "flavor_dict": "flavor_dict",
-        }
-        task = self.ns.verticalscale_task(
-            vdu, vnf, vdu_index, action_id, nsr_id, task_index, extra_dict
-        )
+                "action": action,
+            }
+            extra_dict["params"] = params
+            expected_result = deepcopy(expected_result_rebuild_start_stop)
+            expected_result[
+                "target_record"
+            ] = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.4.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+            expected_result["params"] = params
+            task = self.ns.rebuild_start_stop_task(
+                vdu_id,
+                vnf_id,
+                vdu_index,
+                action_id,
+                nsr_id_2,
+                task_index,
+                target_vim,
+                extra_dict,
+            )
+            self.assertDictEqual(task, expected_result)
 
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test__rebuild_start_stop_task__different_task_index__task_id_changes(
+        self, assign_vim
+    ):
+        self.ns = Ns()
+        extra_dict = {}
+        actions = ["start", "stop", "rebuild"]
+        vdu_index = "0"
+        task_index = 3
+        for action in actions:
+            params = {
+                "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+                "action": action,
+            }
+            extra_dict["params"] = params
+            expected_result = deepcopy(expected_result_rebuild_start_stop)
+            expected_result[
+                "target_record"
+            ] = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+            expected_result["params"] = params
+            expected_result["task_id"] = "bb937f49-3870-4169-b758-9732e1ff40f3:3"
+            task = self.ns.rebuild_start_stop_task(
+                vdu_id,
+                vnf_id,
+                vdu_index,
+                action_id,
+                nsr_id_2,
+                task_index,
+                target_vim,
+                extra_dict,
+            )
+            self.assertDictEqual(task, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test__rebuild_start_stop_task__assign_vim_raises__task_is_not_created(
+        self, assign_vim
+    ):
+        self.ns = Ns()
+        extra_dict = {}
+        actions = ["start", "stop", "rebuild"]
+        vdu_index = "0"
+        task_index = 0
+        for action in actions:
+            params = {
+                "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
+                "action": action,
+            }
+            extra_dict["params"] = params
+            assign_vim.side_effect = TestException("Can not connect to VIM.")
+            with self.assertRaises(TestException) as err:
+                task = self.ns.rebuild_start_stop_task(
+                    vdu_id,
+                    vnf_id,
+                    vdu_index,
+                    action_id,
+                    nsr_id_2,
+                    task_index,
+                    target_vim,
+                    extra_dict,
+                )
+                self.assertEqual(task, None)
+                self.assertEqual(str(err.exception), "Can not connect to VIM.")
+
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test_verticalscale_task__successful(self, assign_vim):
+        self.ns = Ns()
+        vdu_index = "1"
+        task_index = 1
+        task = self.ns.verticalscale_task(
+            vdu,
+            vnf,
+            vdu_index,
+            action_id,
+            nsr_id_2,
+            task_index,
+            extra_dict_vertical_scale,
+        )
+        self.assertDictEqual(task, expected_result_vertical_scale)
+
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test_verticalscale_task__task_index_changes__task_id_changes(self, assign_vim):
+        self.ns = Ns()
+        vdu_index = "1"
+        task_index = 2
+        expected_result = deepcopy(expected_result_vertical_scale)
+        expected_result["task_id"] = "bb937f49-3870-4169-b758-9732e1ff40f3:2"
+        task = self.ns.verticalscale_task(
+            vdu,
+            vnf,
+            vdu_index,
+            action_id,
+            nsr_id_2,
+            task_index,
+            extra_dict_vertical_scale,
+        )
         self.assertDictEqual(task, expected_result)
 
     @patch("osm_ng_ro.ns.Ns._assign_vim")
-    def test_migrate_task(self, assign_vim):
+    def test_verticalscale_task__empty_extra_dict__expected_result_without_params(
+        self, assign_vim
+    ):
         self.ns = Ns()
         extra_dict = {}
         vdu_index = "1"
-        action_id = "bb937f49-3870-4169-b758-9732e1ff40f3"
-        nsr_id = "993166fe-723e-4680-ac4b-b1af2541ae31"
         task_index = 1
-        target_record_id = (
-            "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:"
-            "vdur.bb9c43f9-10a2-4569-a8a8-957c3528b6d1"
+        expected_result = deepcopy(expected_result_vertical_scale)
+        expected_result.pop("params")
+        task = self.ns.verticalscale_task(
+            vdu, vnf, vdu_index, action_id, nsr_id_2, task_index, extra_dict
         )
-
-        expected_result = {
-            "target_id": "vim:f9f370ac-0d44-41a7-9000-457f2332bc35",
-            "action_id": "bb937f49-3870-4169-b758-9732e1ff40f3",
-            "nsr_id": "993166fe-723e-4680-ac4b-b1af2541ae31",
-            "task_id": "bb937f49-3870-4169-b758-9732e1ff40f3:1",
-            "status": "SCHEDULED",
-            "action": "EXEC",
-            "item": "migrate",
-            "target_record": "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.1",
-            "target_record_id": target_record_id,
-            "params": {
-                "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
-                "migrate_host": "migrateToHost",
-            },
-        }
-        vdu = {
-            "id": "bb9c43f9-10a2-4569-a8a8-957c3528b6d1",
-            "vim_info": {
-                "vim:f9f370ac-0d44-41a7-9000-457f2332bc35": {"interfaces": []}
-            },
-        }
-        vnf = {"_id": "665b4165-ce24-4320-bf19-b9a45bade49f"}
-        extra_dict["params"] = {
-            "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
-            "migrate_host": "migrateToHost",
-        }
-        task = self.ns.migrate_task(
-            vdu, vnf, vdu_index, action_id, nsr_id, task_index, extra_dict
-        )
-
         self.assertDictEqual(task, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test_verticalscale_task__assign_vim_raises__task_is_not_created(
+        self, assign_vim
+    ):
+        self.ns = Ns()
+        vdu_index = "1"
+        task_index = 1
+        assign_vim.side_effect = TestException("Can not connect to VIM.")
+        with self.assertRaises(TestException) as err:
+            task = self.ns.verticalscale_task(
+                vdu,
+                vnf,
+                vdu_index,
+                action_id,
+                nsr_id_2,
+                task_index,
+                extra_dict_vertical_scale,
+            )
+            self.assertEqual(task, {})
+            self.assertEqual(str(err.exception), "Can not connect to VIM.")
+
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test_migrate_task__successful(self, assign_vim):
+        self.ns = Ns()
+        vdu_index = "1"
+        task_index = 1
+        task = self.ns.migrate_task(
+            vdu, vnf, vdu_index, action_id, nsr_id_2, task_index, extra_dict_migrate
+        )
+        self.assertDictEqual(task, expected_result_migrate)
+
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test_migrate_task__empty_extra_dict__task_without_params(self, assign_vim):
+        self.ns = Ns()
+        extra_dict = {}
+        vdu_index = "1"
+        task_index = 1
+        expected_result = deepcopy(expected_result_migrate)
+        expected_result.pop("params")
+        task = self.ns.migrate_task(
+            vdu, vnf, vdu_index, action_id, nsr_id_2, task_index, extra_dict
+        )
+        self.assertDictEqual(task, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test_migrate_task__different_vdu_index__target_record_with_different_vdu_index(
+        self, assign_vim
+    ):
+        self.ns = Ns()
+        vdu_index = "4"
+        task_index = 1
+        expected_result = deepcopy(expected_result_migrate)
+        expected_result[
+            "target_record"
+        ] = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.4.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+        task = self.ns.migrate_task(
+            vdu, vnf, vdu_index, action_id, nsr_id_2, task_index, extra_dict_migrate
+        )
+        self.assertDictEqual(task, expected_result)
+
+    @patch("osm_ng_ro.ns.Ns._assign_vim")
+    def test_migrate_task__assign_vim_raises__task_is_not_created(self, assign_vim):
+        self.ns = Ns()
+        vdu_index = "1"
+        task_index = 1
+        assign_vim.side_effect = TestException("Can not connect to VIM.")
+        with self.assertRaises(TestException) as err:
+            task = self.ns.migrate_task(
+                vdu, vnf, vdu_index, action_id, nsr_id, task_index, extra_dict_migrate
+            )
+            self.assertDictEqual(task, {})
+            self.assertEqual(str(err.exception), "Can not connect to VIM.")
 
 
 class TestProcessVduParams(unittest.TestCase):
