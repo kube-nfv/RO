@@ -17,7 +17,7 @@
 #
 ##
 
-""""
+"""
 This is thread that interacts with a VIM. It processes TASKs sequentially against a single VIM.
 The tasks are stored at database in table ro_tasks
 A single ro_task refers to a VIM element (flavor, image, network, ...).
@@ -56,7 +56,7 @@ def deep_get(target_dict, *args, **kwargs):
     :param target_dict: dictionary to be read
     :param args: list of keys to read from  target_dict
     :param kwargs: only can contain default=value to return if key is not present in the nested dictionary
-    :return: The wanted value if exist, None or default otherwise
+    :return: The wanted value if exists, None or default otherwise
     """
     for key in args:
         if not isinstance(target_dict, dict) or key not in target_dict:
@@ -345,7 +345,6 @@ class VimInteractionVdu(VimInteractionBase):
         task = ro_task["tasks"][task_index]
         task_id = task["task_id"]
         created = False
-        created_items = {}
         target_vim = self.my_vims[ro_task["target_id"]]
         try:
             created = True
@@ -643,6 +642,7 @@ class VimInteractionImage(VimInteractionBase):
 
         try:
             # FIND
+            vim_image_id = ""
             if task.get("find_params"):
                 vim_images = target_vim.get_image_list(**task["find_params"])
 
@@ -663,7 +663,7 @@ class VimInteractionImage(VimInteractionBase):
 
             ro_vim_item_update = {
                 "vim_id": vim_image_id,
-                "vim_status": "DONE",
+                "vim_status": "ACTIVE",
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,
@@ -864,7 +864,7 @@ class VimInteractionFlavor(VimInteractionBase):
 
             ro_vim_item_update = {
                 "vim_id": vim_flavor_id,
-                "vim_status": "DONE",
+                "vim_status": "ACTIVE",
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,
@@ -942,6 +942,7 @@ class VimInteractionAffinityGroup(VimInteractionBase):
         try:
             affinity_group_vim_id = None
             affinity_group_data = None
+            param_affinity_group_id = ""
 
             if task.get("params"):
                 affinity_group_data = task["params"].get("affinity_group_data")
@@ -970,7 +971,7 @@ class VimInteractionAffinityGroup(VimInteractionBase):
 
             ro_vim_item_update = {
                 "vim_id": affinity_group_vim_id,
-                "vim_status": "DONE",
+                "vim_status": "ACTIVE",
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,
@@ -1007,6 +1008,7 @@ class VimInteractionUpdateVdu(VimInteractionBase):
         target_vim = self.my_vims[ro_task["target_id"]]
 
         try:
+            vim_vm_id = ""
             if task.get("params"):
                 vim_vm_id = task["params"].get("vim_vm_id")
                 action = task["params"].get("action")
@@ -1015,7 +1017,7 @@ class VimInteractionUpdateVdu(VimInteractionBase):
                 # created = True
             ro_vim_item_update = {
                 "vim_id": vim_vm_id,
-                "vim_status": "DONE",
+                "vim_status": "ACTIVE",
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,
@@ -1043,8 +1045,8 @@ class VimInteractionSdnNet(VimInteractionBase):
     @staticmethod
     def _match_pci(port_pci, mapping):
         """
-        Check if port_pci matches with mapping
-        mapping can have brackets to indicate that several chars are accepted. e.g
+        Check if port_pci matches with mapping.
+        The mapping can have brackets to indicate that several chars are accepted. e.g
         pci '0000:af:10.1' matches with '0000:af:1[01].[1357]'
         :param port_pci: text
         :param mapping: text, can contain brackets to indicate several chars are available
@@ -1159,6 +1161,7 @@ class VimInteractionSdnNet(VimInteractionBase):
 
         try:
             # CREATE
+            db_vim = {}
             params = task["params"]
             vlds_to_connect = params.get("vlds", [])
             associated_vim = params.get("target_vim")
@@ -1446,6 +1449,7 @@ class VimInteractionMigration(VimInteractionBase):
         refreshed_vim_info = {}
 
         try:
+            vim_vm_id = ""
             if task.get("params"):
                 vim_vm_id = task["params"].get("vim_vm_id")
                 migrate_host = task["params"].get("migrate_host")
@@ -1527,6 +1531,7 @@ class VimInteractionResize(VimInteractionBase):
         target_vim = self.my_vims[ro_task["target_id"]]
 
         try:
+            vim_vm_id = ""
             if task.get("params"):
                 vim_vm_id = task["params"].get("vim_vm_id")
                 flavor_dict = task["params"].get("flavor_dict")
@@ -1554,7 +1559,7 @@ class VimInteractionResize(VimInteractionBase):
 
             ro_vim_item_update = {
                 "vim_id": vim_vm_id,
-                "vim_status": "DONE",
+                "vim_status": "ACTIVE",
                 "created": created,
                 "created_items": created_items,
                 "vim_details": None,
@@ -1787,6 +1792,7 @@ class NsWorker(threading.Thread):
             if target == "wim"
             else "sdns"
         )
+        error_text = ""
 
         try:
             step = "Getting {} from db".format(target_id)
@@ -1881,7 +1887,7 @@ class NsWorker(threading.Thread):
         """
         Load or reload a vim_account, sdn_controller or wim_account.
         Read content from database, load the plugin if not loaded.
-        In case of error loading the plugin, it load a failing VIM_connector
+        In case of error loading the plugin, it loads a failing VIM_connector
         It fills self db_vims dictionary, my_vims dictionary and vim_targets list
         :param target_id: Contains type:_id; where type can be 'vim', ...
         :return: None if ok, descriptive text if error
@@ -2107,7 +2113,6 @@ class NsWorker(threading.Thread):
         """
         my_task = ro_task["tasks"][task_index]
         task_id = my_task["task_id"]
-        task_status = None
 
         if my_task["status"] == "FAILED":
             return None, None  # TODO need to be retry??
@@ -2337,6 +2342,7 @@ class NsWorker(threading.Thread):
                     task_path = "tasks.{}.status".format(task_index)
                     try:
                         db_vim_info_update = None
+                        dependency_ro_task = {}
 
                         if task["status"] == "SCHEDULED":
                             # check if tasks that this depends on have been completed
@@ -2537,7 +2543,7 @@ class NsWorker(threading.Thread):
                     lock_object["locked_at"],
                     lock_object["locked_at"] + self.task_locked_time,
                 ]
-                # locked_at contains two times to avoid race condition. In case the lock has been renew, it will
+                # locked_at contains two times to avoid race condition. In case the lock has been renewed, it will
                 # contain exactly locked_at + self.task_locked_time
                 LockRenew.remove_lock_object(lock_object)
 
@@ -2549,7 +2555,7 @@ class NsWorker(threading.Thread):
             # modify own task. Try filtering by to_next_check. For race condition if to_check_at has been modified,
             # outside this task (by ro_nbi) do not update it
             db_ro_task_update["locked_by"] = None
-            # locked_at converted to int only for debugging. When has not decimals it means it has been unlocked
+            # locked_at converted to int only for debugging. When it is not decimals it means it has been unlocked
             db_ro_task_update["locked_at"] = int(now - self.task_locked_time)
             db_ro_task_update["modified_at"] = now
             db_ro_task_update["to_check_at"] = next_check_at

@@ -1728,7 +1728,7 @@ class TestVimInteractionAffinityGroup(unittest.TestCase):
             self.assertEqual(result[0], "DONE")
             self.assertEqual(result[1].get("vim_id"), "sample_affinity_group_id_1")
             self.assertEqual(result[1].get("created"), True)
-            self.assertEqual(result[1].get("vim_status"), "DONE")
+            self.assertEqual(result[1].get("vim_status"), "ACTIVE")
 
     def test__new_affinity_group_failed(self):
         """
@@ -1776,7 +1776,7 @@ class TestVimInteractionAffinityGroup(unittest.TestCase):
             self.assertEqual(result[0], "DONE")
             self.assertEqual(result[1].get("vim_id"), None)
             self.assertEqual(result[1].get("created"), False)
-            self.assertEqual(result[1].get("vim_status"), "DONE")
+            self.assertEqual(result[1].get("vim_status"), "ACTIVE")
 
     def test__delete_affinity_group_ok(self):
         """
@@ -1928,7 +1928,7 @@ class TestVimInteractionResize(unittest.TestCase):
             task_index = "task_index_1"
             result = instance.exec(ro_task, task_index, self.task_depends)
             self.assertEqual(result[0], "DONE")
-            self.assertEqual(result[1].get("vim_status"), "DONE")
+            self.assertEqual(result[1].get("vim_status"), "ACTIVE")
 
 
 class TestVimInteractionMigration(unittest.TestCase):
