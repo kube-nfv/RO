@@ -1,3 +1,4 @@
+#######################################################################################
 # Copyright ETSI Contributors and Others.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,12 +13,12 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-##
+#######################################################################################
+---
+fixes:
+  - |
+    Fix Bug 2268
 
-netaddr
-google-api-python-client==2.51.0
-google-auth==2.8.0
-google-api-core==2.8.2
-googleapis-common-protos==1.56.3
-google-cloud
-paramiko
+    Revert to previous GCP libraries that don' present the GCP client
+    authentication issues that make the connection unstable.
+
