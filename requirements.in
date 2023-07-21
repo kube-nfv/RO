@@ -33,4 +33,4 @@
 -r RO-VIM-vmware/requirements.in
 -r RO-VIM-gcp/requirements.in
 
-pyyaml<6
+pyyaml>6
