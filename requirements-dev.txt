@@ -50,7 +50,7 @@ python-dateutil==2.8.2
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=paas
     #   temporalio
-pyyaml==5.3.1
+pyyaml==6.0.1
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=paas
 six==1.16.0
     # via

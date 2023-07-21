@@ -382,7 +382,7 @@ pyvcloud==19.1.1
     # via -r RO-VIM-vmware/requirements.in
 pyvmomi==8.0.1.0
     # via -r RO-VIM-vmware/requirements.in
-pyyaml==5.3.1
+pyyaml==6.0.1
     # via
     #   -r NG-RO/requirements.in
     #   -r RO-VIM-aws/requirements.in
