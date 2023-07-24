@@ -2822,11 +2822,7 @@ class vimconnector(vimconn.VimConnector):
             k_id    (str):      Port id in the VIM
         """
         try:
-            port_dict = self.neutron.list_ports()
-            existing_ports = [port["id"] for port in port_dict["ports"] if port_dict]
-
-            if k_id in existing_ports:
-                self.neutron.delete_port(k_id)
+            self.neutron.delete_port(k_id)
 
         except Exception as e:
             self.logger.error("Error deleting port: {}: {}".format(type(e).__name__, e))
