@@ -4141,51 +4141,17 @@ class TestNewVmInstance(unittest.TestCase):
     def test_delete_ports_by_id_by_neutron(self):
         """neutron delete ports."""
         k_id = port_id
-        self.vimconn.neutron.list_ports.return_value = {
-            "ports": [{"id": port_id}, {"id": port2_id}]
-        }
-
         self.vimconn._delete_ports_by_id_wth_neutron(k_id)
-        self.vimconn.neutron.list_ports.assert_called_once()
         self.vimconn.neutron.delete_port.assert_called_once_with(k_id)
         self.vimconn.logger.error.assert_not_called()
-
-    def test_delete_ports_by_id_by_neutron_id_not_in_port_list(self):
-        """port id not in the port list."""
-        k_id = volume_id
-        self.vimconn.neutron.list_ports.return_value = {
-            "ports": [{"id": port_id}, {"id": port2_id}]
-        }
-
-        self.vimconn._delete_ports_by_id_wth_neutron(k_id)
-        self.vimconn.neutron.list_ports.assert_called_once()
-        self.vimconn.neutron.delete_port.assert_not_called()
-        self.vimconn.logger.error.assert_not_called()
-
-    def test_delete_ports_by_id_by_neutron_list_port_raise_exception(self):
-        """neutron list port raises exception."""
-        k_id = port_id
-        self.vimconn.neutron.list_ports.side_effect = nvExceptions.ClientException(
-            "Connection aborted."
-        )
-        self.vimconn._delete_ports_by_id_wth_neutron(k_id)
-        self.vimconn.neutron.list_ports.assert_called_once()
-        self.vimconn.neutron.delete_port.assert_not_called()
-        self.vimconn.logger.error.assert_called_once_with(
-            "Error deleting port: ClientException: Unknown Error (HTTP Connection aborted.)"
-        )
 
     def test_delete_ports_by_id_by_neutron_delete_port_raise_exception(self):
         """neutron delete port raises exception."""
         k_id = port_id
-        self.vimconn.neutron.list_ports.return_value = {
-            "ports": [{"id": port_id}, {"id": port2_id}]
-        }
         self.vimconn.neutron.delete_port.side_effect = nvExceptions.ClientException(
             "Connection aborted."
         )
         self.vimconn._delete_ports_by_id_wth_neutron(k_id)
-        self.vimconn.neutron.list_ports.assert_called_once()
         self.vimconn.neutron.delete_port.assert_called_once_with(k_id)
         self.vimconn.logger.error.assert_called_once_with(
             "Error deleting port: ClientException: Unknown Error (HTTP Connection aborted.)"
