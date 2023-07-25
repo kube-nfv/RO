@@ -644,7 +644,9 @@ class VimInteractionImage(VimInteractionBase):
             # FIND
             vim_image_id = ""
             if task.get("find_params"):
-                vim_images = target_vim.get_image_list(**task["find_params"])
+                vim_images = target_vim.get_image_list(
+                    task["find_params"].get("filter_dict", {})
+                )
 
                 if not vim_images:
                     raise NsWorkerExceptionNotFound(

@@ -41,6 +41,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 from cinderclient import client as cClient
+import cinderclient.exceptions as cExceptions
 from glanceclient import client as glClient
 import glanceclient.exc as gl1Exceptions
 from keystoneauth1 import session
@@ -83,6 +84,16 @@ supportedClassificationTypes = ["legacy_flow_classifier"]
 # global var to have a timeout creating and deleting volumes
 volume_timeout = 1800
 server_timeout = 1800
+
+
+def catch_any_exception(func):
+    def format_exception(*args, **kwargs):
+        try:
+            return func(*args, *kwargs)
+        except Exception as e:
+            vimconnector._format_exception(e)
+
+    return format_exception
 
 
 class SafeDumper(yaml.SafeDumper):
@@ -525,7 +536,8 @@ class vimconnector(vimconn.VimConnector):
         # Types. Also, abstract vimconnector should call the validation
         # method before the implemented VIM connectors are called.
 
-    def _format_exception(self, exception):
+    @staticmethod
+    def _format_exception(exception):
         """Transform a keystone, nova, neutron  exception into a vimconn exception discovering the cause"""
         message_error = str(exception)
         tip = ""
@@ -535,8 +547,10 @@ class vimconnector(vimconn.VimConnector):
             (
                 neExceptions.NetworkNotFoundClient,
                 nvExceptions.NotFound,
+                nvExceptions.ResourceNotFound,
                 ksExceptions.NotFound,
                 gl1Exceptions.HTTPNotFound,
+                cExceptions.NotFound,
             ),
         ):
             raise vimconn.VimConnNotFoundException(
@@ -551,6 +565,7 @@ class vimconnector(vimconn.VimConnector):
                 ConnectionError,
                 ksExceptions.ConnectionError,
                 neExceptions.ConnectionFailed,
+                cExceptions.ConnectionError,
             ),
         ):
             if type(exception).__name__ == "SSLError":
@@ -565,6 +580,8 @@ class vimconnector(vimconn.VimConnector):
                 KeyError,
                 nvExceptions.BadRequest,
                 ksExceptions.BadRequest,
+                gl1Exceptions.BadRequest,
+                cExceptions.BadRequest,
             ),
         ):
             if message_error == "OS-EXT-SRV-ATTR:host":
@@ -582,6 +599,7 @@ class vimconnector(vimconn.VimConnector):
                 nvExceptions.ClientException,
                 ksExceptions.ClientException,
                 neExceptions.NeutronException,
+                cExceptions.ClientException,
             ),
         ):
             raise vimconn.VimConnUnexpectedResponse(
@@ -594,9 +612,10 @@ class vimconnector(vimconn.VimConnector):
         elif isinstance(exception, vimconn.VimConnException):
             raise exception
         else:  # ()
-            self.logger.error("General Exception " + message_error, exc_info=True)
+            logger = logging.getLogger("ro.vim.openstack")
+            logger.error("General Exception " + message_error, exc_info=True)
 
-            raise vimconn.VimConnConnectionException(
+            raise vimconn.VimConnException(
                 type(exception).__name__ + ": " + message_error
             )
 
@@ -673,7 +692,6 @@ class vimconnector(vimconn.VimConnector):
         Returns the tenant list of dictionaries: [{'name':'<name>, 'id':'<id>, ...}, ...]
         """
         self.logger.debug("Getting tenants from VIM filter: '%s'", str(filter_dict))
-
         try:
             self._reload_connection()
 
@@ -703,7 +721,6 @@ class vimconnector(vimconn.VimConnector):
     def new_tenant(self, tenant_name, tenant_description):
         """Adds a new tenant to openstack VIM. Returns the tenant identifier"""
         self.logger.debug("Adding a new tenant name: %s", tenant_name)
-
         try:
             self._reload_connection()
 
@@ -729,7 +746,6 @@ class vimconnector(vimconn.VimConnector):
     def delete_tenant(self, tenant_id):
         """Delete a tenant from openstack VIM. Returns the old tenant identifier"""
         self.logger.debug("Deleting tenant %s from VIM", tenant_id)
-
         try:
             self._reload_connection()
 
@@ -739,6 +755,7 @@ class vimconnector(vimconn.VimConnector):
                 self.keystone.tenants.delete(tenant_id)
 
             return tenant_id
+
         except (
             ksExceptions.ConnectionError,
             ksExceptions.ClientException,
@@ -828,7 +845,7 @@ class vimconnector(vimconn.VimConnector):
                         "dataplane_physical_net"
                     )
 
-                    # if it is non empty list, use the first value. If it is a string use the value directly
+                    # if it is non-empty list, use the first value. If it is a string use the value directly
                     if (
                         isinstance(provider_physical_network, (tuple, list))
                         and provider_physical_network
@@ -1007,6 +1024,14 @@ class vimconnector(vimconn.VimConnector):
 
                     if k_item == "l2gwconn":
                         self.neutron.delete_l2_gateway_connection(k_id)
+
+                except (neExceptions.ConnectionFailed, ConnectionError) as e2:
+                    self.logger.error(
+                        "Error deleting l2 gateway connection: {}: {}".format(
+                            type(e2).__name__, e2
+                        )
+                    )
+                    self._format_exception(e2)
                 except Exception as e2:
                     self.logger.error(
                         "Error deleting l2 gateway connection: {}: {}".format(
@@ -1031,7 +1056,6 @@ class vimconnector(vimconn.VimConnector):
         Returns the network list of dictionaries
         """
         self.logger.debug("Getting network from VIM filter: '%s'", str(filter_dict))
-
         try:
             self._reload_connection()
             filter_dict_os = filter_dict.copy()
@@ -1091,6 +1115,7 @@ class vimconnector(vimconn.VimConnector):
 
         return net
 
+    @catch_any_exception
     def delete_network(self, net_id, created_items=None):
         """
         Removes a tenant network from VIM and its associated elements
@@ -1114,6 +1139,14 @@ class vimconnector(vimconn.VimConnector):
                     k_item, _, k_id = k.partition(":")
                     if k_item == "l2gwconn":
                         self.neutron.delete_l2_gateway_connection(k_id)
+
+                except (neExceptions.ConnectionFailed, ConnectionError) as e:
+                    self.logger.error(
+                        "Error deleting l2 gateway connection: {}: {}".format(
+                            type(e).__name__, e
+                        )
+                    )
+                    self._format_exception(e)
                 except Exception as e:
                     self.logger.error(
                         "Error deleting l2 gateway connection: {}: {}".format(
@@ -1126,21 +1159,22 @@ class vimconnector(vimconn.VimConnector):
             for p in ports["ports"]:
                 try:
                     self.neutron.delete_port(p["id"])
+
+                except (neExceptions.ConnectionFailed, ConnectionError) as e:
+                    self.logger.error("Error deleting port %s: %s", p["id"], str(e))
+                    # If there is connection error, it raises.
+                    self._format_exception(e)
                 except Exception as e:
                     self.logger.error("Error deleting port %s: %s", p["id"], str(e))
 
             self.neutron.delete_network(net_id)
 
             return net_id
-        except (
-            neExceptions.ConnectionFailed,
-            neExceptions.NetworkNotFoundClient,
-            neExceptions.NeutronException,
-            ksExceptions.ClientException,
-            neExceptions.NeutronException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
+        except (neExceptions.NetworkNotFoundClient, neExceptions.NotFound) as e:
+            # If network to be deleted is not found, it does not raise.
+            self.logger.warning(
+                f"Error deleting network: {net_id} is not found, {str(e)}"
+            )
 
     def refresh_nets_status(self, net_list):
         """Get the status of the networks
@@ -1193,13 +1227,11 @@ class vimconnector(vimconn.VimConnector):
     def get_flavor(self, flavor_id):
         """Obtain flavor details from the  VIM. Returns the flavor dict details"""
         self.logger.debug("Getting flavor '%s'", flavor_id)
-
         try:
             self._reload_connection()
             flavor = self.nova.flavors.find(id=flavor_id)
-            # TODO parse input and translate to VIM format (openmano_schemas.new_vminstance_response_schema)
-
             return flavor.to_dict()
+
         except (
             nvExceptions.NotFound,
             nvExceptions.ClientException,
@@ -1271,6 +1303,7 @@ class vimconnector(vimconn.VimConnector):
             )
         except (
             nvExceptions.NotFound,
+            nvExceptions.BadRequest,
             nvExceptions.ClientException,
             ksExceptions.ClientException,
             ConnectionError,
@@ -1541,6 +1574,7 @@ class vimconnector(vimconn.VimConnector):
             flavor_data.get("extended"),
         )
 
+    @catch_any_exception
     def new_flavor(self, flavor_data: dict, change_name_if_used: bool = True) -> str:
         """Adds a tenant flavor to openstack VIM.
         if change_name_if_used is True, it will change name in case of conflict,
@@ -1558,70 +1592,58 @@ class vimconnector(vimconn.VimConnector):
         retry = 0
         max_retries = 3
         name_suffix = 0
+        name = flavor_data["name"]
+        while retry < max_retries:
+            retry += 1
+            try:
+                self._reload_connection()
 
-        try:
-            name = flavor_data["name"]
-            while retry < max_retries:
-                retry += 1
-                try:
-                    self._reload_connection()
+                if change_name_if_used:
+                    name = self._change_flavor_name(name, name_suffix, flavor_data)
 
-                    if change_name_if_used:
-                        name = self._change_flavor_name(name, name_suffix, flavor_data)
+                ram, vcpus, extra_specs, extended = self._get_flavor_details(
+                    flavor_data
+                )
+                if extended:
+                    self._process_extended_config_of_flavor(extended, extra_specs)
 
-                    ram, vcpus, extra_specs, extended = self._get_flavor_details(
-                        flavor_data
-                    )
-                    if extended:
-                        self._process_extended_config_of_flavor(extended, extra_specs)
+                # Create flavor
 
-                    # Create flavor
+                new_flavor = self.nova.flavors.create(
+                    name=name,
+                    ram=ram,
+                    vcpus=vcpus,
+                    disk=flavor_data.get("disk", 0),
+                    ephemeral=flavor_data.get("ephemeral", 0),
+                    swap=flavor_data.get("swap", 0),
+                    is_public=flavor_data.get("is_public", True),
+                )
 
-                    new_flavor = self.nova.flavors.create(
-                        name=name,
-                        ram=ram,
-                        vcpus=vcpus,
-                        disk=flavor_data.get("disk", 0),
-                        ephemeral=flavor_data.get("ephemeral", 0),
-                        swap=flavor_data.get("swap", 0),
-                        is_public=flavor_data.get("is_public", True),
-                    )
+                # Add metadata
+                if extra_specs:
+                    new_flavor.set_keys(extra_specs)
 
-                    # Add metadata
-                    if extra_specs:
-                        new_flavor.set_keys(extra_specs)
+                return new_flavor.id
 
-                    return new_flavor.id
+            except nvExceptions.Conflict as e:
+                if change_name_if_used and retry < max_retries:
+                    continue
 
-                except nvExceptions.Conflict as e:
-                    if change_name_if_used and retry < max_retries:
-                        continue
+                self._format_exception(e)
 
-                    self._format_exception(e)
-
-        except (
-            ksExceptions.ClientException,
-            nvExceptions.ClientException,
-            ConnectionError,
-            KeyError,
-        ) as e:
-            self._format_exception(e)
-
+    @catch_any_exception
     def delete_flavor(self, flavor_id):
         """Deletes a tenant flavor from openstack VIM. Returns the old flavor_id"""
         try:
             self._reload_connection()
             self.nova.flavors.delete(flavor_id)
-
             return flavor_id
-        # except nvExceptions.BadRequest as e:
-        except (
-            nvExceptions.NotFound,
-            ksExceptions.ClientException,
-            nvExceptions.ClientException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
+
+        except (nvExceptions.NotFound, nvExceptions.ResourceNotFound) as e:
+            # If flavor is not found, it does not raise.
+            self.logger.warning(
+                f"Error deleting flavor: {flavor_id} is not found, {str(e.message)}"
+            )
 
     def new_image(self, image_dict):
         """
@@ -1705,12 +1727,6 @@ class vimconnector(vimconn.VimConnector):
 
                 return new_image.id
             except (
-                nvExceptions.Conflict,
-                ksExceptions.ClientException,
-                nvExceptions.ClientException,
-            ) as e:
-                self._format_exception(e)
-            except (
                 HTTPException,
                 gl1Exceptions.HTTPException,
                 gl1Exceptions.CommunicationError,
@@ -1725,7 +1741,10 @@ class vimconnector(vimconn.VimConnector):
                     "{}: {} for {}".format(type(e).__name__, e, image_dict["location"]),
                     http_code=vimconn.HTTP_Bad_Request,
                 )
+            except Exception as e:
+                self._format_exception(e)
 
+    @catch_any_exception
     def delete_image(self, image_id):
         """Deletes a tenant image from openstack VIM. Returns the old id"""
         try:
@@ -1733,36 +1752,25 @@ class vimconnector(vimconn.VimConnector):
             self.glance.images.delete(image_id)
 
             return image_id
-        except (
-            nvExceptions.NotFound,
-            ksExceptions.ClientException,
-            nvExceptions.ClientException,
-            gl1Exceptions.CommunicationError,
-            gl1Exceptions.HTTPNotFound,
-            ConnectionError,
-        ) as e:  # TODO remove
-            self._format_exception(e)
+        except gl1Exceptions.NotFound as e:
+            # If image is not found, it does not raise.
+            self.logger.warning(
+                f"Error deleting image: {image_id} is not found, {str(e)}"
+            )
 
+    @catch_any_exception
     def get_image_id_from_path(self, path):
         """Get the image id from image path in the VIM database. Returns the image_id"""
-        try:
-            self._reload_connection()
-            images = self.glance.images.list()
+        self._reload_connection()
+        images = self.glance.images.list()
 
-            for image in images:
-                if image.metadata.get("location") == path:
-                    return image.id
+        for image in images:
+            if image.metadata.get("location") == path:
+                return image.id
 
-            raise vimconn.VimConnNotFoundException(
-                "image with location '{}' not found".format(path)
-            )
-        except (
-            ksExceptions.ClientException,
-            nvExceptions.ClientException,
-            gl1Exceptions.CommunicationError,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
+        raise vimconn.VimConnNotFoundException(
+            "image with location '{}' not found".format(path)
+        )
 
     def get_image_list(self, filter_dict={}):
         """Obtain tenant images from VIM
@@ -1775,7 +1783,6 @@ class vimconnector(vimconn.VimConnector):
             List can be empty
         """
         self.logger.debug("Getting image list from VIM filter: '%s'", str(filter_dict))
-
         try:
             self._reload_connection()
             # filter_dict_os = filter_dict.copy()
@@ -1802,6 +1809,7 @@ class vimconnector(vimconn.VimConnector):
                     pass
 
             return filtered_list
+
         except (
             ksExceptions.ClientException,
             nvExceptions.ClientException,
@@ -2185,16 +2193,14 @@ class vimconnector(vimconn.VimConnector):
             volume_txt += ":keep"
         created_items[volume_txt] = True
 
+    @catch_any_exception
     def new_shared_volumes(self, shared_volume_data) -> (str, str):
-        try:
-            volume = self.cinder.volumes.create(
-                size=shared_volume_data["size"],
-                name=shared_volume_data["name"],
-                volume_type="multiattach",
-            )
-            return (volume.name, volume.id)
-        except (ConnectionError, KeyError) as e:
-            self._format_exception(e)
+        volume = self.cinder.volumes.create(
+            size=shared_volume_data["size"],
+            name=shared_volume_data["name"],
+            volume_type="multiattach",
+        )
+        return volume.name, volume.id
 
     def _prepare_shared_volumes(
         self,
@@ -2774,20 +2780,19 @@ class vimconnector(vimconn.VimConnector):
             flavor_id,
             str(net_list),
         )
+        server = None
+        created_items = {}
+        net_list_vim = []
+        # list of external networks to be connected to instance, later on used to create floating_ip
+        external_network = []
+        # List of ports with port-security disabled
+        no_secured_ports = []
+        block_device_mapping = {}
+        existing_vim_volumes = []
+        server_group_id = None
+        scheduller_hints = {}
 
         try:
-            server = None
-            created_items = {}
-            net_list_vim = []
-            # list of external networks to be connected to instance, later on used to create floating_ip
-            external_network = []
-            # List of ports with port-security disabled
-            no_secured_ports = []
-            block_device_mapping = {}
-            existing_vim_volumes = []
-            server_group_id = None
-            scheduller_hints = {}
-
             # Check the Openstack Connection
             self._reload_connection()
 
@@ -2907,6 +2912,7 @@ class vimconnector(vimconn.VimConnector):
         """Returns the VM instance information from VIM"""
         return self._find_nova_server(vm_id)
 
+    @catch_any_exception
     def get_vminstance_console(self, vm_id, console_type="vnc"):
         """
         Get a console for the virtual machine
@@ -2922,66 +2928,56 @@ class vimconnector(vimconn.VimConnector):
                 suffix:   extra text, e.g. the http path and query string
         """
         self.logger.debug("Getting VM CONSOLE from VIM")
+        self._reload_connection()
+        server = self.nova.servers.find(id=vm_id)
 
-        try:
-            self._reload_connection()
-            server = self.nova.servers.find(id=vm_id)
+        if console_type is None or console_type == "novnc":
+            console_dict = server.get_vnc_console("novnc")
+        elif console_type == "xvpvnc":
+            console_dict = server.get_vnc_console(console_type)
+        elif console_type == "rdp-html5":
+            console_dict = server.get_rdp_console(console_type)
+        elif console_type == "spice-html5":
+            console_dict = server.get_spice_console(console_type)
+        else:
+            raise vimconn.VimConnException(
+                "console type '{}' not allowed".format(console_type),
+                http_code=vimconn.HTTP_Bad_Request,
+            )
 
-            if console_type is None or console_type == "novnc":
-                console_dict = server.get_vnc_console("novnc")
-            elif console_type == "xvpvnc":
-                console_dict = server.get_vnc_console(console_type)
-            elif console_type == "rdp-html5":
-                console_dict = server.get_rdp_console(console_type)
-            elif console_type == "spice-html5":
-                console_dict = server.get_spice_console(console_type)
-            else:
-                raise vimconn.VimConnException(
-                    "console type '{}' not allowed".format(console_type),
-                    http_code=vimconn.HTTP_Bad_Request,
+        console_dict1 = console_dict.get("console")
+
+        if console_dict1:
+            console_url = console_dict1.get("url")
+
+            if console_url:
+                # parse console_url
+                protocol_index = console_url.find("//")
+                suffix_index = (
+                    console_url[protocol_index + 2 :].find("/") + protocol_index + 2
+                )
+                port_index = (
+                    console_url[protocol_index + 2 : suffix_index].find(":")
+                    + protocol_index
+                    + 2
                 )
 
-            console_dict1 = console_dict.get("console")
-
-            if console_dict1:
-                console_url = console_dict1.get("url")
-
-                if console_url:
-                    # parse console_url
-                    protocol_index = console_url.find("//")
-                    suffix_index = (
-                        console_url[protocol_index + 2 :].find("/") + protocol_index + 2
-                    )
-                    port_index = (
-                        console_url[protocol_index + 2 : suffix_index].find(":")
-                        + protocol_index
-                        + 2
+                if protocol_index < 0 or port_index < 0 or suffix_index < 0:
+                    return (
+                        -vimconn.HTTP_Internal_Server_Error,
+                        "Unexpected response from VIM",
                     )
 
-                    if protocol_index < 0 or port_index < 0 or suffix_index < 0:
-                        return (
-                            -vimconn.HTTP_Internal_Server_Error,
-                            "Unexpected response from VIM",
-                        )
+                console_dict = {
+                    "protocol": console_url[0:protocol_index],
+                    "server": console_url[protocol_index + 2 : port_index],
+                    "port": console_url[port_index:suffix_index],
+                    "suffix": console_url[suffix_index + 1 :],
+                }
+                protocol_index += 2
 
-                    console_dict = {
-                        "protocol": console_url[0:protocol_index],
-                        "server": console_url[protocol_index + 2 : port_index],
-                        "port": console_url[port_index:suffix_index],
-                        "suffix": console_url[suffix_index + 1 :],
-                    }
-                    protocol_index += 2
-
-                    return console_dict
-            raise vimconn.VimConnUnexpectedResponse("Unexpected response from VIM")
-        except (
-            nvExceptions.NotFound,
-            ksExceptions.ClientException,
-            nvExceptions.ClientException,
-            nvExceptions.BadRequest,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
+                return console_dict
+        raise vimconn.VimConnUnexpectedResponse("Unexpected response from VIM")
 
     def _delete_ports_by_id_wth_neutron(self, k_id: str) -> None:
         """Neutron delete ports by id.
@@ -2991,6 +2987,10 @@ class vimconnector(vimconn.VimConnector):
         try:
             self.neutron.delete_port(k_id)
 
+        except (neExceptions.ConnectionFailed, ConnectionError) as e:
+            self.logger.error("Error deleting port: {}: {}".format(type(e).__name__, e))
+            # If there is connection error, raise.
+            self._format_exception(e)
         except Exception as e:
             self.logger.error("Error deleting port: {}: {}".format(type(e).__name__, e))
 
@@ -3036,7 +3036,7 @@ class vimconnector(vimconn.VimConnector):
         """
         try:
             if k_id in volumes_to_hold:
-                return
+                return False
 
             if self.cinder.volumes.get(k_id).status != "available":
                 return True
@@ -3045,6 +3045,11 @@ class vimconnector(vimconn.VimConnector):
                 self.cinder.volumes.delete(k_id)
                 created_items[k] = None
 
+        except (cExceptions.ConnectionError, ConnectionError) as e:
+            self.logger.error(
+                "Error deleting volume: {}: {}".format(type(e).__name__, e)
+            )
+            self._format_exception(e)
         except Exception as e:
             self.logger.error(
                 "Error deleting volume: {}: {}".format(type(e).__name__, e)
@@ -3061,6 +3066,11 @@ class vimconnector(vimconn.VimConnector):
             self.neutron.delete_floatingip(k_id)
             created_items[k] = None
 
+        except (neExceptions.ConnectionFailed, ConnectionError) as e:
+            self.logger.error(
+                "Error deleting floating ip: {}: {}".format(type(e).__name__, e)
+            )
+            self._format_exception(e)
         except Exception as e:
             self.logger.error(
                 "Error deleting floating ip: {}: {}".format(type(e).__name__, e)
@@ -3086,6 +3096,11 @@ class vimconnector(vimconn.VimConnector):
                 if k_item == "port":
                     self._delete_ports_by_id_wth_neutron(k_id)
 
+            except (neExceptions.ConnectionFailed, ConnectionError) as e:
+                self.logger.error(
+                    "Error deleting port: {}: {}".format(type(e).__name__, e)
+                )
+                self._format_exception(e)
             except Exception as e:
                 self.logger.error(
                     "Error deleting port: {}: {}".format(type(e).__name__, e)
@@ -3112,6 +3127,16 @@ class vimconnector(vimconn.VimConnector):
                 elif k_item == "floating_ip":
                     self._delete_floating_ip_by_id(k, k_id, created_items)
 
+            except (
+                cExceptions.ConnectionError,
+                neExceptions.ConnectionFailed,
+                ConnectionError,
+                AttributeError,
+                TypeError,
+            ) as e:
+                self.logger.error("Error deleting {}: {}".format(k, e))
+                self._format_exception(e)
+
             except Exception as e:
                 self.logger.error("Error deleting {}: {}".format(k, e))
 
@@ -3133,6 +3158,7 @@ class vimconnector(vimconn.VimConnector):
             if len(key.split(":")) == 2
         }
 
+    @catch_any_exception
     def delete_vminstance(
         self, vm_id: str, created_items: dict = None, volumes_to_hold: list = None
     ) -> None:
@@ -3177,14 +3203,9 @@ class vimconnector(vimconn.VimConnector):
                 if keep_waiting:
                     time.sleep(1)
                     elapsed_time += 1
-
-        except (
-            nvExceptions.NotFound,
-            ksExceptions.ClientException,
-            nvExceptions.ClientException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
+        except (nvExceptions.NotFound, nvExceptions.ResourceNotFound) as e:
+            # If VM does not exist, it does not raise
+            self.logger.warning(f"Error deleting VM: {vm_id} is not found, {str(e)}")
 
     def refresh_vms_status(self, vm_list):
         """Get the status of the virtual machines and their interfaces/ports
@@ -3216,7 +3237,6 @@ class vimconnector(vimconn.VimConnector):
         self.logger.debug(
             "refresh_vms status: Getting tenant VM instance information from VIM"
         )
-
         for vm_id in vm_list:
             vm = {}
 
@@ -3329,122 +3349,111 @@ class vimconnector(vimconn.VimConnector):
 
         return vm_dict
 
+    @catch_any_exception
     def action_vminstance(self, vm_id, action_dict, created_items={}):
         """Send and action over a VM instance from VIM
         Returns None or the console dict if the action was successfully sent to the VIM
         """
         self.logger.debug("Action over VM '%s': %s", vm_id, str(action_dict))
-
-        try:
-            self._reload_connection()
-            server = self.nova.servers.find(id=vm_id)
-
-            if "start" in action_dict:
-                if action_dict["start"] == "rebuild":
-                    server.rebuild()
+        self._reload_connection()
+        server = self.nova.servers.find(id=vm_id)
+        if "start" in action_dict:
+            if action_dict["start"] == "rebuild":
+                server.rebuild()
+            else:
+                if server.status == "PAUSED":
+                    server.unpause()
+                elif server.status == "SUSPENDED":
+                    server.resume()
+                elif server.status == "SHUTOFF":
+                    server.start()
                 else:
-                    if server.status == "PAUSED":
-                        server.unpause()
-                    elif server.status == "SUSPENDED":
-                        server.resume()
-                    elif server.status == "SHUTOFF":
-                        server.start()
-                    else:
-                        self.logger.debug(
-                            "ERROR : Instance is not in SHUTOFF/PAUSE/SUSPEND state"
-                        )
-                        raise vimconn.VimConnException(
-                            "Cannot 'start' instance while it is in active state",
-                            http_code=vimconn.HTTP_Bad_Request,
-                        )
-
-            elif "pause" in action_dict:
-                server.pause()
-            elif "resume" in action_dict:
-                server.resume()
-            elif "shutoff" in action_dict or "shutdown" in action_dict:
-                self.logger.debug("server status %s", server.status)
-                if server.status == "ACTIVE":
-                    server.stop()
-                else:
-                    self.logger.debug("ERROR: VM is not in Active state")
+                    self.logger.debug(
+                        "ERROR : Instance is not in SHUTOFF/PAUSE/SUSPEND state"
+                    )
                     raise vimconn.VimConnException(
-                        "VM is not in active state, stop operation is not allowed",
+                        "Cannot 'start' instance while it is in active state",
                         http_code=vimconn.HTTP_Bad_Request,
                     )
-            elif "forceOff" in action_dict:
-                server.stop()  # TODO
-            elif "terminate" in action_dict:
-                server.delete()
-            elif "createImage" in action_dict:
-                server.create_image()
-                # "path":path_schema,
-                # "description":description_schema,
-                # "name":name_schema,
-                # "metadata":metadata_schema,
-                # "imageRef": id_schema,
-                # "disk": {"oneOf":[{"type": "null"}, {"type":"string"}] },
-            elif "rebuild" in action_dict:
-                server.rebuild(server.image["id"])
-            elif "reboot" in action_dict:
-                server.reboot()  # reboot_type="SOFT"
-            elif "console" in action_dict:
-                console_type = action_dict["console"]
+        elif "pause" in action_dict:
+            server.pause()
+        elif "resume" in action_dict:
+            server.resume()
+        elif "shutoff" in action_dict or "shutdown" in action_dict:
+            self.logger.debug("server status %s", server.status)
+            if server.status == "ACTIVE":
+                server.stop()
+            else:
+                self.logger.debug("ERROR: VM is not in Active state")
+                raise vimconn.VimConnException(
+                    "VM is not in active state, stop operation is not allowed",
+                    http_code=vimconn.HTTP_Bad_Request,
+                )
+        elif "forceOff" in action_dict:
+            server.stop()  # TODO
+        elif "terminate" in action_dict:
+            server.delete()
+        elif "createImage" in action_dict:
+            server.create_image()
+            # "path":path_schema,
+            # "description":description_schema,
+            # "name":name_schema,
+            # "metadata":metadata_schema,
+            # "imageRef": id_schema,
+            # "disk": {"oneOf":[{"type": "null"}, {"type":"string"}] },
+        elif "rebuild" in action_dict:
+            server.rebuild(server.image["id"])
+        elif "reboot" in action_dict:
+            server.reboot()  # reboot_type="SOFT"
+        elif "console" in action_dict:
+            console_type = action_dict["console"]
 
-                if console_type is None or console_type == "novnc":
-                    console_dict = server.get_vnc_console("novnc")
-                elif console_type == "xvpvnc":
-                    console_dict = server.get_vnc_console(console_type)
-                elif console_type == "rdp-html5":
-                    console_dict = server.get_rdp_console(console_type)
-                elif console_type == "spice-html5":
-                    console_dict = server.get_spice_console(console_type)
-                else:
-                    raise vimconn.VimConnException(
-                        "console type '{}' not allowed".format(console_type),
-                        http_code=vimconn.HTTP_Bad_Request,
-                    )
+            if console_type is None or console_type == "novnc":
+                console_dict = server.get_vnc_console("novnc")
+            elif console_type == "xvpvnc":
+                console_dict = server.get_vnc_console(console_type)
+            elif console_type == "rdp-html5":
+                console_dict = server.get_rdp_console(console_type)
+            elif console_type == "spice-html5":
+                console_dict = server.get_spice_console(console_type)
+            else:
+                raise vimconn.VimConnException(
+                    "console type '{}' not allowed".format(console_type),
+                    http_code=vimconn.HTTP_Bad_Request,
+                )
 
-                try:
-                    console_url = console_dict["console"]["url"]
-                    # parse console_url
-                    protocol_index = console_url.find("//")
-                    suffix_index = (
-                        console_url[protocol_index + 2 :].find("/") + protocol_index + 2
-                    )
-                    port_index = (
-                        console_url[protocol_index + 2 : suffix_index].find(":")
-                        + protocol_index
-                        + 2
-                    )
+            try:
+                console_url = console_dict["console"]["url"]
+                # parse console_url
+                protocol_index = console_url.find("//")
+                suffix_index = (
+                    console_url[protocol_index + 2 :].find("/") + protocol_index + 2
+                )
+                port_index = (
+                    console_url[protocol_index + 2 : suffix_index].find(":")
+                    + protocol_index
+                    + 2
+                )
 
-                    if protocol_index < 0 or port_index < 0 or suffix_index < 0:
-                        raise vimconn.VimConnException(
-                            "Unexpected response from VIM " + str(console_dict)
-                        )
-
-                    console_dict2 = {
-                        "protocol": console_url[0:protocol_index],
-                        "server": console_url[protocol_index + 2 : port_index],
-                        "port": int(console_url[port_index + 1 : suffix_index]),
-                        "suffix": console_url[suffix_index + 1 :],
-                    }
-
-                    return console_dict2
-                except Exception:
+                if protocol_index < 0 or port_index < 0 or suffix_index < 0:
                     raise vimconn.VimConnException(
                         "Unexpected response from VIM " + str(console_dict)
                     )
 
-            return None
-        except (
-            ksExceptions.ClientException,
-            nvExceptions.ClientException,
-            nvExceptions.NotFound,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-        # TODO insert exception vimconn.HTTP_Unauthorized
+                console_dict2 = {
+                    "protocol": console_url[0:protocol_index],
+                    "server": console_url[protocol_index + 2 : port_index],
+                    "port": int(console_url[port_index + 1 : suffix_index]),
+                    "suffix": console_url[suffix_index + 1 :],
+                }
+
+                return console_dict2
+            except Exception:
+                raise vimconn.VimConnException(
+                    "Unexpected response from VIM " + str(console_dict)
+                )
+
+        return None
 
     # ###### VIO Specific Changes #########
     def _generate_vlanID(self):
@@ -3649,6 +3658,7 @@ class vimconnector(vimconn.VimConnector):
 
         return error_value, error_text
 
+    @catch_any_exception
     def new_affinity_group(self, affinity_group_data):
         """Adds a server group to VIM
             affinity_group_data contains a dictionary with information, keys:
@@ -3657,55 +3667,29 @@ class vimconnector(vimconn.VimConnector):
                 scope: Only nfvi-node allowed
         Returns the server group identifier"""
         self.logger.debug("Adding Server Group '%s'", str(affinity_group_data))
+        name = affinity_group_data["name"]
+        policy = affinity_group_data["type"]
+        self._reload_connection()
+        new_server_group = self.nova.server_groups.create(name, policy)
+        return new_server_group.id
 
-        try:
-            name = affinity_group_data["name"]
-            policy = affinity_group_data["type"]
-
-            self._reload_connection()
-            new_server_group = self.nova.server_groups.create(name, policy)
-
-            return new_server_group.id
-        except (
-            ksExceptions.ClientException,
-            nvExceptions.ClientException,
-            ConnectionError,
-            KeyError,
-        ) as e:
-            self._format_exception(e)
-
+    @catch_any_exception
     def get_affinity_group(self, affinity_group_id):
         """Obtain server group details from the VIM. Returns the server group detais as a dict"""
         self.logger.debug("Getting flavor '%s'", affinity_group_id)
-        try:
-            self._reload_connection()
-            server_group = self.nova.server_groups.find(id=affinity_group_id)
+        self._reload_connection()
+        server_group = self.nova.server_groups.find(id=affinity_group_id)
+        return server_group.to_dict()
 
-            return server_group.to_dict()
-        except (
-            nvExceptions.NotFound,
-            nvExceptions.ClientException,
-            ksExceptions.ClientException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-
+    @catch_any_exception
     def delete_affinity_group(self, affinity_group_id):
         """Deletes a server group from the VIM. Returns the old affinity_group_id"""
         self.logger.debug("Getting server group '%s'", affinity_group_id)
-        try:
-            self._reload_connection()
-            self.nova.server_groups.delete(affinity_group_id)
+        self._reload_connection()
+        self.nova.server_groups.delete(affinity_group_id)
+        return affinity_group_id
 
-            return affinity_group_id
-        except (
-            nvExceptions.NotFound,
-            ksExceptions.ClientException,
-            nvExceptions.ClientException,
-            ConnectionError,
-        ) as e:
-            self._format_exception(e)
-
+    @catch_any_exception
     def get_vdu_state(self, vm_id, host_is_required=False) -> list:
         """Getting the state of a VDU.
         Args:
@@ -3717,24 +3701,20 @@ class vimconnector(vimconn.VimConnector):
         """
         self.logger.debug("Getting the status of VM")
         self.logger.debug("VIM VM ID %s", vm_id)
-        try:
-            self._reload_connection()
-            server_dict = self._find_nova_server(vm_id)
-            srv_attr = "OS-EXT-SRV-ATTR:host"
-            host_info = (
-                server_dict[srv_attr] if host_is_required else server_dict.get(srv_attr)
-            )
-            vdu_data = [
-                server_dict["status"],
-                server_dict["flavor"]["id"],
-                host_info,
-                server_dict["OS-EXT-AZ:availability_zone"],
-            ]
-            self.logger.debug("vdu_data %s", vdu_data)
-            return vdu_data
-
-        except Exception as e:
-            self._format_exception(e)
+        self._reload_connection()
+        server_dict = self._find_nova_server(vm_id)
+        srv_attr = "OS-EXT-SRV-ATTR:host"
+        host_info = (
+            server_dict[srv_attr] if host_is_required else server_dict.get(srv_attr)
+        )
+        vdu_data = [
+            server_dict["status"],
+            server_dict["flavor"]["id"],
+            host_info,
+            server_dict["OS-EXT-AZ:availability_zone"],
+        ]
+        self.logger.debug("vdu_data %s", vdu_data)
+        return vdu_data
 
     def check_compute_availability(self, host, server_flavor_details):
         self._reload_connection()
@@ -3792,6 +3772,7 @@ class vimconnector(vimconn.VimConnector):
                         az_check["zone_check"] = True
         return az_check
 
+    @catch_any_exception
     def migrate_instance(self, vm_id, compute_host=None):
         """
         Migrate a vdu
@@ -3805,78 +3786,72 @@ class vimconnector(vimconn.VimConnector):
         server_flavor_id = instance_state[1]
         server_hypervisor_name = instance_state[2]
         server_availability_zone = instance_state[3]
-        try:
-            server_flavor = self.nova.flavors.find(id=server_flavor_id).to_dict()
-            server_flavor_details = [
-                server_flavor["ram"],
-                server_flavor["disk"],
-                server_flavor["vcpus"],
-            ]
-            if compute_host == server_hypervisor_name:
-                raise vimconn.VimConnException(
-                    "Unable to migrate instance '{}' to the same host '{}'".format(
-                        vm_id, compute_host
-                    ),
-                    http_code=vimconn.HTTP_Bad_Request,
-                )
-            az_status = self.check_availability_zone(
-                server_availability_zone,
-                server_flavor_details,
-                server_hypervisor_name,
-                compute_host,
+        server_flavor = self.nova.flavors.find(id=server_flavor_id).to_dict()
+        server_flavor_details = [
+            server_flavor["ram"],
+            server_flavor["disk"],
+            server_flavor["vcpus"],
+        ]
+        if compute_host == server_hypervisor_name:
+            raise vimconn.VimConnException(
+                "Unable to migrate instance '{}' to the same host '{}'".format(
+                    vm_id, compute_host
+                ),
+                http_code=vimconn.HTTP_Bad_Request,
             )
-            availability_zone_check = az_status["zone_check"]
-            available_compute_id = az_status.get("compute_availability")
+        az_status = self.check_availability_zone(
+            server_availability_zone,
+            server_flavor_details,
+            server_hypervisor_name,
+            compute_host,
+        )
+        availability_zone_check = az_status["zone_check"]
+        available_compute_id = az_status.get("compute_availability")
 
-            if availability_zone_check is False:
-                raise vimconn.VimConnException(
-                    "Unable to migrate instance '{}' to a different availability zone".format(
-                        vm_id
-                    ),
-                    http_code=vimconn.HTTP_Bad_Request,
-                )
-            if available_compute_id is not None:
-                # disk_over_commit parameter for live_migrate method is not valid for Nova API version >= 2.25
-                self.nova.servers.live_migrate(
-                    server=vm_id,
-                    host=available_compute_id,
-                    block_migration=True,
-                )
-                state = "MIGRATING"
-                changed_compute_host = ""
-                if state == "MIGRATING":
-                    vm_state = self.__wait_for_vm(vm_id, "ACTIVE")
-                    changed_compute_host = self.get_vdu_state(
-                        vm_id, host_is_required=True
-                    )[2]
-                if vm_state and changed_compute_host == available_compute_id:
-                    self.logger.debug(
-                        "Instance '{}' migrated to the new compute host '{}'".format(
-                            vm_id, changed_compute_host
-                        )
+        if availability_zone_check is False:
+            raise vimconn.VimConnException(
+                "Unable to migrate instance '{}' to a different availability zone".format(
+                    vm_id
+                ),
+                http_code=vimconn.HTTP_Bad_Request,
+            )
+        if available_compute_id is not None:
+            # disk_over_commit parameter for live_migrate method is not valid for Nova API version >= 2.25
+            self.nova.servers.live_migrate(
+                server=vm_id,
+                host=available_compute_id,
+                block_migration=True,
+            )
+            state = "MIGRATING"
+            changed_compute_host = ""
+            if state == "MIGRATING":
+                vm_state = self.__wait_for_vm(vm_id, "ACTIVE")
+                changed_compute_host = self.get_vdu_state(vm_id, host_is_required=True)[
+                    2
+                ]
+            if vm_state and changed_compute_host == available_compute_id:
+                self.logger.debug(
+                    "Instance '{}' migrated to the new compute host '{}'".format(
+                        vm_id, changed_compute_host
                     )
-                    return state, available_compute_id
-                else:
-                    raise vimconn.VimConnException(
-                        "Migration Failed. Instance '{}' not moved to the new host {}".format(
-                            vm_id, available_compute_id
-                        ),
-                        http_code=vimconn.HTTP_Bad_Request,
-                    )
+                )
+                return state, available_compute_id
             else:
                 raise vimconn.VimConnException(
-                    "Compute '{}' not available or does not have enough resources to migrate the instance".format(
-                        available_compute_id
+                    "Migration Failed. Instance '{}' not moved to the new host {}".format(
+                        vm_id, available_compute_id
                     ),
                     http_code=vimconn.HTTP_Bad_Request,
                 )
-        except (
-            nvExceptions.BadRequest,
-            nvExceptions.ClientException,
-            nvExceptions.NotFound,
-        ) as e:
-            self._format_exception(e)
+        else:
+            raise vimconn.VimConnException(
+                "Compute '{}' not available or does not have enough resources to migrate the instance".format(
+                    available_compute_id
+                ),
+                http_code=vimconn.HTTP_Bad_Request,
+            )
 
+    @catch_any_exception
     def resize_instance(self, vm_id, new_flavor_id):
         """
         For resizing the vm based on the given
@@ -3891,37 +3866,30 @@ class vimconnector(vimconn.VimConnector):
         instance_status, old_flavor_id, compute_host, az = self.get_vdu_state(vm_id)
         old_flavor_disk = self.nova.flavors.find(id=old_flavor_id).to_dict()["disk"]
         new_flavor_disk = self.nova.flavors.find(id=new_flavor_id).to_dict()["disk"]
-        try:
-            if instance_status == "ACTIVE" or instance_status == "SHUTOFF":
-                if old_flavor_disk > new_flavor_disk:
-                    raise nvExceptions.BadRequest(
-                        400,
-                        message="Server disk resize failed. Resize to lower disk flavor is not allowed",
-                    )
-                else:
-                    self.nova.servers.resize(server=vm_id, flavor=new_flavor_id)
-                    vm_state = self.__wait_for_vm(vm_id, "VERIFY_RESIZE")
-                    if vm_state:
-                        instance_resized_status = self.confirm_resize(vm_id)
-                        return instance_resized_status
-                    else:
-                        raise nvExceptions.BadRequest(
-                            409,
-                            message="Cannot 'resize' vm_state is in ERROR",
-                        )
-
-            else:
-                self.logger.debug("ERROR : Instance is not in ACTIVE or SHUTOFF state")
+        if instance_status == "ACTIVE" or instance_status == "SHUTOFF":
+            if old_flavor_disk > new_flavor_disk:
                 raise nvExceptions.BadRequest(
-                    409,
-                    message="Cannot 'resize' instance while it is in vm_state resized",
+                    400,
+                    message="Server disk resize failed. Resize to lower disk flavor is not allowed",
                 )
-        except (
-            nvExceptions.BadRequest,
-            nvExceptions.ClientException,
-            nvExceptions.NotFound,
-        ) as e:
-            self._format_exception(e)
+            else:
+                self.nova.servers.resize(server=vm_id, flavor=new_flavor_id)
+                vm_state = self.__wait_for_vm(vm_id, "VERIFY_RESIZE")
+                if vm_state:
+                    instance_resized_status = self.confirm_resize(vm_id)
+                    return instance_resized_status
+                else:
+                    raise nvExceptions.BadRequest(
+                        409,
+                        message="Cannot 'resize' vm_state is in ERROR",
+                    )
+
+        else:
+            self.logger.debug("ERROR : Instance is not in ACTIVE or SHUTOFF state")
+            raise nvExceptions.BadRequest(
+                409,
+                message="Cannot 'resize' instance while it is in vm_state resized",
+            )
 
     def confirm_resize(self, vm_id):
         """
@@ -3951,11 +3919,7 @@ class vimconnector(vimconn.VimConnector):
                 self.logger.warning(str(e.message))
             all_ports = self.neutron.list_ports()
             return all_servers, all_ports
-        except (
-            vimconn.VimConnException,
-            vimconn.VimConnNotFoundException,
-            vimconn.VimConnConnectionException,
-        ) as e:
+        except Exception as e:
             raise vimconn.VimConnException(
                 f"Exception in monitoring while getting VMs and ports status: {str(e)}"
             )
