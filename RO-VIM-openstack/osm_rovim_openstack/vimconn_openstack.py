@@ -645,9 +645,10 @@ class vimconnector(vimconn.VimConnector):
             # TODO parse input and translate to VIM format (openmano_schemas.new_vminstance_response_schema)
             server_dict = server.to_dict()
             try:
-                server_dict["flavor"]["id"] = self.nova.flavors.find(
-                    name=server_dict["flavor"]["original_name"]
-                ).id
+                if server_dict["flavor"].get("original_name"):
+                    server_dict["flavor"]["id"] = self.nova.flavors.find(
+                        name=server_dict["flavor"]["original_name"]
+                    ).id
             except nClient.exceptions.NotFound as e:
                 self.logger.warning(str(e.message))
             return server_dict
@@ -3942,9 +3943,10 @@ class vimconnector(vimconn.VimConnector):
             all_servers = self.nova.servers.list(detailed=True)
             try:
                 for server in all_servers:
-                    server.flavor["id"] = self.nova.flavors.find(
-                        name=server.flavor["original_name"]
-                    ).id
+                    if server.flavor.get("original_name"):
+                        server.flavor["id"] = self.nova.flavors.find(
+                            name=server.flavor["original_name"]
+                        ).id
             except nClient.exceptions.NotFound as e:
                 self.logger.warning(str(e.message))
             all_ports = self.neutron.list_ports()
