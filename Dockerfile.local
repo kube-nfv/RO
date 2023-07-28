@@ -14,7 +14,7 @@
 # under the License.
 ############################################################################
 
-FROM ubuntu:20.04 as INSTALL
+FROM ubuntu:22.04 as INSTALL
 
 WORKDIR /build
 
@@ -85,19 +85,32 @@ RUN python3 -m build /build/RO-VIM-gcp && \
 RUN python3 -m build /build/RO-SDN-tapi && \
     python3 -m pip install /build/RO-SDN-tapi/dist/*.whl
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get --yes update && \
     DEBIAN_FRONTEND=noninteractive apt-get --yes install python3-minimal
 
 COPY --from=INSTALL /usr/lib/python3/dist-packages /usr/lib/python3/dist-packages
-COPY --from=INSTALL /usr/local/lib/python3.8/dist-packages  /usr/local/lib/python3.8/dist-packages
+COPY --from=INSTALL /usr/local/lib/python3.10/dist-packages  /usr/local/lib/python3.10/dist-packages
 COPY --from=INSTALL /usr/bin/genisoimage /usr/bin/genisoimage
 COPY --from=INSTALL /etc/protocols /etc/protocols
 
 VOLUME /var/log/osm
 
 EXPOSE 9090
+
+# Creating the user for the app
+RUN groupadd -g 1000 appuser && \
+    useradd -u 1000 -g 1000 -d /app appuser && \
+    mkdir -p /app/osm_ro && \
+    mkdir -p /app/storage/kafka && \
+    mkdir /app/log && \
+    chown -R appuser:appuser /app
+
+WORKDIR /app/osm_ro
+
+# Changing the security context
+USER appuser
 
 # Two mysql databases are needed (DB and DB_OVIM). Can be hosted on same or separated containers
 # These ENV must be provided
