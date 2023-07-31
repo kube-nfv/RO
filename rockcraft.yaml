@@ -1,0 +1,91 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+########################################################################################
+name: resource-orchestrator
+summary: An image for OSM RO
+description: |
+  OSM Resource Orchestrator image.
+version: master_beta_1 # version format: <upstream-version>_<base-version>_<version>
+license: Apache-2.0
+base: ubuntu:22.04
+platforms:
+  amd64:
+
+parts:
+  non-root-user:
+    plugin: nil
+    overlay-script: |
+      chroot ${CRAFT_OVERLAY}
+      mkdir -p /app/osm_ro
+      mkdir -p /app/storage/kafka
+      mkdir -p /app/log
+      groupadd -g 1001 appuser
+      useradd -u 1001 -g 1001 -d /app appuser
+      chown -R appuser:appuser /app
+
+  common:
+    source: https://osm.etsi.org/gerrit/osm/common.git
+    source-branch: master
+    plugin: python
+    python-requirements:
+      - requirements.txt
+    stage-packages:
+      - python3.10-venv
+    build-environment:
+      - PYTHONDONTWRITEBYTECODE: "1" # This does not work as expected, there is a bug and still not fixed.
+    # Workaround for conflicts related with the bug of PYTHONDONTWRITEBYTECODE
+    override-build: |
+      craftctl default
+      find "$CRAFT_PART_INSTALL" -name '*.pyc' -exec rm {} \;
+    stage:
+      - -bin/activate
+      - -bin/activate.csh
+      - -bin/activate.fish
+      - -lib/python3.10/site-packages/pip-23.2.1.dist-info/RECORD
+      - -lib/python3.10/site-packages/wheel-0.41.0.dist-info/RECORD
+      - -lib/python3.10/site-packages/charset_normalizer-3.1.0.dist-info/RECORD
+
+  ro:
+    plugin: python
+    source: https://osm.etsi.org/gerrit/osm/RO.git
+    source-tag: master
+    python-requirements:
+      - requirements.txt
+    stage-packages:
+      - python3.10-venv
+    python-packages:
+      - pip
+      - setuptools
+      - wheel
+      - ./NG-RO
+      - ./RO-plugin
+      - ./RO-VIM-vmware
+      - ./RO-VIM-openstack
+      - ./RO-VIM-openvim
+      - ./RO-VIM-aws
+      - ./RO-VIM-azure
+      - ./RO-SDN-dynpac
+      - ./RO-SDN-ietfl2vpn
+      - ./RO-SDN-onos_vpls
+      - ./RO-SDN-onos_openflow
+      - ./RO-SDN-odl_openflow
+      - ./RO-SDN-floodlight_openflow
+      - ./RO-SDN-arista_cloudvision
+      - ./RO-SDN-juniper_contrail
+      - ./RO-VIM-gcp
+      - ./RO-SDN-tapi
+    build-packages:
+      - wget
+      - genisoimage
+      - netbase
+
