@@ -847,7 +847,9 @@ class VimInteractionFlavor(VimInteractionBase):
             # FIND
             vim_flavor_id = None
 
-            if task.get("find_params"):
+            if task.get("find_params", {}).get("vim_flavor_id"):
+                vim_flavor_id = task["find_params"]["vim_flavor_id"]
+            elif task.get("find_params", {}).get("flavor_data"):
                 try:
                     flavor_data = task["find_params"]["flavor_data"]
                     vim_flavor_id = target_vim.get_flavor_id_from_data(flavor_data)

@@ -818,16 +818,22 @@ class Ns(object):
         db = kwargs.get("db")
         target_vdur = {}
 
+        for vnf in indata.get("vnf", []):
+            for vdur in vnf.get("vdur", []):
+                if vdur.get("ns-flavor-id") == target_flavor.get("id"):
+                    target_vdur = vdur
+
+        vim_flavor_id = (
+            target_vdur.get("additionalParams", {}).get("OSM", {}).get("vim_flavor_id")
+        )
+        if vim_flavor_id:  # vim-flavor-id was passed so flavor won't be created
+            return {"find_params": {"vim_flavor_id": vim_flavor_id}}
+
         flavor_data = {
             "disk": int(target_flavor["storage-gb"]),
             "ram": int(target_flavor["memory-mb"]),
             "vcpus": int(target_flavor["vcpu-count"]),
         }
-
-        for vnf in indata.get("vnf", []):
-            for vdur in vnf.get("vdur", []):
-                if vdur.get("ns-flavor-id") == target_flavor.get("id"):
-                    target_vdur = vdur
 
         if db and isinstance(indata.get("vnf"), list):
             vnfd_id = indata.get("vnf")[0].get("vnfd-id")
@@ -1521,12 +1527,12 @@ class Ns(object):
         vnf_preffix = "vnfrs:{}".format(vnfr_id)
         ns_preffix = "nsrs:{}".format(nsr_id)
         image_text = ns_preffix + ":image." + target_vdu["ns-image-id"]
-        extra_dict = {"depends_on": [image_text]}
+        flavor_text = ns_preffix + ":flavor." + target_vdu["ns-flavor-id"]
+        extra_dict = {"depends_on": [image_text, flavor_text]}
         net_list = []
         persistent_root_disk = {}
         persistent_ordinary_disk = {}
         vdu_instantiation_volumes_list = []
-        vdu_instantiation_flavor_id = None
         disk_list = []
         vnfd_id = vnfr["vnfd-id"]
         vnfd = db.get_one("vnfds", {"_id": vnfd_id})
@@ -1565,17 +1571,6 @@ class Ns(object):
             vdu_instantiation_volumes_list = (
                 target_vdu.get("additionalParams").get("OSM", {}).get("vdu_volumes")
             )
-            vdu_instantiation_flavor_id = (
-                target_vdu.get("additionalParams").get("OSM", {}).get("vim_flavor_id")
-            )
-
-        # flavor id
-        if vdu_instantiation_flavor_id:
-            flavor_id = vdu_instantiation_flavor_id
-        else:
-            flavor_text = ns_preffix + ":flavor." + target_vdu["ns-flavor-id"]
-            flavor_id = "TASK-" + flavor_text
-            extra_dict["depends_on"].append(flavor_text)
 
         if vdu_instantiation_volumes_list:
             # Find the root volumes and add to the disk_list
@@ -1623,7 +1618,7 @@ class Ns(object):
             "description": target_vdu["vdu-name"],
             "start": True,
             "image_id": "TASK-" + image_text,
-            "flavor_id": flavor_id,
+            "flavor_id": "TASK-" + flavor_text,
             "affinity_group_list": affinity_group_list,
             "net_list": net_list,
             "cloud_config": cloud_config or None,
