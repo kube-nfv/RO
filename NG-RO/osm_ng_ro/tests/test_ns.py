@@ -3368,7 +3368,7 @@ class TestProcessVduParams(unittest.TestCase):
         persist_root_disk = self.ns.find_persistent_root_volumes(
             vnfd, target_vdu, vdu_instantiation_volumes_list, disk_list
         )
-        self.assertEqual(persist_root_disk, None)
+        self.assertEqual(persist_root_disk, {})
         mock_volume_keeping_required.assert_not_called()
         self.assertEqual(disk_list, [])
 
