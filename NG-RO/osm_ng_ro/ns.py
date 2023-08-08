@@ -1005,6 +1005,7 @@ class Ns(object):
                             disk_list.append(persistent_root_disk[vsd["id"]])
 
                             return persistent_root_disk
+                return persistent_root_disk
 
     @staticmethod
     def find_persistent_volumes(
