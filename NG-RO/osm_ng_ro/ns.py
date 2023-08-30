@@ -1775,7 +1775,11 @@ class Ns(object):
                 net_item["model"] = interface.get("type")
 
             if interface.get("ip-address"):
-                net_item["ip_address"] = interface["ip-address"]
+                dual_ip = interface.get("ip-address").split(";")
+                if len(dual_ip) == 2:
+                    net_item["ip_address"] = dual_ip
+                else:
+                    net_item["ip_address"] = interface["ip-address"]
 
             if interface.get("mac-address"):
                 net_item["mac_address"] = interface["mac-address"]
