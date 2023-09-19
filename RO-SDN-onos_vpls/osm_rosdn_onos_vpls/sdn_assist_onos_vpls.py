@@ -54,6 +54,7 @@ class OnosVpls(SdnConnectorBase):
             url = url + "/"
 
         self.url = url + "onos/v1/network/configuration"
+        self.hosts_url = url + "onos/v1/hosts"
         self.logger.info("ONOS VPLS Connector Initialized.")
 
     def check_credentials(self):
@@ -141,6 +142,35 @@ class OnosVpls(SdnConnectorBase):
                     ),
                     http_code=status_code,
                 )
+        except requests.exceptions.ConnectionError as e:
+            self.logger.info("Exception connecting to onos: %s", e)
+
+            raise SdnConnectorError("Error connecting to onos: {}".format(e))
+        except Exception as e:
+            self.logger.info("Exception posting onos network config: %s", e)
+
+            raise SdnConnectorError(
+                "Exception posting onos network config: {}".format(e)
+            )
+
+    def _delete_onos_hosts(self, onos_host_list):
+        try:
+            for host_id in onos_host_list:
+                url = f"{self.hosts_url}/{host_id}"
+                onos_resp = requests.delete(
+                    url, auth=HTTPBasicAuth(self.user, self.password)
+                )
+                status_code = onos_resp.status_code
+
+                if status_code != requests.codes.ok:
+                    self.logger.info(
+                        "Error deleting ONOS host, status code: {}".format(status_code)
+                    )
+
+                    raise SdnConnectorError(
+                        "Error deleting ONOS host, status code: {}".format(status_code),
+                        http_code=status_code,
+                    )
         except requests.exceptions.ConnectionError as e:
             self.logger.info("Exception connecting to onos: %s", e)
 
@@ -414,9 +444,12 @@ class OnosVpls(SdnConnectorBase):
         created_ifs = conn_info.get("interfaces", [])
         # Obtain current config
         onos_config = self._get_onos_netconfig()
+        conn_service_host_list = []
 
         try:
             # Removes ports used by network from onos config
+            # In addition, it  stores host identifiers (e.g. "FA:16:3E:43:9F:4A/1001")
+            # in conn_service_host_list to be deleted by self._delete_onos_hosts
             for vpls in (
                 onos_config.get("apps", {})
                 .get("org.onosproject.vpls", {})
@@ -424,6 +457,7 @@ class OnosVpls(SdnConnectorBase):
                 .get("vplsList", {})
             ):
                 if vpls["name"] == service_uuid:
+                    self.logger.debug(f"vpls service to be deleted: {vpls}")
                     # iterate interfaces to check if must delete them
                     for interface in vpls["interfaces"]:
                         for port in onos_config["ports"].values():
@@ -437,6 +471,9 @@ class OnosVpls(SdnConnectorBase):
                                             )
                                         )
                                         port["interfaces"].remove(port_interface)
+                                        # TODO: store host_id
+                                        # host_id = ""
+                                        # conn_service_host_list.append(f"{host_id}")
                     onos_config["apps"]["org.onosproject.vpls"]["vpls"][
                         "vplsList"
                     ].remove(vpls)
@@ -448,6 +485,7 @@ class OnosVpls(SdnConnectorBase):
 
             self._pop_last_update_time(onos_config)
             self._post_onos_netconfig(onos_config)
+            self._delete_onos_hosts(conn_service_host_list)
             self.logger.debug(
                 "deleted connectivity service uuid: {}".format(service_uuid)
             )
