@@ -14,11 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
--e RO-plugin
-    # via -r requirements-test.in
-coverage==7.3.2
-    # via -r requirements-test.in
-mock==5.1.0
-    # via -r requirements-test.in
-nose2==0.13.0
-    # via -r requirements-test.in
+---
+other:
+  - |
+    Update pip requirements. It also pins pylint version to 2.17.7, so that
+    it does not present issues with ne version 3.0.0, which still has bugs.
+
