@@ -1782,7 +1782,21 @@ class vimconnector(vimconn.VimConnector):
                 vm = self.conn_compute.virtual_machines.get(
                     self.resource_group, res_name
                 )
-                out_vm["vim_info"] = str(vm)
+                img = vm.storage_profile.image_reference
+                images = self._get_version_image_list(
+                    img.publisher, img.offer, img.sku, img.version
+                )
+                vim_info = {
+                    "id": vm.id,
+                    "name": vm.name,
+                    "location": vm.location,
+                    "provisioning_state": vm.provisioning_state,
+                    "vm_id": vm.vm_id,
+                    "type": vm.type,
+                    "flavor": {"id": vm.hardware_profile.vm_size},
+                    "image": images[0],
+                }
+                out_vm["vim_info"] = str(vim_info)
                 out_vm["status"] = self.provision_state2osm.get(
                     vm.provisioning_state, "OTHER"
                 )
@@ -1861,6 +1875,10 @@ class vimconnector(vimconn.VimConnector):
                     )
                     self.logger.debug("Public ip address is: %s", public_ip.ip_address)
                     ips.append(public_ip.ip_address)
+
+                subnet = nic_data.ip_configurations[0].subnet.id
+                if subnet:
+                    interface_dict["vim_net_id"] = subnet
 
                 private_ip = nic_data.ip_configurations[0].private_ip_address
                 ips.append(private_ip)
