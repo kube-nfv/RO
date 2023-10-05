@@ -186,6 +186,7 @@ class vimconnector(vimconn.VimConnector):
 
         self.persistent_info = persistent_info
         self.availability_zone = persistent_info.get("availability_zone", None)
+        self.storage_availability_zone = None
         self.session = persistent_info.get("session", {"reload_client": True})
         self.my_tenant_id = self.session.get("my_tenant_id")
         self.nova = self.session.get("nova")
@@ -1873,6 +1874,10 @@ class vimconnector(vimconn.VimConnector):
                 self.availability_zone = vim_availability_zones
         else:
             self.availability_zone = self._get_openstack_availablity_zones()
+        if "storage_availability_zone" in self.config:
+            self.storage_availability_zone = self.config.get(
+                "storage_availability_zone"
+            )
 
     def _get_vm_availability_zone(
         self, availability_zone_index, availability_zone_list
@@ -2111,7 +2116,7 @@ class vimconnector(vimconn.VimConnector):
     def _prepare_persistent_root_volumes(
         self,
         name: str,
-        vm_av_zone: list,
+        storage_av_zone: list,
         disk: dict,
         base_disk_index: int,
         block_device_mapping: dict,
@@ -2122,7 +2127,7 @@ class vimconnector(vimconn.VimConnector):
 
         Args:
             name    (str):                      Name of VM instance
-            vm_av_zone  (list):                 List of availability zones
+            storage_av_zone  (list):            Storage of availability zones
             disk    (dict):                     Disk details
             base_disk_index (int):              Disk index
             block_device_mapping    (dict):     Block device details
@@ -2136,11 +2141,9 @@ class vimconnector(vimconn.VimConnector):
         # Disk may include only vim_volume_id or only vim_id."
         # Use existing persistent root volume finding with volume_id or vim_id
         key_id = "vim_volume_id" if "vim_volume_id" in disk.keys() else "vim_id"
-
         if disk.get(key_id):
             block_device_mapping["vd" + chr(base_disk_index)] = disk[key_id]
             existing_vim_volumes.append({"id": disk[key_id]})
-
         else:
             # Create persistent root volume
             volume = self.cinder.volumes.create(
@@ -2148,7 +2151,7 @@ class vimconnector(vimconn.VimConnector):
                 name=name + "vd" + chr(base_disk_index),
                 imageRef=disk["image_id"],
                 # Make sure volume is in the same AZ as the VM to be attached to
-                availability_zone=vm_av_zone,
+                availability_zone=storage_av_zone,
             )
             boot_volume_id = volume.id
             self.update_block_device_mapping(
@@ -2195,10 +2198,16 @@ class vimconnector(vimconn.VimConnector):
 
     @catch_any_exception
     def new_shared_volumes(self, shared_volume_data) -> (str, str):
+        availability_zone = (
+            self.storage_availability_zone
+            if self.storage_availability_zone
+            else self._get_vm_availability_zone
+        )
         volume = self.cinder.volumes.create(
             size=shared_volume_data["size"],
             name=shared_volume_data["name"],
             volume_type="multiattach",
+            availability_zone=availability_zone,
         )
         return volume.name, volume.id
 
@@ -2241,7 +2250,7 @@ class vimconnector(vimconn.VimConnector):
         self,
         name: str,
         disk: dict,
-        vm_av_zone: list,
+        storage_av_zone: list,
         block_device_mapping: dict,
         base_disk_index: int,
         existing_vim_volumes: list,
@@ -2252,7 +2261,7 @@ class vimconnector(vimconn.VimConnector):
         Args:
             name    (str):                      Name of VM instance
             disk    (dict):                     Disk details
-            vm_av_zone  (list):                 List of availability zones
+            storage_av_zone  (list):            Storage of availability zones
             block_device_mapping    (dict):     Block device details
             base_disk_index (int):              Disk index
             existing_vim_volumes    (list):     Existing disk details
@@ -2271,7 +2280,7 @@ class vimconnector(vimconn.VimConnector):
                 size=disk["size"],
                 name=volume_name,
                 # Make sure volume is in the same AZ as the VM to be attached to
-                availability_zone=vm_av_zone,
+                availability_zone=storage_av_zone,
             )
             self.update_block_device_mapping(
                 volume=volume,
@@ -2352,7 +2361,7 @@ class vimconnector(vimconn.VimConnector):
         name: str,
         existing_vim_volumes: list,
         created_items: dict,
-        vm_av_zone: list,
+        storage_av_zone: list,
         block_device_mapping: dict,
         disk_list: list = None,
     ) -> None:
@@ -2362,7 +2371,7 @@ class vimconnector(vimconn.VimConnector):
             name    (str):                      Name of Instance
             existing_vim_volumes    (list):     List of existing volumes
             created_items   (dict):             All created items belongs to VM
-            vm_av_zone  (list):                 VM availability zone
+            storage_av_zone  (list):            Storage availability zone
             block_device_mapping (dict):        Block devices to be attached to VM
             disk_list   (list):                 List of disks
 
@@ -2377,7 +2386,7 @@ class vimconnector(vimconn.VimConnector):
                 base_disk_index = ord("a")
                 boot_volume_id = self._prepare_persistent_root_volumes(
                     name=name,
-                    vm_av_zone=vm_av_zone,
+                    storage_av_zone=storage_av_zone,
                     disk=disk,
                     base_disk_index=base_disk_index,
                     block_device_mapping=block_device_mapping,
@@ -2398,7 +2407,7 @@ class vimconnector(vimconn.VimConnector):
                 self._prepare_non_root_persistent_volumes(
                     name=name,
                     disk=disk,
-                    vm_av_zone=vm_av_zone,
+                    storage_av_zone=storage_av_zone,
                     block_device_mapping=block_device_mapping,
                     base_disk_index=base_disk_index,
                     existing_vim_volumes=existing_vim_volumes,
@@ -2814,13 +2823,19 @@ class vimconnector(vimconn.VimConnector):
                 availability_zone_index, availability_zone_list
             )
 
+            storage_av_zone = (
+                self.storage_availability_zone
+                if self.storage_availability_zone
+                else vm_av_zone
+            )
+
             if disk_list:
                 # Prepare disks
                 self._prepare_disk_for_vminstance(
                     name=name,
                     existing_vim_volumes=existing_vim_volumes,
                     created_items=created_items,
-                    vm_av_zone=vm_av_zone,
+                    storage_av_zone=storage_av_zone,
                     block_device_mapping=block_device_mapping,
                     disk_list=disk_list,
                 )

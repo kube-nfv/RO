@@ -1302,7 +1302,7 @@ class TestNewVmInstance(unittest.TestCase):
 
     def test_prepare_persistent_root_volumes_vim_using_volume_id(self):
         """Existing persistent root volume with vim_volume_id."""
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         base_disk_index = ord("a")
         disk = {"vim_volume_id": volume_id}
         block_device_mapping = {}
@@ -1313,7 +1313,7 @@ class TestNewVmInstance(unittest.TestCase):
         expected_existing_vim_volumes = [{"id": volume_id}]
         boot_volume_id = self.vimconn._prepare_persistent_root_volumes(
             name,
-            vm_av_zone,
+            storage_av_zone,
             disk,
             base_disk_index,
             block_device_mapping,
@@ -1368,7 +1368,7 @@ class TestNewVmInstance(unittest.TestCase):
         self, mock_update_block_device_mapping
     ):
         """Existing persistent non root volume with vim_volume_id."""
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         base_disk_index = ord("b")
         disk = {"vim_volume_id": volume_id}
         block_device_mapping = {}
@@ -1379,7 +1379,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn._prepare_non_root_persistent_volumes(
             name,
             disk,
-            vm_av_zone,
+            storage_av_zone,
             block_device_mapping,
             base_disk_index,
             existing_vim_volumes,
@@ -1395,7 +1395,7 @@ class TestNewVmInstance(unittest.TestCase):
         self, mock_update_block_device_mapping
     ):
         """Existing persistent root volume with vim_id."""
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         base_disk_index = ord("a")
         disk = {"vim_id": volume_id}
         block_device_mapping = {}
@@ -1406,7 +1406,7 @@ class TestNewVmInstance(unittest.TestCase):
         expected_existing_vim_volumes = [{"id": volume_id}]
         boot_volume_id = self.vimconn._prepare_persistent_root_volumes(
             name,
-            vm_av_zone,
+            storage_av_zone,
             disk,
             base_disk_index,
             block_device_mapping,
@@ -1424,7 +1424,7 @@ class TestNewVmInstance(unittest.TestCase):
         self, mock_update_block_device_mapping
     ):
         """Existing persistent root volume with vim_id."""
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         base_disk_index = ord("b")
         disk = {"vim_id": volume_id}
         block_device_mapping = {}
@@ -1436,7 +1436,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn._prepare_non_root_persistent_volumes(
             name,
             disk,
-            vm_av_zone,
+            storage_av_zone,
             block_device_mapping,
             base_disk_index,
             existing_vim_volumes,
@@ -1454,7 +1454,7 @@ class TestNewVmInstance(unittest.TestCase):
     ):
         """Create persistent root volume."""
         self.vimconn.cinder.volumes.create.return_value.id = volume_id2
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         base_disk_index = ord("a")
         disk = {"size": 10, "image_id": image_id}
         block_device_mapping = {}
@@ -1463,7 +1463,7 @@ class TestNewVmInstance(unittest.TestCase):
         expected_boot_vol_id = volume_id2
         boot_volume_id = self.vimconn._prepare_persistent_root_volumes(
             name,
-            vm_av_zone,
+            storage_av_zone,
             disk,
             base_disk_index,
             block_device_mapping,
@@ -1499,7 +1499,7 @@ class TestNewVmInstance(unittest.TestCase):
     ):
         """Create persistent root volume, disk has keep parameter."""
         self.vimconn.cinder.volumes.create.return_value.id = volume_id2
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         base_disk_index = ord("a")
         disk = {"size": 10, "image_id": image_id, "keep": True}
         block_device_mapping = {}
@@ -1509,7 +1509,7 @@ class TestNewVmInstance(unittest.TestCase):
         expected_existing_vim_volumes = []
         boot_volume_id = self.vimconn._prepare_persistent_root_volumes(
             name,
-            vm_av_zone,
+            storage_av_zone,
             disk,
             base_disk_index,
             block_device_mapping,
@@ -1547,7 +1547,7 @@ class TestNewVmInstance(unittest.TestCase):
         """Create persistent non-root volume."""
         self.vimconn.cinder = CopyingMock()
         self.vimconn.cinder.volumes.create.return_value.id = volume_id2
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         base_disk_index = ord("a")
         disk = {"size": 10}
         block_device_mapping = {}
@@ -1557,7 +1557,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn._prepare_non_root_persistent_volumes(
             name,
             disk,
-            vm_av_zone,
+            storage_av_zone,
             block_device_mapping,
             base_disk_index,
             existing_vim_volumes,
@@ -1591,7 +1591,7 @@ class TestNewVmInstance(unittest.TestCase):
         """Create persistent non-root volume."""
         self.vimconn.cinder = CopyingMock()
         self.vimconn.cinder.volumes.create.return_value.id = volume_id2
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         base_disk_index = ord("a")
         disk = {"size": 10, "keep": True}
         block_device_mapping = {}
@@ -1601,7 +1601,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.vimconn._prepare_non_root_persistent_volumes(
             name,
             disk,
-            vm_av_zone,
+            storage_av_zone,
             block_device_mapping,
             base_disk_index,
             existing_vim_volumes,
@@ -1635,12 +1635,17 @@ class TestNewVmInstance(unittest.TestCase):
         class MyVolume:
             name = "my-shared-volume"
             id = volume_id4
+            availability_zone = ["nova"]
 
+        self.vimconn.storage_availability_zone = ["nova"]
         self.vimconn.cinder.volumes.create.return_value = MyVolume()
         shared_volume_data = {"size": 10, "name": "my-shared-volume"}
         result = self.vimconn.new_shared_volumes(shared_volume_data)
         self.vimconn.cinder.volumes.create.assert_called_once_with(
-            size=10, name="my-shared-volume", volume_type="multiattach"
+            size=10,
+            name="my-shared-volume",
+            volume_type="multiattach",
+            availability_zone=["nova"],
         )
         self.assertEqual(result[0], "my-shared-volume")
         self.assertEqual(result[1], volume_id4)
@@ -1651,7 +1656,7 @@ class TestNewVmInstance(unittest.TestCase):
     ):
         """Create persistent root volume raise exception."""
         self.vimconn.cinder.volumes.create.side_effect = Exception
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         base_disk_index = ord("a")
         disk = {"size": 10, "image_id": image_id}
         block_device_mapping = {}
@@ -1661,7 +1666,7 @@ class TestNewVmInstance(unittest.TestCase):
         with self.assertRaises(Exception):
             result = self.vimconn._prepare_persistent_root_volumes(
                 name,
-                vm_av_zone,
+                storage_av_zone,
                 disk,
                 base_disk_index,
                 block_device_mapping,
@@ -1688,7 +1693,7 @@ class TestNewVmInstance(unittest.TestCase):
     ):
         """Create persistent non-root volume raise exception."""
         self.vimconn.cinder.volumes.create.side_effect = Exception
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         base_disk_index = ord("b")
         disk = {"size": 10}
         block_device_mapping = {}
@@ -1699,7 +1704,7 @@ class TestNewVmInstance(unittest.TestCase):
             self.vimconn._prepare_non_root_persistent_volumes(
                 name,
                 disk,
-                vm_av_zone,
+                storage_av_zone,
                 block_device_mapping,
                 base_disk_index,
                 existing_vim_volumes,
@@ -1921,7 +1926,7 @@ class TestNewVmInstance(unittest.TestCase):
         existing_vim_volumes = []
         created_items = {}
         block_device_mapping = {}
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
 
         mock_root_volumes.return_value = root_vol_id
         mock_created_vol_availability.return_value = 10
@@ -1931,7 +1936,7 @@ class TestNewVmInstance(unittest.TestCase):
             name,
             existing_vim_volumes,
             created_items,
-            vm_av_zone,
+            storage_av_zone,
             block_device_mapping,
             disk_list2,
         )
@@ -1944,7 +1949,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertEqual(mock_non_root_volumes.call_count, 1)
         mock_root_volumes.assert_called_once_with(
             name="basicvm",
-            vm_av_zone=["nova"],
+            storage_av_zone=["nova"],
             disk={"size": 10, "image_id": image_id},
             base_disk_index=97,
             block_device_mapping={},
@@ -1954,7 +1959,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_non_root_volumes.assert_called_once_with(
             name="basicvm",
             disk={"size": 20},
-            vm_av_zone=["nova"],
+            storage_av_zone=["nova"],
             base_disk_index=98,
             block_device_mapping={},
             existing_vim_volumes=[],
@@ -1975,7 +1980,7 @@ class TestNewVmInstance(unittest.TestCase):
         """Timeout exceeded while waiting for disks."""
         existing_vim_volumes = []
         created_items = {}
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         block_device_mapping = {}
 
         mock_root_volumes.return_value = root_vol_id
@@ -1987,7 +1992,7 @@ class TestNewVmInstance(unittest.TestCase):
                 name,
                 existing_vim_volumes,
                 created_items,
-                vm_av_zone,
+                storage_av_zone,
                 block_device_mapping,
                 disk_list2,
             )
@@ -2003,7 +2008,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertEqual(mock_non_root_volumes.call_count, 1)
         mock_root_volumes.assert_called_once_with(
             name="basicvm",
-            vm_av_zone=["nova"],
+            storage_av_zone=["nova"],
             disk={"size": 10, "image_id": image_id},
             base_disk_index=97,
             block_device_mapping={},
@@ -2013,7 +2018,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_non_root_volumes.assert_called_once_with(
             name="basicvm",
             disk={"size": 20},
-            vm_av_zone=["nova"],
+            storage_av_zone=["nova"],
             base_disk_index=98,
             block_device_mapping={},
             existing_vim_volumes=[],
@@ -2035,7 +2040,7 @@ class TestNewVmInstance(unittest.TestCase):
         existing_vim_volumes = []
         created_items = {}
         block_device_mapping = {}
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         mock_created_vol_availability.return_value = 2
         mock_existing_vol_availability.return_value = 3
 
@@ -2043,7 +2048,7 @@ class TestNewVmInstance(unittest.TestCase):
             name,
             existing_vim_volumes,
             created_items,
-            vm_av_zone,
+            storage_av_zone,
             block_device_mapping,
             disk_list,
         )
@@ -2067,7 +2072,7 @@ class TestNewVmInstance(unittest.TestCase):
         """Persistent root volumes preparation raises error."""
         existing_vim_volumes = []
         created_items = {}
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         block_device_mapping = {}
 
         mock_root_volumes.side_effect = Exception()
@@ -2079,7 +2084,7 @@ class TestNewVmInstance(unittest.TestCase):
                 name,
                 existing_vim_volumes,
                 created_items,
-                vm_av_zone,
+                storage_av_zone,
                 block_device_mapping,
                 disk_list2,
             )
@@ -2088,7 +2093,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_existing_vol_availability.assert_not_called()
         mock_root_volumes.assert_called_once_with(
             name="basicvm",
-            vm_av_zone=["nova"],
+            storage_av_zone=["nova"],
             disk={"size": 10, "image_id": image_id},
             base_disk_index=97,
             block_device_mapping={},
@@ -2111,7 +2116,7 @@ class TestNewVmInstance(unittest.TestCase):
         """Non-root volumes preparation raises error."""
         existing_vim_volumes = []
         created_items = {}
-        vm_av_zone = ["nova"]
+        storage_av_zone = ["nova"]
         block_device_mapping = {}
 
         mock_root_volumes.return_value = root_vol_id
@@ -2122,7 +2127,7 @@ class TestNewVmInstance(unittest.TestCase):
                 name,
                 existing_vim_volumes,
                 created_items,
-                vm_av_zone,
+                storage_av_zone,
                 block_device_mapping,
                 disk_list2,
             )
@@ -2133,7 +2138,7 @@ class TestNewVmInstance(unittest.TestCase):
         self.assertEqual(mock_non_root_volumes.call_count, 1)
         mock_root_volumes.assert_called_once_with(
             name="basicvm",
-            vm_av_zone=["nova"],
+            storage_av_zone=["nova"],
             disk={"size": 10, "image_id": image_id},
             base_disk_index=97,
             block_device_mapping={},
@@ -2143,7 +2148,7 @@ class TestNewVmInstance(unittest.TestCase):
         mock_non_root_volumes.assert_called_once_with(
             name="basicvm",
             disk={"size": 20},
-            vm_av_zone=["nova"],
+            storage_av_zone=["nova"],
             base_disk_index=98,
             block_device_mapping={},
             existing_vim_volumes=[],
@@ -3300,7 +3305,7 @@ class TestNewVmInstance(unittest.TestCase):
             name=name,
             existing_vim_volumes=[],
             created_items={},
-            vm_av_zone="nova",
+            storage_av_zone="nova",
             block_device_mapping={},
             disk_list=disk_list2,
         )
@@ -3477,7 +3482,7 @@ class TestNewVmInstance(unittest.TestCase):
             name=name,
             existing_vim_volumes=[],
             created_items={},
-            vm_av_zone="nova",
+            storage_av_zone="nova",
             block_device_mapping={},
             disk_list=disk_list2,
         )
@@ -3575,7 +3580,7 @@ class TestNewVmInstance(unittest.TestCase):
             name=name,
             existing_vim_volumes=[],
             created_items={},
-            vm_av_zone="nova",
+            storage_av_zone="nova",
             block_device_mapping={},
             disk_list=disk_list2,
         )
@@ -3674,7 +3679,7 @@ class TestNewVmInstance(unittest.TestCase):
             name=name,
             existing_vim_volumes=[],
             created_items={},
-            vm_av_zone="nova",
+            storage_av_zone="nova",
             block_device_mapping={},
             disk_list=disk_list2,
         )
