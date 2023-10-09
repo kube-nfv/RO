@@ -1140,7 +1140,7 @@ class vimconnector(vimconn.VimConnector):
             vm_sizes_list = [
                 vm_size.as_dict()
                 for vm_size in self.conn_compute.resource_skus.list(
-                    "location eq '{}'".format(self.region)
+                    filter="location eq '{}'".format(self.region)
                 )
             ]
 
@@ -1218,7 +1218,7 @@ class vimconnector(vimconn.VimConnector):
             vm_sizes_list = [
                 vm_size.as_dict()
                 for vm_size in self.conn_compute.resource_skus.list(
-                    "location eq '{}'".format(self.region)
+                    filter="location eq '{}'".format(self.region)
                 )
             ]
 
