@@ -907,6 +907,9 @@ class vimconnector(vimconn.VimConnector):
                         ] = "regions/%s/subnetworks/" % self.region + net.get("name")
                 else:
                     net_iface["subnetwork"] = net.get("net_id")
+                if net.get("ip_address"):
+                    net_iface["networkIP"] = net.get("ip_address")
+
                 # In order to get an external IP address, the key "accessConfigs" must be used
                 # in the interace. It has to be of type "ONE_TO_ONE_NAT" and name "External NAT"
                 if net.get("floating_ip", False) or (
@@ -1095,6 +1098,20 @@ class vimconnector(vimconn.VimConnector):
                 )
             )
 
+    def _get_id_from_image(self, image):
+        """
+        Obtains image_id from the google cloud complete image identifier: image_id will be the last five items
+        """
+        self.logger.debug(f"_get_id_from_image begin: image {image}")
+        try:
+            image_id = "/".join(image.split("/")[-5:])
+            self.logger.debug(f"_get_id_from_image Return: image_id {image_id}")
+            return image_id
+        except Exception as e:
+            raise vimconn.VimConnException(
+                f"Unable to get image_id from image '{image}' Error: '{e}'"
+            )
+
     def refresh_nets_status(self, net_list):
         """Get the status of the networks
         Params: the list of network identifiers
@@ -1189,7 +1206,43 @@ class vimconnector(vimconn.VimConnector):
                     .execute()
                 )
 
-                out_vm["vim_info"] = str(vm["name"])
+                disk_source = vm["disks"][0]["source"]
+                self.logger.debug("getting disk information")
+                disk = (
+                    self.conn_compute.disks()
+                    .get(
+                        project=self.project,
+                        zone=self.zone,
+                        disk=self._get_resource_name_from_resource_id(disk_source),
+                    )
+                    .execute()
+                )
+                image = {}
+                if disk is not None:
+                    self.logger.debug(f"disk: {disk}")
+                    image = {
+                        "id": self._get_id_from_image(disk["sourceImage"]),
+                        "source": disk_source,
+                    }
+
+                vim_info = {
+                    "id": vm_id,
+                    "name": vm["name"],
+                    "creationTimestamp": vm["creationTimestamp"],
+                    "lastStartTimestamp": vm["lastStartTimestamp"],
+                    "vm_id": vm["id"],
+                    "kind": vm["kind"],
+                    "cpuPlatform": vm["cpuPlatform"],
+                    "zone": self._get_resource_name_from_resource_id(vm["zone"]),
+                    "machineType": vm["machineType"],
+                    "flavor": {
+                        "id": self._get_resource_name_from_resource_id(
+                            vm["machineType"]
+                        )
+                    },
+                    "image": image,
+                }
+                out_vm["vim_info"] = str(vim_info)
                 out_vm["status"] = self.provision_state2osm.get(vm["status"], "OTHER")
 
                 # In Google Cloud the there is no difference between provision or power status,
@@ -1229,6 +1282,7 @@ class vimconnector(vimconn.VimConnector):
             for network_interface in interfaces:
                 interface_dict = {}
                 interface_dict["vim_interface_id"] = network_interface["name"]
+                interface_dict["vim_net_id"] = network_interface["subnetwork"]
 
                 ips = []
                 ips.append(network_interface["networkIP"])
