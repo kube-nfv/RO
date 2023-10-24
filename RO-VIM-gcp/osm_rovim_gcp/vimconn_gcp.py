@@ -183,7 +183,9 @@ class vimconnector(vimconn.VimConnector):
 
             try:
                 # Set to client created
-                self.conn_compute = googleapiclient.discovery.build("compute", "v1")
+                self.conn_compute = googleapiclient.discovery.build(
+                    "compute", "v1", credentials=self.credentials
+                )
             except Exception as e:
                 self._format_vimconn_exception(e)
 
