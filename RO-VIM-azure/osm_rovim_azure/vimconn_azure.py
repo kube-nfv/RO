@@ -203,7 +203,7 @@ class vimconnector(vimconn.VimConnector):
         # Variable that indicates if client must be reloaded or initialized
         self.reload_client = True
 
-        self.vnet_address_space = None
+        self.vnet_address_space = []
 
         # LOGGER
         self.logger = logging.getLogger("ro.vim.azure")
@@ -407,7 +407,7 @@ class vimconnector(vimconn.VimConnector):
             vnet = self.conn_vnet.virtual_networks.get(
                 self.vnet_resource_group or self.resource_group, self.vnet_name
             )
-            self.vnet_address_space = vnet.address_space.address_prefixes[0]
+            self.vnet_address_space = vnet.address_space.address_prefixes
             self.vnet_id = vnet.id
 
             return
@@ -424,7 +424,7 @@ class vimconnector(vimconn.VimConnector):
                 "location": self.region,
                 "address_space": {"address_prefixes": ["10.0.0.0/8"]},
             }
-            self.vnet_address_space = "10.0.0.0/8"
+            self.vnet_address_space = ["10.0.0.0/8"]
 
             self.logger.debug("create base vnet: %s", self.vnet_name)
             self.conn_vnet.virtual_networks.begin_create_or_update(
@@ -485,16 +485,21 @@ class vimconnector(vimconn.VimConnector):
         if ip_profile is None:
             # get a non used vnet ip range /24 and allocate automatically inside the range self.vnet_address_space
             used_subnets = self.get_network_list()
-            for ip_range in netaddr.IPNetwork(self.vnet_address_space).subnet(24):
-                for used_subnet in used_subnets:
-                    subnet_range = netaddr.IPNetwork(used_subnet["cidr_block"])
+            for space in self.vnet_address_space:
+                for ip_range in netaddr.IPNetwork(space).subnet(24):
+                    for used_subnet in used_subnets:
+                        subnet_range = netaddr.IPNetwork(used_subnet["cidr_block"])
 
-                    if subnet_range in ip_range or ip_range in subnet_range:
-                        # this range overlaps with an existing subnet ip range. Breaks and look for another
+                        if subnet_range in ip_range or ip_range in subnet_range:
+                            # this range overlaps with an existing subnet ip range. Breaks and look for another
+                            break
+                    else:
+                        ip_profile = {"subnet_address": str(ip_range)}
+                        self.logger.debug(
+                            "dinamically obtained ip_profile: %s", ip_range
+                        )
                         break
-                else:
-                    ip_profile = {"subnet_address": str(ip_range)}
-                    self.logger.debug("dinamically obtained ip_profile: %s", ip_range)
+                if ip_profile is not None:
                     break
             else:
                 raise vimconn.VimConnException(
