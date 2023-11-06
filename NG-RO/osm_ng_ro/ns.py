@@ -1611,9 +1611,9 @@ class Ns(object):
 
         extra_dict["params"] = {
             "name": "{}-{}-{}-{}".format(
-                indata["name"][:16],
-                vnfr["member-vnf-index-ref"][:16],
-                target_vdu["vdu-name"][:32],
+                indata["name"],
+                vnfr["member-vnf-index-ref"],
+                target_vdu["vdu-name"],
                 target_vdu.get("count-index") or 0,
             ),
             "description": target_vdu["vdu-name"],
@@ -1844,9 +1844,9 @@ class Ns(object):
 
         extra_dict["params"] = {
             "name": "{}-{}-{}-{}".format(
-                db_nsr["name"][:16],
-                vnfr["member-vnf-index-ref"][:16],
-                existing_vdu["vdu-name"][:32],
+                db_nsr["name"],
+                vnfr["member-vnf-index-ref"],
+                existing_vdu["vdu-name"],
                 existing_vdu.get("count-index") or 0,
             ),
             "description": existing_vdu["vdu-name"],
