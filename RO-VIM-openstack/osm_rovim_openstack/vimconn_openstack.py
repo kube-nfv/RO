@@ -3376,6 +3376,12 @@ class vimconnector(vimconn.VimConnector):
         if "start" in action_dict:
             if action_dict["start"] == "rebuild":
                 server.rebuild()
+                vm_state = self.__wait_for_vm(vm_id, "ACTIVE")
+                if not vm_state:
+                    raise nvExceptions.BadRequest(
+                        409,
+                        message="Cannot 'REBUILD' vm_state is in ERROR",
+                    )
             else:
                 if server.status == "PAUSED":
                     server.unpause()
@@ -3383,6 +3389,12 @@ class vimconnector(vimconn.VimConnector):
                     server.resume()
                 elif server.status == "SHUTOFF":
                     server.start()
+                    vm_state = self.__wait_for_vm(vm_id, "ACTIVE")
+                    if not vm_state:
+                        raise nvExceptions.BadRequest(
+                            409,
+                            message="Cannot 'START' vm_state is in ERROR",
+                        )
                 else:
                     self.logger.debug(
                         "ERROR : Instance is not in SHUTOFF/PAUSE/SUSPEND state"
@@ -3399,6 +3411,12 @@ class vimconnector(vimconn.VimConnector):
             self.logger.debug("server status %s", server.status)
             if server.status == "ACTIVE":
                 server.stop()
+                vm_state = self.__wait_for_vm(vm_id, "SHUTOFF")
+                if not vm_state:
+                    raise nvExceptions.BadRequest(
+                        409,
+                        message="Cannot 'STOP' vm_state is in ERROR",
+                    )
             else:
                 self.logger.debug("ERROR: VM is not in Active state")
                 raise vimconn.VimConnException(
