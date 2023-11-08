@@ -331,11 +331,14 @@ expected_result_vertical_scale = {
     "params": {
         "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
         "flavor_dict": "flavor_dict",
+        "flavor_id": "TASK-nsrs:993166fe-723e-4680-ac4b-b1af2541ae31:flavor.0",
     },
+    "depends_on": ["nsrs:993166fe-723e-4680-ac4b-b1af2541ae31:flavor.0"],
 }
 vdu = {
     "id": vdu_id,
     "vim_info": {target_vim: {"interfaces": []}},
+    "ns-flavor-id": "0",
 }
 vnf = {"_id": vnf_id}
 extra_dict_vertical_scale = {
@@ -3210,11 +3213,25 @@ class TestNs(unittest.TestCase):
         self, assign_vim
     ):
         self.ns = Ns()
-        extra_dict = {}
+        extra_dict = {"params": {}}
         vdu_index = "1"
         task_index = 1
-        expected_result = deepcopy(expected_result_vertical_scale)
-        expected_result.pop("params")
+        expected_result = {
+            "target_id": "vim:f9f370ac-0d44-41a7-9000-457f2332bc35",
+            "action_id": "bb937f49-3870-4169-b758-9732e1ff40f3",
+            "nsr_id": "993166fe-723e-4680-ac4b-b1af2541ae31",
+            "task_id": "bb937f49-3870-4169-b758-9732e1ff40f3:1",
+            "status": "SCHEDULED",
+            "action": "EXEC",
+            "item": "verticalscale",
+            "target_record": "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.1.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35",
+            "target_record_id": "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.bb9c43f9-10a2-4569-a8a8-957c3528b6d1",
+            "params": {
+                "flavor_id": "TASK-nsrs:993166fe-723e-4680-ac4b-b1af2541ae31:flavor.0"
+            },
+            "depends_on": ["nsrs:993166fe-723e-4680-ac4b-b1af2541ae31:flavor.0"],
+        }
+
         task = self.ns.verticalscale_task(
             vdu, vnf, vdu_index, action_id, nsr_id_2, task_index, extra_dict
         )
