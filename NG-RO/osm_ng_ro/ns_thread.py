@@ -1519,20 +1519,12 @@ class VimInteractionResize(VimInteractionBase):
         target_vim = self.my_vims[ro_task["target_id"]]
 
         try:
+            params = task["params"]
+            params_copy = deepcopy(params)
+            target_flavor_uuid = task_depends[params_copy["flavor_id"]]
             vim_vm_id = ""
             if task.get("params"):
-                vim_vm_id = task["params"].get("vim_vm_id")
-                flavor_dict = task["params"].get("flavor_dict")
-                self.logger.info("flavor_dict %s", flavor_dict)
-
-                try:
-                    target_flavor_uuid = target_vim.get_flavor_id_from_data(flavor_dict)
-                except Exception as e:
-                    self.logger.info("Cannot find any flavor matching  %s.", str(e))
-                    try:
-                        target_flavor_uuid = target_vim.new_flavor(flavor_dict)
-                    except Exception as e:
-                        self.logger.error("Error creating flavor at VIM  %s.", str(e))
+                self.logger.info("vim_vm_id %s", vim_vm_id)
 
                 if target_flavor_uuid is not None:
                     resized_status = target_vim.resize_instance(

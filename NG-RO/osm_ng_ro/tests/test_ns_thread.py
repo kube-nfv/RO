@@ -1921,12 +1921,16 @@ class TestVimInteractionResize(unittest.TestCase):
                         "params": {
                             "vim_vm_id": "f37b18ef-3caa-4dc9-ab91-15c669b16396",
                             "flavor_dict": "flavor_dict",
+                            "flavor_id": "TASK-nsrs:993166fe-723e-4680-ac4b-b1af2541ae31:flavor.0",
                         },
                     }
                 },
             }
+            task_depends = {
+                "TASK-nsrs:993166fe-723e-4680-ac4b-b1af2541ae31:flavor.0": "1"
+            }
             task_index = "task_index_1"
-            result = instance.exec(ro_task, task_index, self.task_depends)
+            result = instance.exec(ro_task, task_index, task_depends)
             self.assertEqual(result[0], "DONE")
             self.assertEqual(result[1].get("vim_status"), "ACTIVE")
 

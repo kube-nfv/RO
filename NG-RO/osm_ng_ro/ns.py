@@ -3121,6 +3121,10 @@ class Ns(object):
     ):
         target_vim, vim_info = next(k_v for k_v in vdu["vim_info"].items())
         self._assign_vim(target_vim)
+        ns_preffix = "nsrs:{}".format(nsr_id)
+        flavor_text = ns_preffix + ":flavor." + vdu["ns-flavor-id"]
+        extra_dict["depends_on"] = [flavor_text]
+        extra_dict["params"].update({"flavor_id": "TASK-" + flavor_text})
         target_record = "vnfrs:{}:vdur.{}.vim_info.{}".format(
             vnf["_id"], vdu_index, target_vim
         )
@@ -3142,9 +3146,36 @@ class Ns(object):
         )
         return task
 
+    def verticalscale_flavor_task(
+        self, vdu, vnf, vdu_index, action_id, nsr_id, task_index, extra_dict
+    ):
+        target_vim, vim_info = next(k_v for k_v in vdu["vim_info"].items())
+        self._assign_vim(target_vim)
+        db_nsr = self.db.get_one("nsrs", {"_id": nsr_id})
+        target_record = "nsrs:{}:flavor.{}.vim_info.{}".format(
+            nsr_id, len(db_nsr["flavor"]) - 1, target_vim
+        )
+        target_record_id = "nsrs:{}:flavor.{}".format(nsr_id, len(db_nsr["flavor"]) - 1)
+        deployment_info = {
+            "action_id": action_id,
+            "nsr_id": nsr_id,
+            "task_index": task_index,
+        }
+        task = Ns._create_task(
+            deployment_info=deployment_info,
+            target_id=target_vim,
+            item="flavor",
+            action="CREATE",
+            target_record=target_record,
+            target_record_id=target_record_id,
+            extra_dict=extra_dict,
+        )
+        return task
+
     def verticalscale(self, session, indata, version, nsr_id, *args, **kwargs):
         task_index = 0
         extra_dict = {}
+        flavor_extra_dict = {}
         now = time()
         action_id = indata.get("action_id", str(uuid4()))
         step = ""
@@ -3166,6 +3197,13 @@ class Ns(object):
                 "vcpus": numVirtualCpu,
                 "disk": sizeOfStorage,
             }
+            flavor_data = {
+                "ram": virtualMemory,
+                "vcpus": numVirtualCpu,
+                "disk": sizeOfStorage,
+            }
+            flavor_extra_dict["find_params"] = {"flavor_data": flavor_data}
+            flavor_extra_dict["params"] = {"flavor_data": flavor_dict}
             db_new_tasks = []
             step = "Creating Tasks for vertical scaling"
             with self.write_lock:
@@ -3177,7 +3215,21 @@ class Ns(object):
                         extra_dict["params"] = {
                             "vim_vm_id": vdu["vim-id"],
                             "flavor_dict": flavor_dict,
+                            "vdu-id-ref": vdu["vdu-id-ref"],
+                            "count-index": vdu["count-index"],
+                            "vnf_instance_id": vnf_instance_id,
                         }
+                        task = self.verticalscale_flavor_task(
+                            vdu,
+                            db_vnfr,
+                            vdu_index,
+                            action_id,
+                            nsr_id,
+                            task_index,
+                            flavor_extra_dict,
+                        )
+                        db_new_tasks.append(task)
+                        task_index += 1
                         task = self.verticalscale_task(
                             vdu,
                             db_vnfr,
