@@ -1404,8 +1404,6 @@ class VimInteractionUpdateVdu(VimInteractionBase):
         task = ro_task["tasks"][task_index]
         task_id = task["task_id"]
         db_task_update = {"retries": 0}
-        created = False
-        created_items = {}
         target_vim = self.my_vims[ro_task["target_id"]]
 
         try:
@@ -1419,10 +1417,6 @@ class VimInteractionUpdateVdu(VimInteractionBase):
             ro_vim_item_update = {
                 "vim_id": vim_vm_id,
                 "vim_status": "ACTIVE",
-                "created": created,
-                "created_items": created_items,
-                "vim_details": None,
-                "vim_message": None,
             }
             self.logger.debug(
                 "task={} {} vm-migration done".format(task_id, ro_task["target_id"])
@@ -1435,7 +1429,6 @@ class VimInteractionUpdateVdu(VimInteractionBase):
             )
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
-                "created": created,
                 "vim_message": str(e),
             }
 
@@ -1845,8 +1838,6 @@ class VimInteractionMigration(VimInteractionBase):
         db_task_update = {"retries": 0}
         target_vim = self.my_vims[ro_task["target_id"]]
         vim_interfaces = []
-        created = False
-        created_items = {}
         refreshed_vim_info = {}
 
         try:
@@ -1885,8 +1876,6 @@ class VimInteractionMigration(VimInteractionBase):
             ro_vim_item_update = {
                 "vim_id": vim_vm_id,
                 "vim_status": "ACTIVE",
-                "created": created,
-                "created_items": created_items,
                 "vim_details": None,
                 "vim_message": None,
             }
@@ -1913,7 +1902,6 @@ class VimInteractionMigration(VimInteractionBase):
             )
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
-                "created": created,
                 "vim_message": str(e),
             }
 
@@ -1925,9 +1913,7 @@ class VimInteractionResize(VimInteractionBase):
         task = ro_task["tasks"][task_index]
         task_id = task["task_id"]
         db_task_update = {"retries": 0}
-        created = False
         target_flavor_uuid = None
-        created_items = {}
         refreshed_vim_info = {}
         target_vim = self.my_vims[ro_task["target_id"]]
 
@@ -1953,8 +1939,6 @@ class VimInteractionResize(VimInteractionBase):
             ro_vim_item_update = {
                 "vim_id": vim_vm_id,
                 "vim_status": "ACTIVE",
-                "created": created,
-                "created_items": created_items,
                 "vim_details": None,
                 "vim_message": None,
             }
@@ -1975,7 +1959,6 @@ class VimInteractionResize(VimInteractionBase):
             )
             ro_vim_item_update = {
                 "vim_status": "VIM_ERROR",
-                "created": created,
                 "vim_message": str(e),
             }
 
