@@ -187,6 +187,7 @@ class vimconnector(vimconn.VimConnector):
         self.persistent_info = persistent_info
         self.availability_zone = persistent_info.get("availability_zone", None)
         self.storage_availability_zone = None
+        self.vm_av_zone = None
         self.session = persistent_info.get("session", {"reload_client": True})
         self.my_tenant_id = self.session.get("my_tenant_id")
         self.nova = self.session.get("nova")
@@ -2201,7 +2202,7 @@ class vimconnector(vimconn.VimConnector):
         availability_zone = (
             self.storage_availability_zone
             if self.storage_availability_zone
-            else self._get_vm_availability_zone
+            else self.vm_av_zone
         )
         volume = self.cinder.volumes.create(
             size=shared_volume_data["size"],
@@ -2819,14 +2820,14 @@ class vimconnector(vimconn.VimConnector):
             config_drive, userdata = self._create_user_data(cloud_config)
 
             # Get availability Zone
-            vm_av_zone = self._get_vm_availability_zone(
+            self.vm_av_zone = self._get_vm_availability_zone(
                 availability_zone_index, availability_zone_list
             )
 
             storage_av_zone = (
                 self.storage_availability_zone
                 if self.storage_availability_zone
-                else vm_av_zone
+                else self.vm_av_zone
             )
 
             if disk_list:
@@ -2854,7 +2855,7 @@ class vimconnector(vimconn.VimConnector):
                     flavor_id,
                     net_list_vim,
                     self.config.get("security_groups"),
-                    vm_av_zone,
+                    self.vm_av_zone,
                     self.config.get("keypair"),
                     userdata,
                     config_drive,
@@ -2870,7 +2871,7 @@ class vimconnector(vimconn.VimConnector):
                 nics=net_list_vim,
                 security_groups=self.config.get("security_groups"),
                 # TODO remove security_groups in future versions. Already at neutron port
-                availability_zone=vm_av_zone,
+                availability_zone=self.vm_av_zone,
                 key_name=self.config.get("keypair"),
                 userdata=userdata,
                 config_drive=config_drive,
