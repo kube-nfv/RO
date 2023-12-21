@@ -241,7 +241,7 @@ class OfConnFloodLight(OpenflowConn):
             self.logger.debug("get_of_rules " + error_text)
             info = of_response.json()
 
-            if type(info) != dict:
+            if not info.isinstance(dict):
                 self.logger.error(
                     "get_of_rules. Unexpected response not a dict %s", str(type(info))
                 )
@@ -445,7 +445,7 @@ class OfConnFloodLight(OpenflowConn):
                     self.logger.debug("obtain_port_correspondence " + error_text)
                     info = of_response.json()
 
-                    if type(info) != dict:
+                    if not info.isinstance(dict):
                         raise OpenflowConnUnexpectedResponse(
                             "unexpected openflow port-desc response, "
                             "not a dict. Wrong version?"
@@ -457,10 +457,9 @@ class OfConnFloodLight(OpenflowConn):
                             "'portDesc' not found. Wrong version?"
                         )
 
-                    if (
-                        type(info["portDesc"]) != list
-                        and type(info["portDesc"]) != tuple
-                    ):
+                    if not info["portDesc"].isinstance(list) and not info[
+                        "portDesc"
+                    ].isinstance(tuple):
                         raise OpenflowConnUnexpectedResponse(
                             "unexpected openflow port-desc response at "
                             "'portDesc', not a list. Wrong version?"
