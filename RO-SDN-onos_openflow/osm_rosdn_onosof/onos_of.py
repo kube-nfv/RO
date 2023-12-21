@@ -128,7 +128,7 @@ class OfConnOnos(OpenflowConn):
             self.logger.debug("get_of_switches " + error_text)
             info = of_response.json()
 
-            if type(info) != dict:
+            if not info.isinstance(dict):
                 self.logger.error(
                     "get_of_switches. Unexpected response, not a dict: %s", str(info)
                 )
@@ -312,7 +312,7 @@ class OfConnOnos(OpenflowConn):
 
             info = of_response.json()
 
-            if type(info) != dict:
+            if not info.isinstance(dict):
                 self.logger.error(
                     "get_of_rules. Unexpected response, not a dict: %s",
                     str(info),

@@ -6330,7 +6330,7 @@ class vimconnector(vimconn.VimConnector):
                         ].spec.ip.ipAddress
 
                         for device in vm_obj.config.hardware.device:
-                            if type(device) == vim.vm.device.VirtualPCIPassthrough:
+                            if device.isinstance(vim.vm.device.VirtualPCIPassthrough):
                                 device_details = {
                                     "devide_id": device.backing.id,
                                     "pciSlotNumber": device.slotInfo.pciSlotNumber,
