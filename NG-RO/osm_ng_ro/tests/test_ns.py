@@ -3037,9 +3037,9 @@ class TestNs(unittest.TestCase):
             }
             extra_dict["params"] = params
             expected_result = deepcopy(expected_result_rebuild_start_stop)
-            expected_result[
-                "target_record"
-            ] = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+            expected_result["target_record"] = (
+                "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+            )
             expected_result["params"] = params
             task = self.ns.rebuild_start_stop_task(
                 vdu_id,
@@ -3063,9 +3063,9 @@ class TestNs(unittest.TestCase):
         vdu_index = "0"
         task_index = 0
         expected_result = deepcopy(expected_result_rebuild_start_stop)
-        expected_result[
-            "target_record"
-        ] = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+        expected_result["target_record"] = (
+            "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+        )
         for _ in actions:
             task = self.ns.rebuild_start_stop_task(
                 vdu_id,
@@ -3095,9 +3095,9 @@ class TestNs(unittest.TestCase):
             }
             extra_dict["params"] = params
             expected_result = deepcopy(expected_result_rebuild_start_stop)
-            expected_result[
-                "target_record"
-            ] = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.4.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+            expected_result["target_record"] = (
+                "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.4.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+            )
             expected_result["params"] = params
             task = self.ns.rebuild_start_stop_task(
                 vdu_id,
@@ -3127,9 +3127,9 @@ class TestNs(unittest.TestCase):
             }
             extra_dict["params"] = params
             expected_result = deepcopy(expected_result_rebuild_start_stop)
-            expected_result[
-                "target_record"
-            ] = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+            expected_result["target_record"] = (
+                "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.0.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+            )
             expected_result["params"] = params
             expected_result["task_id"] = "bb937f49-3870-4169-b758-9732e1ff40f3:3"
             task = self.ns.rebuild_start_stop_task(
@@ -3289,9 +3289,9 @@ class TestNs(unittest.TestCase):
         vdu_index = "4"
         task_index = 1
         expected_result = deepcopy(expected_result_migrate)
-        expected_result[
-            "target_record"
-        ] = "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.4.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+        expected_result["target_record"] = (
+            "vnfrs:665b4165-ce24-4320-bf19-b9a45bade49f:vdur.4.vim_info.vim:f9f370ac-0d44-41a7-9000-457f2332bc35"
+        )
         task = self.ns.migrate_task(
             vdu, vnf, vdu_index, action_id, nsr_id_2, task_index, extra_dict_migrate
         )

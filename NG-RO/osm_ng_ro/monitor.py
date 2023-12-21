@@ -526,21 +526,21 @@ class MonitorVms:
             vdur_path               (str):          Path of VDUR in DB
         """
         if server.status in openStackvmStatusOk:
-            vdur_vim_info_update["vim_status"] = vdur_update[
-                vdur_path + ".status"
-            ] = server.status
+            vdur_vim_info_update["vim_status"] = vdur_update[vdur_path + ".status"] = (
+                server.status
+            )
 
         else:
-            vdur_vim_info_update["vim_status"] = vdur_update[
-                vdur_path + ".status"
-            ] = server.status
+            vdur_vim_info_update["vim_status"] = vdur_update[vdur_path + ".status"] = (
+                server.status
+            )
             vdur_vim_info_update["vim_message"] = "VIM status reported " + server.status
 
         vdur_vim_info_update["vim_details"] = self._get_server_info(server)
         vdur_vim_info_update["vim_id"] = server.id
-        vdur_vim_info_update["vim_name"] = vdur_update[
-            vdur_path + ".name"
-        ] = server.name
+        vdur_vim_info_update["vim_name"] = vdur_update[vdur_path + ".name"] = (
+            server.name
+        )
 
     @staticmethod
     def get_interface_info(
@@ -610,9 +610,9 @@ class MonitorVms:
         """
         current_ip_address = MonitorVms._get_current_ip_address(interface_info)
         if current_ip_address:
-            vdur_update[
-                vdur_path + ".interfaces." + str(index) + ".ip-address"
-            ] = current_ip_address
+            vdur_update[vdur_path + ".interfaces." + str(index) + ".ip-address"] = (
+                current_ip_address
+            )
 
             if old_interface.get("mgmt_vdu_interface"):
                 vdur_update[vdur_path + ".ip-address"] = current_ip_address
@@ -620,9 +620,9 @@ class MonitorVms:
             if old_interface.get("mgmt_vnf_interface"):
                 vnfr_update[vnfr_id + ".ip-address"] = current_ip_address
 
-        vdur_update[
-            vdur_path + ".interfaces." + str(index) + ".mac-address"
-        ] = interface_info.get("mac_address")
+        vdur_update[vdur_path + ".interfaces." + str(index) + ".mac-address"] = (
+            interface_info.get("mac_address")
+        )
 
     @staticmethod
     def _get_current_ip_address(interface_info: dict) -> Optional[str]:
@@ -667,14 +667,18 @@ class MonitorVms:
         vdur_vim_info_update["interfaces"][index].update(
             {
                 "mac_address": interface_info["mac_address"],
-                "ip_address": interface_info["fixed_ips"][0].get("ip_address")
-                if interface_info.get("fixed_ips")
-                else None,
+                "ip_address": (
+                    interface_info["fixed_ips"][0].get("ip_address")
+                    if interface_info.get("fixed_ips")
+                    else None
+                ),
                 "vim_net_id": interface_info["network_id"],
                 "vim_info": self.serialize(interface_info),
-                "compute_node": server.to_dict()["OS-EXT-SRV-ATTR:host"]
-                if server.to_dict().get("OS-EXT-SRV-ATTR:host")
-                else None,
+                "compute_node": (
+                    server.to_dict()["OS-EXT-SRV-ATTR:host"]
+                    if server.to_dict().get("OS-EXT-SRV-ATTR:host")
+                    else None
+                ),
             }
         )
 
@@ -744,9 +748,9 @@ class MonitorVms:
         for index, old_interface in enumerate(existing_vim_info["interfaces"]):
             interface_info = self.get_interface_info(ports, old_interface, server)
             if not interface_info:
-                vdur_vim_info_update[
-                    "vim_message"
-                ] = f"Interface {old_interface['vim_interface_id']} deleted externally."
+                vdur_vim_info_update["vim_message"] = (
+                    f"Interface {old_interface['vim_interface_id']} deleted externally."
+                )
 
             else:
                 if interface_info.get("status") in openStacknetStatusOk:

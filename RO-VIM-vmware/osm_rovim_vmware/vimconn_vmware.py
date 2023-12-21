@@ -1253,9 +1253,9 @@ class vimconnector(vimconn.VimConnector):
                             "x-vcloud-authorization"
                         ],
                     }
-                    headers[
-                        "Content-Type"
-                    ] = "application/vnd.vmware.vcloud.uploadVAppTemplateParams+xml"
+                    headers["Content-Type"] = (
+                        "application/vnd.vmware.vcloud.uploadVAppTemplateParams+xml"
+                    )
 
                 response = self.perform_request(
                     req_type="POST", url=catalog_href, headers=headers, data=data
@@ -1990,9 +1990,9 @@ class vimconnector(vimconn.VimConnector):
                 ).group(1)
                 # cores = re.search('<vmw:CoresPerSocket ovf:required.*?>(\d+)</vmw:CoresPerSocket>', result).group(1)
 
-                headers[
-                    "Content-Type"
-                ] = "application/vnd.vmware.vcloud.instantiateVAppTemplateParams+xml"
+                headers["Content-Type"] = (
+                    "application/vnd.vmware.vcloud.instantiateVAppTemplateParams+xml"
+                )
                 vdc_id = vdc.get("id").split(":")[-1]
                 instantiate_vapp_href = (
                     "{}/api/vdc/{}/action/instantiateVAppTemplate".format(
@@ -4220,15 +4220,15 @@ class vimconnector(vimconn.VimConnector):
                     child.attrib["type"]
                     == "application/vnd.vmware.vcloud.orgNetwork+xml"
                 ):
-                    network_list[
-                        child.attrib["href"].split("/")[-1:][0]
-                    ] = child.attrib["name"]
+                    network_list[child.attrib["href"].split("/")[-1:][0]] = (
+                        child.attrib["name"]
+                    )
                     org_dict["networks"] = network_list
 
                 if child.attrib["type"] == "application/vnd.vmware.vcloud.catalog+xml":
-                    catalog_list[
-                        child.attrib["href"].split("/")[-1:][0]
-                    ] = child.attrib["name"]
+                    catalog_list[child.attrib["href"].split("/")[-1:][0]] = (
+                        child.attrib["name"]
+                    )
                     org_dict["catalogs"] = catalog_list
         except Exception:
             pass
@@ -4440,9 +4440,9 @@ class vimconnector(vimconn.VimConnector):
                         for configuration in child.iter():
                             tagKey = configuration.tag.split("}")[1].strip()
                             if tagKey != "":
-                                network_configuration[
-                                    tagKey
-                                ] = configuration.text.strip()
+                                network_configuration[tagKey] = (
+                                    configuration.text.strip()
+                                )
         except Exception as exp:
             self.logger.debug("get_vcd_network: Failed with Exception {}".format(exp))
 
@@ -4988,9 +4988,9 @@ class vimconnector(vimconn.VimConnector):
                                         </InstantiateVdcTemplateParams>""".format(
                 vdc_name, vdc_template_ref
             )
-            headers[
-                "Content-Type"
-            ] = "application/vnd.vmware.vcloud.instantiateVdcTemplateParams+xml"
+            headers["Content-Type"] = (
+                "application/vnd.vmware.vcloud.instantiateVdcTemplateParams+xml"
+            )
             response = self.perform_request(
                 req_type="POST", url=vm_list_rest_call, headers=headers, data=data
             )
@@ -5102,9 +5102,9 @@ class vimconnector(vimconn.VimConnector):
                                 ip_ranges = scope.getchildren()
                                 for ipblock in ip_ranges:
                                     for block in ipblock:
-                                        parsed_respond[
-                                            block.tag.split("}")[1]
-                                        ] = block.text
+                                        parsed_respond[block.tag.split("}")[1]] = (
+                                            block.text
+                                        )
                             else:
                                 parsed_respond[tag_key] = scope.text
 
@@ -5192,9 +5192,9 @@ class vimconnector(vimconn.VimConnector):
                                 if link.attrib["rel"] == "edit" and link.attrib[
                                     "href"
                                 ].endswith("/disks"):
-                                    vm_virtual_hardware_info[
-                                        "disk_edit_href"
-                                    ] = link.attrib["href"]
+                                    vm_virtual_hardware_info["disk_edit_href"] = (
+                                        link.attrib["href"]
+                                    )
                                     break
 
                     parsed_respond["vm_virtual_hardware"] = vm_virtual_hardware_info
@@ -5306,9 +5306,9 @@ class vimconnector(vimconn.VimConnector):
             )
 
             # Send PUT request to modify disk size
-            headers[
-                "Content-Type"
-            ] = "application/vnd.vmware.vcloud.rasdItemsList+xml; charset=ISO-8859-1"
+            headers["Content-Type"] = (
+                "application/vnd.vmware.vcloud.rasdItemsList+xml; charset=ISO-8859-1"
+            )
 
             response = self.perform_request(
                 req_type="PUT", url=disk_href, headers=headers, data=data
@@ -5834,14 +5834,14 @@ class vimconnector(vimconn.VimConnector):
                         ].spec.ip.ipAddress
 
                         for device in vm_obj.config.hardware.device:
-                            if type(device) == vim.vm.device.VirtualPCIPassthrough:
+                            if device.isinstance(vim.vm.device.VirtualPCIPassthrough):
                                 device_details = {
                                     "devide_id": device.backing.id,
                                     "pciSlotNumber": device.slotInfo.pciSlotNumber,
                                 }
-                                vm_pci_devices_info[
-                                    device.deviceInfo.label
-                                ] = device_details
+                                vm_pci_devices_info[device.deviceInfo.label] = (
+                                    device_details
+                                )
                 else:
                     self.logger.error(
                         "Can not connect to vCenter while getting "
@@ -5986,9 +5986,9 @@ class vimconnector(vimconn.VimConnector):
             )
 
         data = response.text
-        headers[
-            "Content-Type"
-        ] = "application/vnd.vmware.vcloud.networkConfigSection+xml"
+        headers["Content-Type"] = (
+            "application/vnd.vmware.vcloud.networkConfigSection+xml"
+        )
         net_id = self.get_network_id_by_name(net_name)
         if not net_id:
             raise vimconn.VimConnException(
@@ -6103,9 +6103,9 @@ class vimconnector(vimconn.VimConnector):
             data = response.text
             data = data.split('<Link rel="edit"')[0]
 
-            headers[
-                "Content-Type"
-            ] = "application/vnd.vmware.vcloud.networkConnectionSection+xml"
+            headers["Content-Type"] = (
+                "application/vnd.vmware.vcloud.networkConnectionSection+xml"
+            )
 
             newdata = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                       <NetworkConnectionSection xmlns="http://www.vmware.com/vcloud/v1.5"
@@ -6293,9 +6293,9 @@ class vimconnector(vimconn.VimConnector):
 
                         data = data + new_item + "</NetworkConnectionSection>"
 
-                    headers[
-                        "Content-Type"
-                    ] = "application/vnd.vmware.vcloud.networkConnectionSection+xml"
+                    headers["Content-Type"] = (
+                        "application/vnd.vmware.vcloud.networkConnectionSection+xml"
+                    )
 
                     response = self.perform_request(
                         req_type="PUT", url=url_rest_call, headers=headers, data=data
@@ -6446,9 +6446,9 @@ class vimconnector(vimconn.VimConnector):
 
                         data = data + new_item + "</NetworkConnectionSection>"
 
-                    headers[
-                        "Content-Type"
-                    ] = "application/vnd.vmware.vcloud.networkConnectionSection+xml"
+                    headers["Content-Type"] = (
+                        "application/vnd.vmware.vcloud.networkConnectionSection+xml"
+                    )
 
                     response = self.perform_request(
                         req_type="PUT", url=url_rest_call, headers=headers, data=data
@@ -6671,9 +6671,9 @@ class vimconnector(vimconn.VimConnector):
             )
 
             # Send PUT request to modify virtual hardware section with new disk
-            headers[
-                "Content-Type"
-            ] = "application/vnd.vmware.vcloud.rasdItemsList+xml; charset=ISO-8859-1"
+            headers["Content-Type"] = (
+                "application/vnd.vmware.vcloud.rasdItemsList+xml; charset=ISO-8859-1"
+            )
 
             response = self.perform_request(
                 req_type="PUT", url=disk_href, data=new_data, headers=headers
@@ -7258,9 +7258,9 @@ class vimconnector(vimconn.VimConnector):
                 for vms in vapp.get_all_vms():
                     vm_id = vms.get("id").split(":")[-1]
 
-                    headers[
-                        "Content-Type"
-                    ] = "application/vnd.vmware.vcloud.mediaInsertOrEjectParams+xml"
+                    headers["Content-Type"] = (
+                        "application/vnd.vmware.vcloud.mediaInsertOrEjectParams+xml"
+                    )
                     rest_url = "{}/api/vApp/vm-{}/media/action/insertMedia".format(
                         self.url, vm_id
                     )

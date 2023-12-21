@@ -904,9 +904,9 @@ class vimconnector(vimconn.VimConnector):
                     if not net.get("name"):
                         continue
                     else:
-                        net_iface[
-                            "subnetwork"
-                        ] = "regions/%s/subnetworks/" % self.region + net.get("name")
+                        net_iface["subnetwork"] = (
+                            "regions/%s/subnetworks/" % self.region + net.get("name")
+                        )
                 else:
                     net_iface["subnetwork"] = net.get("net_id")
                 if net.get("ip_address"):

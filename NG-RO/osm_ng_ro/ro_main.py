@@ -254,9 +254,9 @@ class Server(object):
                             indata = filecontent.file  # .read()
 
                             if filecontent.content_type.value:
-                                cherrypy.request.headers[
-                                    "Content-Type"
-                                ] = filecontent.content_type.value
+                                cherrypy.request.headers["Content-Type"] = (
+                                    filecontent.content_type.value
+                                )
                     else:
                         # raise cherrypy.HTTPError(HTTPStatus.Not_Acceptable,
                         #                          "Only 'Content-Type' of type 'application/json' or
@@ -356,9 +356,9 @@ class Server(object):
 
         if accept:
             if "application/json" in accept:
-                cherrypy.response.headers[
-                    "Content-Type"
-                ] = "application/json; charset=utf-8"
+                cherrypy.response.headers["Content-Type"] = (
+                    "application/json; charset=utf-8"
+                )
                 a = json.dumps(data, indent=4) + "\n"
 
                 return a.encode("utf8")
@@ -539,15 +539,15 @@ class Server(object):
             return ",".join(folders) + " folders deleted\n"
         elif args and args[0] == "login":
             if not cherrypy.request.headers.get("Authorization"):
-                cherrypy.response.headers[
-                    "WWW-Authenticate"
-                ] = 'Basic realm="Access to OSM site", charset="UTF-8"'
+                cherrypy.response.headers["WWW-Authenticate"] = (
+                    'Basic realm="Access to OSM site", charset="UTF-8"'
+                )
                 cherrypy.response.status = HTTPStatus.UNAUTHORIZED.value
         elif args and args[0] == "login2":
             if not cherrypy.request.headers.get("Authorization"):
-                cherrypy.response.headers[
-                    "WWW-Authenticate"
-                ] = 'Bearer realm="Access to OSM site"'
+                cherrypy.response.headers["WWW-Authenticate"] = (
+                    'Bearer realm="Access to OSM site"'
+                )
                 cherrypy.response.status = HTTPStatus.UNAUTHORIZED.value
         elif args and args[0] == "sleep":
             sleep_time = 5
@@ -743,9 +743,11 @@ class Server(object):
             cherrypy.response.status = (
                 HTTPStatus.ACCEPTED.value
                 if not done
-                else HTTPStatus.OK.value
-                if outdata is not None
-                else HTTPStatus.NO_CONTENT.value
+                else (
+                    HTTPStatus.OK.value
+                    if outdata is not None
+                    else HTTPStatus.NO_CONTENT.value
+                )
             )
 
             return self._format_out(outdata, token_info, _format)
@@ -766,9 +768,9 @@ class Server(object):
                 http_code_name = e.http_code.name
                 cherrypy.log("Exception {}".format(e))
             else:
-                http_code_value = (
-                    cherrypy.response.status
-                ) = HTTPStatus.BAD_REQUEST.value  # INTERNAL_SERVER_ERROR
+                http_code_value = cherrypy.response.status = (
+                    HTTPStatus.BAD_REQUEST.value
+                )  # INTERNAL_SERVER_ERROR
                 cherrypy.log("CRITICAL: Exception {}".format(e), traceback=True)
                 http_code_name = HTTPStatus.BAD_REQUEST.name
 

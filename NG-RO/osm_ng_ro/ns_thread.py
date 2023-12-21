@@ -285,9 +285,11 @@ class VimInteractionNet(VimInteractionBase):
                     ro_task["target_id"],
                     vim_id,
                     ro_vim_item_update.get("vim_status"),
-                    ro_vim_item_update.get("vim_message")
-                    if ro_vim_item_update.get("vim_status") != "ACTIVE"
-                    else "",
+                    (
+                        ro_vim_item_update.get("vim_message")
+                        if ro_vim_item_update.get("vim_status") != "ACTIVE"
+                        else ""
+                    ),
                 )
             )
 
@@ -969,9 +971,11 @@ class VimInteractionVdu(VimInteractionBase):
                     ro_task["target_id"],
                     vim_id,
                     ro_vim_item_update.get("vim_status"),
-                    ro_vim_item_update.get("vim_message")
-                    if ro_vim_item_update.get("vim_status") != "ACTIVE"
-                    else "",
+                    (
+                        ro_vim_item_update.get("vim_message")
+                        if ro_vim_item_update.get("vim_status") != "ACTIVE"
+                        else ""
+                    ),
                 )
             )
 
@@ -1635,9 +1639,9 @@ class VimInteractionSdnNet(VimInteractionBase):
                 new_port = {
                     "service_endpoint_id": pmap.get("service_endpoint_id")
                     or service_endpoint_id,
-                    "service_endpoint_encapsulation_type": "dot1q"
-                    if port["type"] == "SR-IOV"
-                    else None,
+                    "service_endpoint_encapsulation_type": (
+                        "dot1q" if port["type"] == "SR-IOV" else None
+                    ),
                     "service_endpoint_encapsulation_info": {
                         "vlan": port.get("vlan"),
                         "mac": port.get("mac-address"),
@@ -2183,9 +2187,7 @@ class NsWorker(threading.Thread):
         target_database = (
             "vim_accounts"
             if target == "vim"
-            else "wim_accounts"
-            if target == "wim"
-            else "sdns"
+            else "wim_accounts" if target == "wim" else "sdns"
         )
         error_text = ""
 
@@ -2291,9 +2293,7 @@ class NsWorker(threading.Thread):
         target_database = (
             "vim_accounts"
             if target == "vim"
-            else "wim_accounts"
-            if target == "wim"
-            else "sdns"
+            else "wim_accounts" if target == "wim" else "sdns"
         )
         plugin_name = ""
         vim = None
@@ -2474,9 +2474,9 @@ class NsWorker(threading.Thread):
                     and task["action"] == "CREATE"
                 ):
                     # set to finished
-                    db_update["tasks.{}.status".format(index)] = task[
-                        "status"
-                    ] = "FINISHED"
+                    db_update["tasks.{}.status".format(index)] = task["status"] = (
+                        "FINISHED"
+                    )
                 elif task["action"] == "CREATE" and task["status"] not in (
                     "FINISHED",
                     "SUPERSEDED",
@@ -2789,9 +2789,9 @@ class NsWorker(threading.Thread):
                                 task_depends[dependency_task_id] = dependency_ro_task[
                                     "vim_info"
                                 ]["vim_id"]
-                                task_depends[
-                                    "TASK-{}".format(dependency_task_id)
-                                ] = dependency_ro_task["vim_info"]["vim_id"]
+                                task_depends["TASK-{}".format(dependency_task_id)] = (
+                                    dependency_ro_task["vim_info"]["vim_id"]
+                                )
 
                             if dependency_not_completed:
                                 self.logger.warning(

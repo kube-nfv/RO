@@ -863,17 +863,17 @@ class vimconnector(vimconn.VimConnector):
                     )
 
                 if not self.config.get("multisegment_support"):
-                    network_dict[
-                        "provider:physical_network"
-                    ] = provider_physical_network
+                    network_dict["provider:physical_network"] = (
+                        provider_physical_network
+                    )
 
                     if (
                         provider_network_profile
                         and "network-type" in provider_network_profile
                     ):
-                        network_dict[
-                            "provider:network_type"
-                        ] = provider_network_profile["network-type"]
+                        network_dict["provider:network_type"] = (
+                            provider_network_profile["network-type"]
+                        )
                     else:
                         network_dict["provider:network_type"] = self.config.get(
                             "dataplane_network_type", "vlan"

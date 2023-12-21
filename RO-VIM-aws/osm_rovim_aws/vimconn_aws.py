@@ -1034,9 +1034,9 @@ class vimconnector(vimconn.VimConnector):
                                     + interface.private_ip_address
                                 )
                             else:
-                                interface_dict[
-                                    "ip_address"
-                                ] = interface.private_ip_address
+                                interface_dict["ip_address"] = (
+                                    interface.private_ip_address
+                                )
 
                             instance_dict["interfaces"].append(interface_dict)
                     except Exception as e:

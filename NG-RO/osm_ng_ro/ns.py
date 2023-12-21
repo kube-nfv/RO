@@ -737,9 +737,11 @@ class Ns(object):
             # Pinning policy "ISOLATE" uses cores as host should not support SMT architecture
             # Pinning policy "PREFER" uses threads in case host supports SMT architecture
             numa[
-                "cores"
-                if guest_epa_quota.get("cpu-thread-pinning-policy") == "ISOLATE"
-                else "threads"
+                (
+                    "cores"
+                    if guest_epa_quota.get("cpu-thread-pinning-policy") == "ISOLATE"
+                    else "threads"
+                )
             ] = max(vcpu_count, 1)
             local_epa_vcpu_set = True
 
@@ -3393,9 +3395,9 @@ class Ns(object):
 
         return_data = {
             "status": global_status,
-            "details": ". ".join(details)
-            if details
-            else "progress {}/{}".format(done, total),
+            "details": (
+                ". ".join(details) if details else "progress {}/{}".format(done, total)
+            ),
             "nsr_id": nsr_id,
             "action_id": action_id,
             "tasks": task_list,

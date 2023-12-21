@@ -263,9 +263,9 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
                 site_network_accesses = {}
                 site_network_access_list = []
                 site_network_access_list.append(site_network_access)
-                site_network_accesses[
-                    "ietf-l2vpn-svc:site-network-access"
-                ] = site_network_access_list
+                site_network_accesses["ietf-l2vpn-svc:site-network-access"] = (
+                    site_network_access_list
+                )
                 conn_info_d = {}
                 conn_info_d["site"] = connection_point_wan_info["service_mapping_info"][
                     "site-id"
@@ -419,9 +419,9 @@ class WimconnectorIETFL2VPN(SdnConnectorBase):
             site_network_accesses = {}
             site_network_access_list = []
             site_network_access_list.append(site_network_access)
-            site_network_accesses[
-                "ietf-l2vpn-svc:site-network-access"
-            ] = site_network_access_list
+            site_network_accesses["ietf-l2vpn-svc:site-network-access"] = (
+                site_network_access_list
+            )
 
             try:
                 endpoint_site_network_access_edit = (
