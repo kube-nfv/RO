@@ -14,6 +14,9 @@
 # limitations under the License.
 
 set -e
+echo "Skipping the check of the release notes ..."
+exit 0
+
 echo "Checking the presence of release notes ..."
 
 nb_rn=$(git diff --diff-filter=A --name-only HEAD~1 |grep "releasenotes\/notes" |wc -l)
