@@ -300,74 +300,107 @@ class VimConnector:
         userdata = None
         userdata_list = []
 
-        if isinstance(cloud_config, dict):
-            if cloud_config.get("user-data"):
-                if isinstance(cloud_config["user-data"], str):
-                    userdata_list.append(cloud_config["user-data"])
-                else:
-                    for u in cloud_config["user-data"]:
-                        userdata_list.append(u)
+        # For more information, check https://cloudinit.readthedocs.io/en/latest/reference/merging.html
+        # Basically, with this, we don't override the provider's cloud config
+        merge_how = yaml.safe_dump(
+            {
+                "merge_how": [
+                    {
+                        "name": "list",
+                        "settings": ["append", "recurse_dict", "recurse_list"],
+                    },
+                    {
+                        "name": "dict",
+                        "settings": ["no_replace", "recurse_list", "recurse_dict"],
+                    },
+                ]
+            },
+            indent=4,
+            default_flow_style=False,
+        )
 
+        if isinstance(cloud_config, dict):
             if cloud_config.get("boot-data-drive") is not None:
                 config_drive = cloud_config["boot-data-drive"]
+            # If a config drive is needed, userdata is passed directly
+            if config_drive:
+                userdata = cloud_config.get("user-data")
+            # If a config drive is not necessary, then we process userdata and
+            # generate MIME multipart
+            else:
+                if cloud_config.get("user-data"):
+                    if isinstance(cloud_config["user-data"], str):
+                        userdata_list.append(
+                            cloud_config["user-data"] + f"\n{merge_how}"
+                        )
+                    else:
+                        for u in cloud_config["user-data"]:
+                            userdata_list.append(u + f"\n{merge_how}")
 
-            if (
-                cloud_config.get("config-files")
-                or cloud_config.get("users")
-                or cloud_config.get("key-pairs")
-            ):
-                userdata_dict = {}
+                if (
+                    cloud_config.get("config-files")
+                    or cloud_config.get("users")
+                    or cloud_config.get("key-pairs")
+                ):
+                    userdata_dict = {}
 
-                # default user
-                if cloud_config.get("key-pairs"):
-                    userdata_dict["ssh-authorized-keys"] = cloud_config["key-pairs"]
-                    userdata_dict["users"] = [
-                        {
-                            "default": None,
-                            "ssh-authorized-keys": cloud_config["key-pairs"],
+                    # default user
+                    if cloud_config.get("key-pairs"):
+                        userdata_dict["ssh-authorized-keys"] = cloud_config["key-pairs"]
+                        userdata_dict["system_info"] = {
+                            "default_user": {
+                                "ssh_authorized_keys": cloud_config["key-pairs"],
+                            }
                         }
-                    ]
-
-                if cloud_config.get("users"):
-                    if "users" not in userdata_dict:
                         userdata_dict["users"] = ["default"]
 
-                    for user in cloud_config["users"]:
-                        user_info = {
-                            "name": user["name"],
-                            "sudo": "ALL = (ALL)NOPASSWD:ALL",
-                        }
+                    if cloud_config.get("users"):
+                        if "users" not in userdata_dict:
+                            userdata_dict["users"] = ["default"]
 
-                        if "user-info" in user:
-                            user_info["gecos"] = user["user-info"]
+                        for user in cloud_config["users"]:
+                            user_info = {
+                                "name": user["name"],
+                                "sudo": "ALL = (ALL)NOPASSWD:ALL",
+                            }
 
-                        if user.get("key-pairs"):
-                            user_info["ssh-authorized-keys"] = user["key-pairs"]
+                            if "user-info" in user:
+                                user_info["gecos"] = user["user-info"]
 
-                        userdata_dict["users"].append(user_info)
+                            if user.get("key-pairs"):
+                                user_info["ssh-authorized-keys"] = user["key-pairs"]
 
-                if cloud_config.get("config-files"):
-                    userdata_dict["write_files"] = []
-                    for file in cloud_config["config-files"]:
-                        file_info = {"path": file["dest"], "content": file["content"]}
+                            userdata_dict["users"].append(user_info)
 
-                        if file.get("encoding"):
-                            file_info["encoding"] = file["encoding"]
+                    if cloud_config.get("config-files"):
+                        userdata_dict["write_files"] = []
+                        for file in cloud_config["config-files"]:
+                            file_info = {
+                                "path": file["dest"],
+                                "content": file["content"],
+                            }
 
-                        if file.get("permissions"):
-                            file_info["permissions"] = file["permissions"]
+                            if file.get("encoding"):
+                                file_info["encoding"] = file["encoding"]
 
-                        if file.get("owner"):
-                            file_info["owner"] = file["owner"]
+                            if file.get("permissions"):
+                                file_info["permissions"] = file["permissions"]
 
-                        userdata_dict["write_files"].append(file_info)
+                            if file.get("owner"):
+                                file_info["owner"] = file["owner"]
 
-                userdata_list.append(
-                    "#cloud-config\n"
-                    + yaml.safe_dump(userdata_dict, indent=4, default_flow_style=False)
-                )
-            userdata = self._create_mimemultipart(userdata_list)
-            self.logger.debug("userdata: %s", userdata)
+                            userdata_dict["write_files"].append(file_info)
+
+                    userdata_list.append(
+                        "#cloud-config\n"
+                        + yaml.safe_dump(
+                            userdata_dict, indent=4, default_flow_style=False
+                        )
+                        + f"\n{merge_how}"
+                    )
+                userdata = self._create_mimemultipart(userdata_list)
+                self.logger.debug("userdata: %s", userdata)
+            # End if config_drive
         elif isinstance(cloud_config, str):
             userdata = cloud_config
 
