@@ -4532,7 +4532,9 @@ class vimconnector(vimconn.VimConnector):
                 self.nova.servers.resize(server=vm_id, flavor=new_flavor_id)
                 vm_state = self.__wait_for_vm(vm_id, "VERIFY_RESIZE")
                 if vm_state:
-                    instance_resized_status = self.confirm_resize(vm_id)
+                    instance_resized_status = self.confirm_resize(
+                        vm_id, instance_status
+                    )
                     return instance_resized_status
                 else:
                     raise nvExceptions.BadRequest(
@@ -4547,7 +4549,7 @@ class vimconnector(vimconn.VimConnector):
                 message="Cannot 'resize' instance while it is in vm_state resized",
             )
 
-    def confirm_resize(self, vm_id):
+    def confirm_resize(self, vm_id, instance_state):
         """
         Confirm the resize of an instance
         param:
@@ -4556,7 +4558,7 @@ class vimconnector(vimconn.VimConnector):
         self._reload_connection()
         self.nova.servers.confirm_resize(server=vm_id)
         if self.get_vdu_state(vm_id)[0] == "VERIFY_RESIZE":
-            self.__wait_for_vm(vm_id, "ACTIVE")
+            self.__wait_for_vm(vm_id, instance_state)
         instance_status = self.get_vdu_state(vm_id)[0]
         return instance_status
 
