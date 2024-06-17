@@ -625,9 +625,17 @@ class MonitorVms:
         )
 
     @staticmethod
+    def _get_dual_ip(data=None):
+        if data:
+            ip_addresses = [item["ip_address"] for item in data]
+            return ";".join(ip_addresses) if len(ip_addresses) > 1 else ip_addresses[0]
+        else:
+            return None
+
+    @staticmethod
     def _get_current_ip_address(interface_info: dict) -> Optional[str]:
         if interface_info.get("fixed_ips") and interface_info["fixed_ips"][0]:
-            return interface_info["fixed_ips"][0].get("ip_address")
+            return MonitorVms._get_dual_ip(interface_info.get("fixed_ips"))
 
     @staticmethod
     def backup_vdu_interfaces(vdur_vim_info_update: dict) -> None:
