@@ -1835,13 +1835,21 @@ class Ns(object):
             target_vdu, extra_dict, ns_preffix
         )
 
+        instance_name = "{}-{}-{}-{}".format(
+            indata["name"],
+            vnfr["member-vnf-index-ref"],
+            target_vdu["vdu-name"],
+            target_vdu.get("count-index") or 0,
+        )
+        if additional_params := target_vdu.get("additionalParams"):
+            if additional_params.get("OSM", {}).get("instance_name"):
+                instance_name = additional_params.get("OSM", {}).get("instance_name")
+                if count_index := target_vdu.get("count-index"):
+                    if count_index >= 1:
+                        instance_name = "{}-{}".format(instance_name, count_index)
+
         extra_dict["params"] = {
-            "name": "{}-{}-{}-{}".format(
-                indata["name"],
-                vnfr["member-vnf-index-ref"],
-                target_vdu["vdu-name"],
-                target_vdu.get("count-index") or 0,
-            ),
+            "name": instance_name,
             "description": target_vdu["vdu-name"],
             "start": True,
             "image_id": "TASK-" + image_text,
@@ -2068,13 +2076,21 @@ class Ns(object):
                         ].get("vim_id", None)
                         affinity_group_list.append(affinity_group)
 
+        instance_name = "{}-{}-{}-{}".format(
+            db_nsr["name"],
+            vnfr["member-vnf-index-ref"],
+            existing_vdu["vdu-name"],
+            existing_vdu.get("count-index") or 0,
+        )
+        if additional_params := existing_vdu.get("additionalParams"):
+            if additional_params.get("OSM", {}).get("instance_name"):
+                instance_name = additional_params.get("OSM", {}).get("instance_name")
+                if count_index := existing_vdu.get("count-index"):
+                    if count_index >= 1:
+                        instance_name = "{}-{}".format(instance_name, count_index)
+
         extra_dict["params"] = {
-            "name": "{}-{}-{}-{}".format(
-                db_nsr["name"],
-                vnfr["member-vnf-index-ref"],
-                existing_vdu["vdu-name"],
-                existing_vdu.get("count-index") or 0,
-            ),
+            "name": instance_name,
             "description": existing_vdu["vdu-name"],
             "start": True,
             "image_id": vim_details["image"]["id"],
