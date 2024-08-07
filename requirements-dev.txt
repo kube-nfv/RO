@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #######################################################################################
-aiokafka==0.8.1
+aiokafka==0.11.0
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
 async-timeout==4.0.3
     # via
@@ -22,27 +22,27 @@ async-timeout==4.0.3
     #   aiokafka
 dataclasses==0.6
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
-dnspython==2.4.2
+dnspython==2.6.1
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
     #   pymongo
-kafka-python==2.0.2
-    # via
-    #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
-    #   aiokafka
-motor==3.3.1
+motor==3.5.1
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
 osm-common @ git+https://osm.etsi.org/gerrit/osm/common.git@master
     # via -r requirements-dev.in
-packaging==23.1
+packaging==24.1
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
     #   aiokafka
-pycryptodome==3.19.0
+pycryptodome==3.20.0
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
-pymongo==4.5.0
+pymongo==4.8.0
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
     #   motor
-pyyaml==6.0.1
+pyyaml==6.0.2
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
+typing-extensions==4.12.2
+    # via
+    #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
+    #   aiokafka
