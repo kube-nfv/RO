@@ -2139,6 +2139,7 @@ class vimconnector(vimconn.VimConnector):
             boot_volume_id  (str):              ID of boot volume
 
         """
+        self.logger.debug("Preparing root persistent volumes")
         # Disk may include only vim_volume_id or only vim_id."
         # Use existing persistent root volume finding with volume_id or vim_id
         key_id = "vim_volume_id" if "vim_volume_id" in disk.keys() else "vim_id"
@@ -2199,6 +2200,7 @@ class vimconnector(vimconn.VimConnector):
 
     @catch_any_exception
     def new_shared_volumes(self, shared_volume_data) -> (str, str):
+        self.logger.debug("Creating new shared volume")
         availability_zone = (
             self.storage_availability_zone
             if self.storage_availability_zone
@@ -2221,6 +2223,7 @@ class vimconnector(vimconn.VimConnector):
         existing_vim_volumes: list,
         created_items: dict,
     ):
+        self.logger.debug("Preparing shared volumes")
         volumes = {volume.name: volume.id for volume in self.cinder.volumes.list()}
         if volumes.get(disk["name"]):
             sv_id = volumes[disk["name"]]
@@ -2270,6 +2273,7 @@ class vimconnector(vimconn.VimConnector):
         """
         # Non-root persistent volumes
         # Disk may include only vim_volume_id or only vim_id."
+        self.logger.debug("Preparing non-root persistent volumes")
         key_id = "vim_volume_id" if "vim_volume_id" in disk.keys() else "vim_id"
         if disk.get(key_id):
             # Use existing persistent volume
@@ -2304,13 +2308,16 @@ class vimconnector(vimconn.VimConnector):
             elapsed_time    (int):          Time spent while waiting
 
         """
+        self.logger.debug("Waiting for all created volumes to become available")
         while elapsed_time < volume_timeout:
+            self.logger.debug("Checking disk availability for created volumes")
             for created_item in created_items:
                 v, volume_id = (
                     created_item.split(":")[0],
                     created_item.split(":")[1],
                 )
                 if v == "volume":
+                    self.logger.debug(f"Checking volume: {volume_id}")
                     volume = self.cinder.volumes.get(volume_id)
                     if (
                         volume.volume_type == "multiattach"
@@ -2342,8 +2349,11 @@ class vimconnector(vimconn.VimConnector):
 
         """
 
+        self.logger.debug("Waiting for all existing volumes to become available")
         while elapsed_time < volume_timeout:
+            self.logger.debug("Checking disk availability for existing volumes")
             for volume in existing_vim_volumes:
+                self.logger.debug(f"Checking existing volume: {volume}")
                 v = self.cinder.volumes.get(volume["id"])
                 if v.volume_type == "multiattach" and v.status == "in-use":
                     return elapsed_time
@@ -2378,10 +2388,12 @@ class vimconnector(vimconn.VimConnector):
 
         """
         # Create additional volumes in case these are present in disk_list
+        self.logger.debug("Preparing disks for VM instances")
         base_disk_index = ord("b")
         boot_volume_id = None
         elapsed_time = 0
         for disk in disk_list:
+            self.logger.debug(f"Disk: {disk}")
             if "image_id" in disk:
                 # Root persistent volume
                 base_disk_index = ord("a")
@@ -3622,8 +3634,7 @@ class vimconnector(vimconn.VimConnector):
     def get_hosts_info(self):
         """Get the information of deployed hosts
         Returns the hosts content"""
-        if self.debug:
-            print("osconnector: Getting Host info from VIM")
+        self.logger.debug("osconnector: Getting Host info from VIM")
 
         try:
             h_list = []

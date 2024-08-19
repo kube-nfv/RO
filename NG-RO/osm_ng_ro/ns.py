@@ -855,9 +855,8 @@ class Ns(object):
                     for vsd in vnfd.get("virtual-storage-desc", ()):
                         if vsd.get("id") == vdu.get("virtual-storage-desc", [[]])[0]:
                             root_disk = vsd
-                            if (
-                                root_disk.get("type-of-storage")
-                                == "persistent-storage:persistent-storage"
+                            if root_disk.get("type-of-storage", "").endswith(
+                                "persistent-storage"
                             ):
                                 flavor_data["disk"] = 0
 
@@ -1202,10 +1201,7 @@ class Ns(object):
                 and vsd.get("id") == vdu.get("virtual-storage-desc", [[]])[0]
             ):
                 root_disk = vsd
-                if (
-                    root_disk.get("type-of-storage")
-                    == "persistent-storage:persistent-storage"
-                ):
+                if root_disk.get("type-of-storage", "").endswith("persistent-storage"):
                     for vdu_volume in vdu_instantiation_volumes_list:
                         if (
                             vdu_volume["vim-volume-id"]
@@ -1254,7 +1250,7 @@ class Ns(object):
         persistent_disk = {}
         for disk in target_vdu.get("virtual-storages", {}):
             if (
-                disk.get("type-of-storage") == "persistent-storage:persistent-storage"
+                disk.get("type-of-storage", "").endswith("persistent-storage")
                 and disk["id"] not in persistent_root_disk.keys()
             ):
                 for vdu_volume in vdu_instantiation_volumes_list:
@@ -1614,11 +1610,9 @@ class Ns(object):
         """
         if vsd.get("id") == vdu.get("virtual-storage-desc", [[]])[0]:
             root_disk = vsd
-            if root_disk.get(
-                "type-of-storage"
-            ) == "persistent-storage:persistent-storage" and root_disk.get(
-                "size-of-storage"
-            ):
+            if root_disk.get("type-of-storage", "").endswith(
+                "persistent-storage"
+            ) and root_disk.get("size-of-storage"):
                 return root_disk
 
     @staticmethod
@@ -1671,8 +1665,7 @@ class Ns(object):
         if target_vdu.get("virtual-storages"):
             for disk in target_vdu["virtual-storages"]:
                 if (
-                    disk.get("type-of-storage")
-                    == "persistent-storage:persistent-storage"
+                    disk.get("type-of-storage", "").endswith("persistent-storage")
                     and disk["id"] not in persistent_root_disk.keys()
                 ):
                     name, multiattach = Ns.is_shared_volume(disk, vnf_id)
