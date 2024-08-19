@@ -900,6 +900,8 @@ def start_monitoring(config: dict):
     instance = MonitorVms(config)
     period = instance.refresh_config.active
     instance.run()
+    if period == -1:
+        period = 10 * 24 * 60 * 60  # 10 days (big enough)
     monitoring_task = threading.Timer(period, start_monitoring, args=(config,))
     monitoring_task.start()
 

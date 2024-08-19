@@ -41,5 +41,5 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         python3-pip \
         tox
 
-ENV LC_ALL C.UTF-8
-ENV LANG C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV LANG=C.UTF-8
