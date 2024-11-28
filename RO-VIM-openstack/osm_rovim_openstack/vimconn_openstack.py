@@ -314,17 +314,19 @@ class vimconnector(vimconn.VimConnector):
                 )
 
             sess = session.Session(auth=auth, verify=self.verify)
-            # addedd region_name to keystone, nova, neutron and cinder to support distributed cloud for Wind River
+            # added region_name to keystone, nova, neutron and cinder to support distributed cloud for Wind River
             # Titanium cloud and StarlingX
             region_name = self.config.get("region_name")
 
             if self.api_version3:
+                self.logger.debug(f"Using Keystone client v3 for VIM {self.id}")
                 self.keystone = ksClient_v3.Client(
                     session=sess,
                     endpoint_type=self.endpoint_type,
                     region_name=region_name,
                 )
             else:
+                self.logger.debug(f"Using Keystone client v2 for VIM {self.id}")
                 self.keystone = ksClient_v2.Client(
                     session=sess, endpoint_type=self.endpoint_type
                 )
@@ -356,7 +358,18 @@ class vimconnector(vimconn.VimConnector):
                 region_name=region_name,
             )
 
-            if sess.get_all_version_data(service_type="volumev2"):
+            if sess.get_all_version_data(service_type="volumev3"):
+                self.logger.debug(f"Using Cinder client v3 for VIM {self.id}")
+                self.cinder = self.session["cinder"] = cClient.Client(
+                    3,
+                    session=sess,
+                    endpoint_type=self.endpoint_type,
+                    region_name=region_name,
+                )
+            elif sess.get_all_version_data(service_type="volumev2"):
+                self.logger.debug(
+                    f"Service type volumev3 not found. Using Cinder client v2 for VIM {self.id}"
+                )
                 self.cinder = self.session["cinder"] = cClient.Client(
                     2,
                     session=sess,
@@ -364,6 +377,9 @@ class vimconnector(vimconn.VimConnector):
                     region_name=region_name,
                 )
             else:
+                self.logger.debug(
+                    f"Service type not found. Using Cinder client v3 for VIM {self.id}"
+                )
                 self.cinder = self.session["cinder"] = cClient.Client(
                     3,
                     session=sess,
