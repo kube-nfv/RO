@@ -18,7 +18,7 @@ adal==1.2.7
     # via msrestazure
 atpublic==5.0
     # via flufl-enum
-attrs==24.2.0
+attrs==24.3.0
     # via
     #   jsonschema
     #   referencing
@@ -37,7 +37,7 @@ azure-core==1.32.0
     #   msrest
 azure-identity==1.19.0
     # via -r RO-VIM-azure/requirements.in
-azure-mgmt-compute==33.0.0
+azure-mgmt-compute==33.1.0
     # via -r RO-VIM-azure/requirements.in
 azure-mgmt-core==1.5.0
     # via
@@ -209,11 +209,9 @@ netaddr==1.3.0
     #   oslo-config
     #   oslo-utils
     #   python-neutronclient
-netifaces==0.11.0
-    # via openstacksdk
 oauthlib==3.2.2
     # via requests-oauthlib
-openstacksdk==4.1.0
+openstacksdk==4.2.0
     # via
     #   os-client-config
     #   osc-lib
@@ -311,7 +309,9 @@ protobuf==4.25.5
     #   google-api-core
     #   googleapis-common-protos
 psutil==6.1.0
-    # via oslo-utils
+    # via
+    #   openstacksdk
+    #   oslo-utils
 py-radix==0.10.0
     # via ipconflict
 pyasn1==0.6.1
