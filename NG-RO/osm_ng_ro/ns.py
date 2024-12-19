@@ -1934,7 +1934,6 @@ class Ns(object):
         vim_info: Dict[str, Any],
         target_record_id: str,
         target_id: str,
-        flavor_task_id: str,
         **kwargs: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Function to process VDU parameters to recreate.
@@ -2110,7 +2109,7 @@ class Ns(object):
             "description": existing_vdu["vdu-name"],
             "start": True,
             "image_id": vim_details["image"]["id"],
-            "flavor_id": "TASK-" + flavor_task_id,
+            "flavor_id": vim_details["flavor"]["id"],
             "affinity_group_list": affinity_group_list,
             "net_list": net_list,
             "cloud_config": cloud_config or None,
@@ -2938,94 +2937,6 @@ class Ns(object):
 
         return volumes_list
 
-    def _process_recreate_flavor_params(
-        self,
-        existing_vdu: Dict[str, Any],
-        db_nsr: Dict[str, Any],
-        vim_info: Dict[str, Any],
-        target_record_id: str,
-        **kwargs: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """Method to process Flavor parameters to recreate.
-
-        Args:
-            existing_vdu (Dict[str, Any]): [description]
-            db_nsr (Dict[str, Any]): [description]
-            vim_info (Dict[str, Any]): [description]
-            target_record_id (str): [description]
-            target_id (str): [description]
-            kwargs  (dict)
-
-        Returns:
-            vdu_flavor_dict: (Dict[str, Any])
-
-        """
-        try:
-            vdu_flavor_id = existing_vdu.get("ns-flavor-id")
-            target_flavor = next(
-                filter(
-                    lambda vdu_flavor_dict: vdu_flavor_dict["id"] == vdu_flavor_id,
-                    db_nsr.get("flavor"),
-                ),
-                None,
-            )
-            vdu_flavor_dict = Ns._process_flavor_params(
-                target_flavor=target_flavor,
-                indata={},
-                vim_info=vim_info,
-                target_record_id=target_record_id,
-                **kwargs,
-            )
-            vdu_flavor_dict["name"] = target_flavor["name"]
-            return vdu_flavor_dict
-
-        except (DbException, KeyError, ValueError, TypeError) as error:
-            raise NsException(error)
-
-    def _prepare_flavor_create_item(
-        self,
-        existing_instance: dict,
-        db_nsr: dict,
-        target_viminfo: dict,
-        target_record_id: str,
-        target_vim: str,
-        action_id: str,
-        task_index: int,
-        item_index: int,
-        db_record_flavor: str,
-        changes_list: list,
-        **kwargs,
-    ) -> str:
-        flavor_data = self._process_recreate_flavor_params(
-            existing_instance,
-            db_nsr,
-            target_viminfo,
-            target_record_id,
-            **kwargs,
-        )
-        flavor_task_id = f"{action_id}:{task_index}"
-
-        flavor_item = {
-            "deployment_info": {
-                "action_id": action_id,
-                "nsr_id": kwargs["nsr_id"],
-                "task_index": task_index,
-            },
-            "target_id": target_vim,
-            "item": "flavor",
-            "action": "CREATE",
-            "target_record": f"{db_record_flavor}.{item_index}.vim_info.{target_vim}",
-            # "target_record_id": "{}.{}".format(
-            #   db_record_flavor, existing_instance["id"]
-            # ),
-            "target_record_id": target_record_id,
-            "extra_dict": flavor_data,
-            "task_id": flavor_task_id,
-        }
-        changes_list.append(flavor_item)
-
-        return flavor_task_id
-
     def prepare_changes_to_recreate(
         self,
         indata,
@@ -3048,7 +2959,6 @@ class Ns(object):
         # set list with diffs:
         changes_list = []
         db_path = self.db_path_map["vdu"]
-        db_path_flavor = self.db_path_map["flavor"]
         target_list = indata.get("healVnfData", {})
         vdu2cloud_init = indata.get("cloud_init_content") or {}
         ro_nsr_public_key = db_ro_nsr["public_key"]
@@ -3059,7 +2969,6 @@ class Ns(object):
             vnfr_id = target_vnf["vnfInstanceId"]
             existing_vnf = db_vnfrs.get(vnfr_id, {})
             db_record = "vnfrs:{}:{}".format(vnfr_id, db_path)
-            db_record_flavor = "nsrs:{}:{}".format(nsr_id, db_path_flavor)
             # vim_account_id = existing_vnf.get("vim-account-id", "")
 
             target_vdus = target_vnf.get("additionalParams", {}).get("vdu", [])
@@ -3086,10 +2995,6 @@ class Ns(object):
                             and instance["count-index"] == count_index
                         ):
                             existing_instance = instance
-                            item_index_flv = instance.get("ns-flavor-id")
-                            target_record_id_flv = "{}.{}".format(
-                                db_record_flavor, instance.get("ns-flavor-id")
-                            )
                             break
                         else:
                             item_index += 1
@@ -3138,34 +3043,7 @@ class Ns(object):
                     delete_task_id = f"{action_id}:{task_index}"
                     task_index += 1
 
-                    kwargs = {
-                        "vnfr_id": vnfr_id,
-                        "nsr_id": nsr_id,
-                        "vnfr": existing_vnf,
-                        "vdu2cloud_init": vdu2cloud_init,
-                        "tasks_by_target_record_id": tasks_by_target_record_id,
-                        "logger": self.logger,
-                        "db": self.db,
-                        "fs": self.fs,
-                        "ro_nsr_public_key": ro_nsr_public_key,
-                    }
-
-                    # step 2 check if old flavor exists or prepare to create it
-                    flavor_task_id = self._prepare_flavor_create_item(
-                        existing_instance=existing_instance,
-                        db_nsr=db_nsr,
-                        target_viminfo=target_viminfo,
-                        target_record_id=target_record_id_flv,
-                        target_vim=target_vim,
-                        action_id=action_id,
-                        task_index=task_index + 1,
-                        item_index=item_index_flv,
-                        db_record_flavor=db_record_flavor,
-                        changes_list=changes_list,
-                        **kwargs,
-                    )
-
-                    # step 3 vdu to be created
+                    # step 2 vdu to be created
                     kwargs = {}
                     kwargs.update(
                         {
@@ -3187,13 +3065,11 @@ class Ns(object):
                         target_viminfo,
                         target_record_id,
                         target_vim,
-                        flavor_task_id,
                         **kwargs,
                     )
 
                     # The CREATE task depens on the DELETE task
                     extra_dict["depends_on"] = [delete_task_id]
-                    extra_dict["depends_on"].append(flavor_task_id)
 
                     # Add volumes created from created_items if any
                     # Ports should be deleted with delete task and automatically created with create task
