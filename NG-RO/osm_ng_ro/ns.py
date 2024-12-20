@@ -3107,37 +3107,6 @@ class Ns(object):
 
         return changes_list
 
-    def _remove_old_ro_tasks(self, nsr_id: str, changes_list: list, task_param) -> None:
-        """Delete all ro_tasks registered for the targets vdurs (target_record)
-        If task of type CREATE exist then vim will try to get info form deleted VMs.
-        So remove all task related to target record.
-
-        Args:
-            nsr_id (str):           NS record ID
-            changes_list   (list):  list of dictionaries to create tasks later
-        """
-
-        ro_tasks = self.db.get_list("ro_tasks", {"tasks.nsr_id": nsr_id})
-        for change in changes_list:
-            if task_param == "task_id":
-                param_to_check = "{}:{}".format(
-                    change.get("deployment_info", {}).get("action_id"),
-                    change.get("deployment_info", {}).get("task_index"),
-                )
-            elif task_param == "target_record":
-                param_to_check = change["target_record"]
-            for ro_task in ro_tasks:
-                for task in ro_task["tasks"]:
-                    if task[task_param] == param_to_check:
-                        self.db.del_one(
-                            "ro_tasks",
-                            q_filter={
-                                "_id": ro_task["_id"],
-                                "modified_at": ro_task["modified_at"],
-                            },
-                            fail_on_empty=False,
-                        )
-
     def recreate(self, session, indata, version, nsr_id, *args, **kwargs):
         self.logger.debug("ns.recreate nsr_id={} indata={}".format(nsr_id, indata))
         # TODO: validate_input(indata, recreate_schema)
@@ -3186,7 +3155,6 @@ class Ns(object):
                     tasks_by_target_record_id=tasks_by_target_record_id,
                 )
 
-                self._remove_old_ro_tasks(nsr_id, changes_list, "target_record")
                 self.define_all_tasks(
                     changes_list=changes_list,
                     db_new_tasks=db_new_tasks,
@@ -3391,7 +3359,6 @@ class Ns(object):
                         action_id=action_id,
                         tasks_by_target_record_id=tasks_by_target_record_id,
                     )
-                    self._remove_old_ro_tasks(nsr_id, changes_list, "task_id")
                     self.define_all_tasks(
                         changes_list=changes_list,
                         db_new_tasks=db_new_tasks,
