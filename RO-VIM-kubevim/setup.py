@@ -17,3 +17,41 @@
 ##
 
 from setuptools import setup
+_name = "osm_rovim_kubevim"
+_version_command = ("git describe --match v* --tags --long --dirty", "pep440-git-full")
+_description = "OSM ro vim plugin for kube-vim"
+_author = "OSM Support"
+_author_email = "osmsupport@etsi.org"
+_maintainer = "OSM Support"
+_maintainer_email = "osmsupport@etsi.org"
+_license = "Apache 2.0"
+_url = "https://osm.etsi.org/gitweb/?p=osm/RO.git;a=summary"
+
+_readme = """
+===========
+osm-rovim_kubevim
+===========
+
+osm-ro pluging for kubevim VIM
+"""
+
+setup(
+    name=_name,
+    description=_description,
+    long_description=_readme,
+    version_command=_version_command,
+    author=_author,
+    author_email=_author_email,
+    maintainer=_maintainer,
+    maintainer_email=_maintainer_email,
+    url=_url,
+    license=_license,
+    packages=[_name],
+    include_package_data=True,
+    setup_requires=["setuptools-version-command"],
+    entry_points={
+        "osm_rovim.plugins": [
+            "rovim_openvim = osm_rovim_kubevim.vimconn_kubevim:vimconnector"
+        ],
+    },
+)
