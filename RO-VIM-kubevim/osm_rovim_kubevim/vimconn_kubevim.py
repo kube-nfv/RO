@@ -28,10 +28,15 @@ from uuid import uuid4
 from osm_ro_plugin import vimconn
 import yaml
 
+from kubevim_vivnfm_client.configuration import Configuration
+from kubevim_vivnfm_client.api_client import ApiClient
+from kubevim_vivnfm_client.api import vi_vnfm_api
+from kubevim_vivnfm_client.exceptions import ApiException, BadRequestException, ConflictException, NotFoundException, UnauthorizedException
+
+from kubevim_vivnfm_client.models.pb_create_compute_flavour_request import PbCreateComputeFlavourRequest
 
 __author__ = "Dmytro Malovanyi"
 __date__ = "2024-12-20"
-
 
 class vimconnector(vimconn.VimConnector):
     def __init__(
@@ -62,59 +67,20 @@ class vimconnector(vimconn.VimConnector):
             persistent_info,
         )
         self.logger = logging.getLogger("ro.vim.kubevim")
-
+        self.headers_req = {"content-type": "application/json"}
+        self.persistent_info = persistent_info
+        self.configuration = Configuration(
+                host=url
+        )
         if log_level:
             self.logger.setLevel(getattr(logging, log_level))
+        
+        # Contains flavor_id -> flavor_name dict. 
+        # ETSI GS NFV-IFA 006 8.4.2 spec doesn't contains flavor name information
+        # but it is required by the RO.
+        self.flavors = dict()
 
-        self.nets = {
-            "mgmt": {
-                "id": "mgmt",
-                "name": "mgmt",
-                "status": "ACTIVE",
-                "vim_info": "{status: ACTIVE}",
-            }
-        }
-        self.vms = {}
-        self.flavors = {}
-        self.tenants = {}
-        # preload some images
-        self.images = {
-            "90681b39-dc09-49b7-ba2e-2c00c6b33b76": {
-                "id": "90681b39-dc09-49b7-ba2e-2c00c6b33b76",
-                "name": "cirros034",
-                "checksum": "ee1eca47dc88f4879d8a229cc70a07c6",
-            },
-            "83a39656-65db-47dc-af03-b55289115a53": {
-                "id": "",
-                "name": "cirros040",
-                "checksum": "443b7623e27ecf03dc9e01ee93f67afe",
-            },
-            "208314f2-8eb6-4101-965d-fe2ffbaedf3c": {
-                "id": "208314f2-8eb6-4101-965d-fe2ffbaedf3c",
-                "name": "ubuntu18.04",
-                "checksum": "b6fc7b9b91bca32e989e1edbcdeecb95",
-            },
-            "c03321f8-4b6e-4045-a309-1b3878bd32c1": {
-                "id": "c03321f8-4b6e-4045-a309-1b3878bd32c1",
-                "name": "ubuntu16.04",
-                "checksum": "8f08442faebad2d4a99fedb22fca11b5",
-            },
-            "4f6399a2-3554-457e-916e-ada01f8b950b": {
-                "id": "4f6399a2-3554-457e-916e-ada01f8b950b",
-                "name": "ubuntu1604",
-                "checksum": "8f08442faebad2d4a99fedb22fca11b5",
-            },
-            "59ac0b79-5c7d-4e83-b517-4c6c6a8ac1d3": {
-                "id": "59ac0b79-5c7d-4e83-b517-4c6c6a8ac1d3",
-                "name": "hackfest3-mgmt",
-                "checksum": "acec1e5d5ad7be9be7e6342a16bcf66a",
-            },
-            "f8818a03-f099-4c18-b1c7-26b1324203c1": {
-                "id": "f8818a03-f099-4c18-b1c7-26b1324203c1",
-                "name": "hackfest-pktgen",
-                "checksum": "f8818a03-f099-4c18-b1c7-26b1324203c1",
-            },
-        }
+        self.images = dict()
 
     def new_network(
         self,
@@ -124,21 +90,7 @@ class vimconnector(vimconn.VimConnector):
         shared=False,
         provider_network_profile=None,
     ):
-        net_id = str(uuid4())
-        self.logger.debug(
-            "new network id={}, name={}, net_type={}, ip_profile={}, provider_network_profile={}".format(
-                net_id, net_name, net_type, ip_profile, provider_network_profile
-            )
-        )
-        net = {
-            "id": net_id,
-            "name": net_name,
-            "net_type": net_type,
-            "status": "ACTIVE",
-        }
-        self.nets[net_id] = net
-
-        return net_id, net
+        pass
 
     def get_network_list(self, filter_dict=None):
         nets = []
@@ -200,140 +152,126 @@ class vimconnector(vimconn.VimConnector):
 
         return nets
 
-    def get_flavor(self, flavor_id):
-        if flavor_id not in self.flavors:
-            raise vimconn.VimConnNotFoundException(
-                "flavor with id {} not found".format(flavor_id)
-            )
+    # Implemented
+    def get_flavor(self, flavor_id, flavor_name):
+        self.logger.debug(f"Flavour {flavor_id} get request")
+        with ApiClient(self.configuration) as api_client:
+            api_instance = vi_vnfm_api.ViVnfmApi(api_client)
+            query_filter=f'filter=(eq,flavourId/value,{flavor_id})'
+            try:
+                api_response = api_instance.vi_vnfm_query_compute_flavour(query_compute_flavour_filter_value=query_filter)
+                if api_response is None or api_response.flavours is None:
+                    raise vimconn.VimConnNotFoundException(f"failed to find flavor with id: {flavor_id}")
+                flavors = api_response.flavours
+                if len(flavors) == 0:
+                    raise vimconn.VimConnNotFoundException(f"failed to find flavor with id: {flavor_id}")
+                if len(flavors) > 1:
+                    raise vimconn.VimConnUnexpectedResponse(f"more that one flavor found with id: {flavor_id}")
+                flavor = flavors[0]
+                if flavor.flavour_id is None or flavor.flavour_id.value is None:
+                    raise vimconn.VimConnUnexpectedResponse(f"flavor_id can't be empty in flavor query response")
+                rsp_flavor_id = flavor.flavour_id.value
+                if rsp_flavor_id not in self.flavors:
+                    raise vimconn.VimConnUnexpectedResponse(f"flavor with id {rsp_flavor_id} name is missed in local storage. Probably flavor was not created by the RO")
+                flavor_name = self.flavors[rsp_flavor_id]
+                resp = {
+                    "id": rsp_flavor_id,
+                    "name": flavor_name
+                }
+                return resp
+            except ApiException as e:
+                self._format_exception(e)
 
-        return self.flavors[flavor_id]
-
+    # Implemented
     def new_flavor(self, flavor_data):
-        flavor_id = str(uuid4())
-        self.logger.debug(
-            "new flavor id={}, flavor_data={}".format(flavor_id, flavor_data)
-        )
-        flavor = deepcopy(flavor_data)
-        flavor["id"] = flavor_id
-
-        if "name" not in flavor:
-            flavor["name"] = flavor_id
-
-        self.flavors[flavor_id] = flavor
-
-        return flavor_id
-
-    def delete_flavor(self, flavor_id):
-        if flavor_id not in self.flavors:
-            raise vimconn.VimConnNotFoundException(
-                "flavor with id {} not found".format(flavor_id)
-            )
-
-        self.logger.debug("delete flavor id={}".format(flavor_id))
-        self.flavors.pop(flavor_id)
-
-        return flavor_id
-
-    def get_flavor_id_from_data(self, flavor_dict):
-        for flavor_id, flavor_data in self.flavors.items():
-            for k in ("ram", "vcpus", "disk", "extended"):
-                if flavor_data.get(k) != flavor_dict.get(k):
-                    break
-            else:
+        self.logger.debug(f"new flavour creation with data {flavor_data} requested")
+        with ApiClient(self.configuration) as api_client:
+            api_instance = vi_vnfm_api.ViVnfmApi(api_client=api_client)
+            body = PbCreateComputeFlavourRequest.from_dict({
+                "flavour": {
+                    "virtualCpu": {
+                        "numVirtualCpu": flavor_data["vcpus"] 
+                    },
+                    "virtualMemory": {
+                        "virtualMemSize": flavor_data["ram"] # In Mbytes
+                    },
+                    "storageAttributes": [
+                        {
+                            "typeOfStorage": "volume",
+                            "sizeOfStorage": flavor_data.disk
+                        }
+                    ]
+                }
+            })
+            if body is None:
+                raise vimconn.VimConnConnectionException(f"incorrect body format for flavor creation") 
+            try:
+                api_response = api_instance.vi_vnfm_create_compute_flavour(body)
+                flavor_id = api_response.flavour_id
+                if flavor_id is None or flavor_id.value is None:
+                    raise vimconn.VimConnUnexpectedResponse("flavor_id in flavor creation response can't be empty")
+                flavor_id = flavor_id.value
+                self.flavos[flavor_id] = flavor_data.name
                 return flavor_id
+            except ApiException as e:
+                self._format_exception(e)
 
-        raise vimconn.VimConnNotFoundException(
-            "flavor with ram={}  cpu={} disk={} {} not found".format(
-                flavor_dict["ram"],
-                flavor_dict["vcpus"],
-                flavor_dict["disk"],
-                "and extended" if flavor_dict.get("extended") else "",
-            )
-        )
+    # Not Implemented
+    def delete_flavor(self, flavor_id):
+        raise vimconn.VimConnNotImplemented("flavor deletion not implemented yet")
 
-    def new_tenant(self, tenant_name, tenant_description):
-        tenant_id = str(uuid4())
-        self.logger.debug(
-            "new tenant id={}, description={}".format(tenant_id, tenant_description)
-        )
-        tenant = {
-            "name": tenant_name,
-            "description": tenant_description,
-            "id": tenant_id,
-        }
-        self.tenants[tenant_id] = tenant
+    # Implemented
+    def get_flavor_id_from_data(self, flavor_dict):
+        with ApiClient(self.configuration) as api_client:
+            api_instance = vi_vnfm_api.ViVnfmApi(api_client)
+            query_filter=f'filter=(eq,virtualMemory/virtualMemSize,{flavor_dict["ram"]});(eq,virtualCpu/numVirtualCpu,{flavor_dict["vcpus"]};(eq,storageAttributes/sizeOfStorage,{flavor_dict["disk"]}'
+            try:
+                api_response = api_instance.vi_vnfm_query_compute_flavour(query_compute_flavour_filter_value=query_filter)
+                if api_response.flavours is None or len(api_response.flavours) == 0:
+                    raise vimconn.VimConnNotFoundException(
+                        "flavor with ram={}  cpu={} disk={} {} not found".format(
+                            flavor_dict["ram"],
+                            flavor_dict["vcpus"],
+                            flavor_dict["disk"],
+                            "and extended" if flavor_dict.get("extended") else "",
+                        )
+                    )
+                flavor = api_response.flavours[0]
+                if flavor.flavour_id is None or flavor.flavour_id.value is None:
+                    raise vimconn.VimConnUnexpectedResponse(f"flavor_id can't be empty in flavor query response")
+                return flavor.flavour_id.value
+            except ApiException as e:
+                self._format_exception(e)
 
-        return tenant_id
-
-    def delete_tenant(self, tenant_id):
-        if tenant_id not in self.tenants:
-            raise vimconn.VimConnNotFoundException(
-                "tenant with id {} not found".format(tenant_id)
-            )
-
-        self.tenants.pop(tenant_id)
-        self.logger.debug("delete tenant id={}".format(tenant_id))
-
-        return tenant_id
-
-    def get_tenant_list(self, filter_dict=None):
-        tenants = []
-
-        for tenant_id, tenant in self.tenants.items():
-            if filter_dict and filter_dict.get("name"):
-                if tenant["name"] != filter_dict.get("name"):
-                    continue
-
-            if filter_dict and filter_dict.get("id"):
-                if tenant_id != filter_dict.get("id"):
-                    continue
-
-            tenants.append(tenant)
-
-        return tenants
-
+    # Implemented
     def new_image(self, image_dict):
-        image_id = str(uuid4())
-        self.logger.debug("new image id={}, iamge_dict={}".format(image_id, image_dict))
-        image = deepcopy(image_dict)
-        image["id"] = image_id
-
-        if "name" not in image:
-            image["id"] = image_id
-
-        self.images[image_id] = image
-
-        return image_id
+        new_image_dict = {"name": image_dict["name"]}
+        if image_dict.get("description"):
+            new_image_dict["description"] = image_dict["description"]
+        if image_dict.get("metadata"):
+            new_image_dict["metadata"] = yaml.load(
+                image_dict["metadata"], Loader=yaml.SafeLoader,
+            )
+        if image_dict.get("location"):
+            new_image_dict["path"] = image_dict["location"]
+        else:
+            raise vimconn.VimConnException("image_dict should have location for the image")
+        try:
+            with ApiClient(self.configuration) as api_client:
+                api_instance = vi_vnfm_api.ViVnfmApi(api_client=api_client)
+                api_response = api_instance.vi_vnfm_query_image(software_image_id_value=new_image_dict["path"])
+                if api_response.software_image_information is None:
+                    raise vimconn.VimConnException("empty image creation response")
+                sw_img_id = api_response.software_image_information.software_image_id.value
+                self.images[sw_img_id] = new_image_dict
+                return sw_img_id
+        except ApiException as e:
+            self._format_exception(e)
 
     def delete_image(self, image_id):
-        if image_id not in self.images:
-            raise vimconn.VimConnNotFoundException(
-                "image with id {} not found".format(image_id)
-            )
-
-        self.logger.debug("delete image id={}".format(image_id))
-        self.images.pop(image_id)
-
-        return image_id
+        raise vimconn.VimConnNotImplemented("image deletion not implemented yet")
 
     def get_image_list(self, filter_dict=None):
-        images = []
-        for image_id, image in self.images.items():
-            if filter_dict and filter_dict.get("name"):
-                if image["name"] != filter_dict.get("name"):
-                    continue
-
-            if filter_dict and filter_dict.get("checksum"):
-                if image["checksum"] != filter_dict.get("checksum"):
-                    continue
-
-            if filter_dict and filter_dict.get("id"):
-                if image_id != filter_dict.get("id"):
-                    continue
-
-            images.append(image)
-
-        return images
 
     def new_vminstance(
         self,
@@ -463,3 +401,18 @@ class vimconnector(vimconn.VimConnector):
         return super().inject_user_key(
             ip_addr=ip_addr, user=user, key=key, ro_key=ro_key, password=password
         )
+
+    def _format_exception(self, exception: ApiException):
+        """Raises a vimconn exception if the requests to the api is not OK"""
+        if isinstance(exception, UnauthorizedException):
+            raise vimconn.VimConnAuthException(exception)
+        elif isinstance(exception, NotFoundException):
+            raise vimconn.VimConnNotFoundException(exception)
+        elif isinstance(exception, ConflictException):
+            raise vimconn.VimConnConflictException(exception)
+        elif isinstance(exception, BadRequestException):
+            raise vimconn.VimConnException(exception)
+        else:
+            raise vimconn.VimConnConnectionException(exception)
+
+
