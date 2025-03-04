@@ -35,6 +35,7 @@ dist_ro_vim_azure
 dist_ro_vim_openstack
 dist_ro_vim_openvim
 dist_ro_vim_vmware
+dist_ro_vim_vcenter
 dist_ro_vim_gcp"
 
 TOX_ENV_LIST="$(echo $PACKAGES | sed "s/ /,/g")"
