@@ -35,6 +35,16 @@ from kubevim_vivnfm_client.exceptions import ApiException, BadRequestException, 
 
 from kubevim_vivnfm_client.models.pb_create_compute_flavour_request import PbCreateComputeFlavourRequest
 
+from kubevim_vivnfm_client.models.pb_allocate_network_request import PbAllocateNetworkRequest
+from kubevim_vivnfm_client.models.virtual_network_data import VirtualNetworkData
+from kubevim_vivnfm_client.models.network_type import NetworkType
+from kubevim_vivnfm_client.models.network_resource_type import NetworkResourceType
+from kubevim_vivnfm_client.models.network_subnet_data import NetworkSubnetData
+from kubevim_vivnfm_client.models.ip_version import IPVersion
+from kubevim_vivnfm_client.models.ip_address import IPAddress
+from kubevim_vivnfm_client.models.ip_subnet_cidr import IPSubnetCIDR
+
+
 __author__ = "Dmytro Malovanyi"
 __date__ = "2024-12-20"
 
@@ -74,7 +84,7 @@ class vimconnector(vimconn.VimConnector):
         )
         if log_level:
             self.logger.setLevel(getattr(logging, log_level))
-        
+
         # Contains flavor_id -> flavor_name dict. 
         # ETSI GS NFV-IFA 006 8.4.2 spec doesn't contains flavor name information
         # but it is required by the RO.
@@ -90,36 +100,47 @@ class vimconnector(vimconn.VimConnector):
         shared=False,
         provider_network_profile=None,
     ):
-        pass
+        self.logger.debug(f"Network {net_name} create request")
+
+        req = PbAllocateNetworkRequest()
+        req.network_resource_type = NetworkResourceType("NETWORK")
+        req.network_resource_name = net_name
+        net = VirtualNetworkData()
+        net.is_shared = shared
+        subnet = NetworkSubnetData()
+        if ip_profile is not None:
+            if ip_profile["ip_version"] == "IPv4":
+                subnet.ip_version = IPVersion("IPV4")
+            elif ip_profile.ip_version == "IPv6":
+                subnet.ip_version = IPVersion("IPV6")
+            subnet.is_dhcp_enabled = ip_profile["dhcp_enabled"]
+            if "gateway_address" in ip_profile:
+                subnet.gateway_ip = IPAddress(ip=ip_profile["gateway_address"])
+            subnet.cidr = IPSubnetCIDR(cidr=ip_profile["subnet_address"])
+            # TODO: Add dhcp pool
+        if net_type == "bridge":
+            net.network_type = NetworkType("OVERLAY")
+        if net_type in ["data", "ptp"]:
+            net.network_type = NetworkType("UNDERLAY")
+            if provider_network_profile is None:
+                raise vimconn.VimConnNotSupportedException(f"provider network should be defined for the {net_type} network type")
+            net.provider_network = provider_network_profile["provider_network"]
+            net.segmentation_id = provider_network_profile["segmentation-id"]
+
+        net.layer3_attributes = [subnet]
+        
+        with ApiClient(self.configuration) as api_client:
+            api_instance = vi_vnfm_api.ViVnfmApi(api_client)
+            try:
+                api_response = api_instance.vi_vnfm_allocate_virtualised_network_resource(body=req)
+            except ApiException as ex:
+                self._format_exception(ex)
 
     def get_network_list(self, filter_dict=None):
-        nets = []
-
-        for net_id, net in self.nets.items():
-            if filter_dict and filter_dict.get("name"):
-                if net["name"] != filter_dict.get("name"):
-                    continue
-
-            if filter_dict and filter_dict.get("id"):
-                if net_id != filter_dict.get("id"):
-                    continue
-
-            nets.append(net)
-
-        # if no network is returned and search by name create a new one
-        if not nets and filter_dict and filter_dict.get("name"):
-            net_id, net = self.new_network(filter_dict.get("name"), "mgmt")
-            nets.append(net)
-
-        return nets
+        return None
 
     def get_network(self, net_id):
-        if net_id not in self.nets:
-            raise vimconn.VimConnNotFoundException(
-                "network with id {} not found".format(net_id)
-            )
-
-        return self.nets[net_id]
+        return None
 
     def delete_network(self, net_id, created_items=None):
         if net_id not in self.nets:
@@ -211,7 +232,7 @@ class vimconnector(vimconn.VimConnector):
                 if flavor_id is None or flavor_id.value is None:
                     raise vimconn.VimConnUnexpectedResponse("flavor_id in flavor creation response can't be empty")
                 flavor_id = flavor_id.value
-                self.flavos[flavor_id] = flavor_data.name
+                self.flavors[flavor_id] = flavor_data.name
                 return flavor_id
             except ApiException as e:
                 self._format_exception(e)
@@ -260,7 +281,7 @@ class vimconnector(vimconn.VimConnector):
             with ApiClient(self.configuration) as api_client:
                 api_instance = vi_vnfm_api.ViVnfmApi(api_client=api_client)
                 api_response = api_instance.vi_vnfm_query_image(software_image_id_value=new_image_dict["path"])
-                if api_response.software_image_information is None:
+                if api_response.software_image_information is None or api_response.software_image_information.software_image_id is None:
                     raise vimconn.VimConnException("empty image creation response")
                 sw_img_id = api_response.software_image_information.software_image_id.value
                 self.images[sw_img_id] = new_image_dict
@@ -271,7 +292,51 @@ class vimconnector(vimconn.VimConnector):
     def delete_image(self, image_id):
         raise vimconn.VimConnNotImplemented("image deletion not implemented yet")
 
-    def get_image_list(self, filter_dict=None):
+    # Implemented
+    def get_image_list(self, filter_dict={}):
+        self.logger.debug(f"Flavour list request: {filter_dict}")
+        img_filter = ""
+        if filter_dict is not None and len(filter_dict) != 0:
+            img_filter = "filter="
+        for filter_name, filter_val in filter_dict:
+            if filter_name == "id":
+                img_filter += f"(eq,flavourId/value,{filter_val});"
+            elif filter_name == "name":
+                img_id = next((k for k, v in self.images.items() if v == filter_val), None)
+                if img_id is None:
+                    raise vimconn.VimConnConflictException(f"There is no image with name {filter_val}")
+                img_filter += f"(eq,flavourId/value,{img_id});"
+            elif filter_name == "location":
+                raise vimconn.VimConnNotImplemented("list images by the location is not supported yet")
+            elif filter_name == "checksum":
+                raise vimconn.VimConnNotImplemented("list images by the checksum is not supported yet")
+        # remove trailing ;
+        img_filter = img_filter[:-1]
+        with ApiClient(self.configuration) as api_client:
+            api_instance = vi_vnfm_api.ViVnfmApi(api_client)
+            try:
+                api_response = api_instance.vi_vnfm_query_images(img_filter)
+                if api_response == None or api_response.software_images_information == None:
+                    raise vimconn.VimConnNotFoundException(f"images with filter {filter_dict} not found")
+                resp = []
+                for img in api_response.software_images_information:
+                    if img.software_image_id is None:
+                        continue
+                    imgId = img.software_image_id.value
+                    if imgId not in self.images:
+                        continue
+                    img_dict = img.dict()
+                    img_dict["name"] = self.images[imgId]
+                    img_dict["checksum"] = "none"
+                    location_key = "image.kubevim.kubenfv.io/source-url"
+                    if img.metadata and img.metadata.fields and location_key in img.metadata.fields:
+                        img_dict["location"] = img.metadata.fields[location_key]
+                    else:
+                        img_dict["location"] = "None"
+                    resp.append(img_dict)
+                return resp
+            except ApiException as e:
+                self._format_exception(e)
 
     def new_vminstance(
         self,
@@ -414,5 +479,4 @@ class vimconnector(vimconn.VimConnector):
             raise vimconn.VimConnException(exception)
         else:
             raise vimconn.VimConnConnectionException(exception)
-
 
