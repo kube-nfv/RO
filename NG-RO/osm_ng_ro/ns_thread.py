@@ -1482,6 +1482,39 @@ class VimInteractionUpdateVdu(VimInteractionBase):
             return "FAILED", ro_vim_item_update, db_task_update
 
 
+class VimInteractionConsoleVdu(VimInteractionBase):
+    def exec(self, ro_task, task_index, task_depends):
+        self.logger.debug("Execute getconsole")
+        task = ro_task["tasks"][task_index]
+        task_id = task["task_id"]
+        db_task_update = {"retries": 0}
+        target_vim = self.my_vims[ro_task["target_id"]]
+
+        self.logger.debug(f"Execute getconsole task: {task}")
+        try:
+            vim_vm_id = ""
+            if task.get("params"):
+                vim_vm_id = task["params"].get("vim_vm_id")
+                console_data = target_vim.get_vminstance_console(vim_vm_id)
+                self.logger.debug(f"Execute getconsole task result: {console_data}")
+            ro_vim_item_update = {"vim_id": vim_vm_id, "vim_console_data": console_data}
+            self.logger.debug(
+                "task={} {} getconsole done".format(task_id, ro_task["target_id"])
+            )
+            return "DONE", ro_vim_item_update, db_task_update
+        except (vimconn.VimConnException, NsWorkerException) as e:
+            self.logger.error(
+                "task={} vim={} VM Migration:"
+                " {}".format(task_id, ro_task["target_id"], e)
+            )
+            ro_vim_item_update = {
+                "vim_status": "VIM_ERROR",
+                "vim_message": str(e),
+            }
+
+            return "FAILED", ro_vim_item_update, db_task_update
+
+
 class VimInteractionSdnNet(VimInteractionBase):
     @staticmethod
     def _match_pci(port_pci, mapping):
@@ -2091,6 +2124,9 @@ class NsWorker(threading.Thread):
                 self.db, self.my_vims, self.db_vims, self.logger
             ),
             "update": VimInteractionUpdateVdu(
+                self.db, self.my_vims, self.db_vims, self.logger
+            ),
+            "console": VimInteractionConsoleVdu(
                 self.db, self.my_vims, self.db_vims, self.logger
             ),
             "affinity-or-anti-affinity-group": VimInteractionAffinityGroup(

@@ -17,9 +17,13 @@
 Utility class with helper methods to deal with vcenter
 """
 import logging
+from queue import Empty, Queue
+import ssl
+import threading
 import time
 
 from osm_ro_plugin import vimconn
+from pyVim.connect import Disconnect, SmartConnect
 from pyVmomi import vim
 import requests
 
@@ -161,3 +165,124 @@ class VCenterFileUploader:
             )
         else:
             self.logger.debug("ISO File updated successfully")
+
+
+class VCenterSessionPool:
+    """
+    Utility class to manage sessions using a pool
+    """
+
+    def __init__(
+        self,
+        host,
+        user,
+        password,
+        port=443,
+        pool_size=5,
+        ssl_context=None,
+        log_level=None,
+    ):
+        self._host = host
+        self._user = user
+        self._password = password
+        self._port = port
+        self._max_pool_size = pool_size
+        self._ssl_context = ssl_context
+        if not self._ssl_context:
+            self._ssl_context = ssl._create_unverified_context()
+
+        self.pool = Queue(maxsize=pool_size)  # Limit the queue size
+        self.lock = threading.Lock()
+        self.live_sessions = 0
+
+        self.logger = logging.getLogger("ro.vim.vcenter.util")
+        if log_level:
+            self.logger.setLevel(getattr(logging, log_level))
+
+    def _connect(self):
+        try:
+            si = SmartConnect(
+                host=self._host,
+                user=self._user,
+                pwd=self._password,
+                port=self._port,
+                sslContext=self._ssl_context,
+            )
+            self.logger.debug("Created a new vCenter session")
+            return si
+        except vim.fault.InvalidLogin as e:
+            raise vimconn.VimConnAuthException(
+                f"Invalid login accesing vcenter: {str(e)}"
+            )
+        except Exception as e:
+            raise vimconn.VimConnConnectionException(
+                f"Invalid login accesing vcenter: {str(e)}"
+            )
+
+    def _is_session_alive(self, si):
+        if si is None:
+            return False
+        try:
+            alive = si.content.sessionManager.currentSession is not None
+            return alive
+        except Exception as e:
+            self.logger.info(f"Session check failed: {e}, must recreate session")
+            return False
+
+    def get_session(self, timeout=5):
+        try:
+            si = self.pool.get_nowait()
+            self.logger.debug("Reusing session from pool.")
+        except Empty:
+            with self.lock:
+                if self.live_sessions < self._max_pool_size:
+                    si = self._connect()
+                    self.live_sessions += 1
+                    self.logger.debug(f"Live sessions count: {self.live_sessions}")
+                else:
+                    self.logger.info(
+                        "Pool is full. Waiting for an available session..."
+                    )
+                    si = self.pool.get(timeout=timeout)
+
+        if not self._is_session_alive(si):
+            self.logger.warning("Dead session detected. Replacing...")
+            try:
+                Disconnect(si)
+            except Exception as e:
+                self.logger.debug(f"Error during disconnect: {e}")
+            with self.lock:
+                self.live_sessions -= 1
+                self.logger.debug(f"Live sessions count: {self.live_sessions}")
+            return self.get_session(timeout=timeout)
+
+        return si
+
+    def return_session(self, si):
+        if self._is_session_alive(si):
+            self.logger.debug("Returning session to pool.")
+            self.pool.put(si)
+        else:
+            self.logger.debug(
+                "Session is dead on return. Dropping and decrementing count."
+            )
+            try:
+                Disconnect(si)
+            except Exception as e:
+                self.logger.debug(f"Error during disconnect: {e}")
+            with self.lock:
+                self.live_sessions -= 1
+                self.logger.info(f"Live sessions count: {self.live_sessions}")
+
+    def close_all(self):
+        self.logger.info("Closing all sessions in pool...")
+        while not self.pool.empty():
+            si = self.pool.get_nowait()
+            try:
+                Disconnect(si)
+                self.logger.debug("Session disconnected.")
+            except Exception as e:
+                self.logger.warning(f"Error closing session: {e}")
+        with self.lock:
+            self.live_sessions = 0
+        self.logger.info("All sessions closed. Pool is clean.")

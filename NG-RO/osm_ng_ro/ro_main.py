@@ -60,7 +60,6 @@ URL: /ro                                                       GET     POST    P
             /<nsrs_id>                                          O       O               O
                 /<action_id>                                    O
                     /cancel                                             O
-
 """
 
 valid_query_string = ("ADMIN", "SET_PROJECT", "FORCE", "PUBLIC")
@@ -108,6 +107,14 @@ valid_url_methods = {
                     "ROLE_PERMISSION": "stop:id:",
                 },
             },
+            "console": {
+                "METHODS": ("POST",),
+                "ROLE_PERMISSION": "console:",
+                "<ID>": {
+                    "METHODS": ("POST",),
+                    "ROLE_PERMISSION": "console:id:",
+                },
+            },
             "deploy": {
                 "METHODS": ("GET",),
                 "ROLE_PERMISSION": "deploy:",
@@ -120,6 +127,10 @@ valid_url_methods = {
                         "cancel": {
                             "METHODS": ("POST",),
                             "ROLE_PERMISSION": "deploy:id:id:cancel",
+                        },
+                        "viminfo": {
+                            "METHODS": ("GET",),
+                            "ROLE_PERMISSION": "deploy:id:id:viminfo:",
                         },
                     },
                 },
@@ -204,10 +215,12 @@ class Server(object):
             "deploy:id:post": self.ns.deploy,
             "deploy:id:delete": self.ns.delete,
             "deploy:id:id:get": self.ns.status,
+            "deploy:id:id:viminfo:get": self.ns.get_action_viminfo,
             "deploy:id:id:cancel:post": self.ns.cancel,
             "rebuild:id:post": self.ns.rebuild_start_stop,
             "start:id:post": self.ns.rebuild_start_stop,
             "stop:id:post": self.ns.rebuild_start_stop,
+            "console:id:post": self.ns.prepare_get_console,
             "recreate:id:post": self.ns.recreate,
             "recreate:id:id:get": self.ns.recreate_status,
             "migrate:id:post": self.ns.migrate,

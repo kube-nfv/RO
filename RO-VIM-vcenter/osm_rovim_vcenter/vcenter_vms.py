@@ -224,6 +224,13 @@ class VCenterVmsUtil:
             self.logger.warning("WARN : Instance is not in Active state")
             return None
 
+    def get_vm_clone_session_ticket(self, session, vm):
+        """
+        Obtain a clone session ticket for the indicated vm
+        """
+        ticket = session.content.sessionManager.AcquireCloneTicket()
+        return ticket
+
     def unattach_volumes(self, session, vm, volumes):
         """
         Unattach the indicated volumes, volumes includes the volume_path quoted

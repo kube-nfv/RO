@@ -28,10 +28,10 @@ from osm_rovim_vcenter.vcenter_config import VCenterConfig
 from osm_rovim_vcenter.vcenter_ipmanager import VCenterIpManager
 from osm_rovim_vcenter.vcenter_network import VCenterNetworkUtil
 from osm_rovim_vcenter.vcenter_util import VCenterFileUploader
+from osm_rovim_vcenter.vcenter_util import VCenterSessionPool
 from osm_rovim_vcenter.vcenter_vms import VCenterVmsOps
 from osm_rovim_vcenter.vcenter_vms import VCenterVmsUtil
 from osm_rovim_vcenter.vim_helper import CloudInitHelper
-from pyVim.connect import Disconnect, SmartConnect
 from pyVmomi import vim
 import yaml
 
@@ -224,6 +224,14 @@ class vimconnector(vimconn.VimConnector):
             nsx_password=self.nsx_password,
             nsx_verify_ssl=self.nsx_verify_ssl,
             dhcp_configure_always=self.dhcp_configure_always,
+        )
+        self.vc_session_pool = VCenterSessionPool(
+            self.vcenter_hostname,
+            self.user,
+            self.passwd,
+            self.vcenter_port,
+            ssl_context=self.ssl_context,
+            log_level=log_level,
         )
 
     def check_vim_connectivity(self):
@@ -1038,7 +1046,8 @@ class vimconnector(vimconn.VimConnector):
         finally:
             self._disconnect_si(session)
 
-    def get_vminstance_console(self, vm_id, console_type="vnc"):
+    @handle_connector_exceptions
+    def get_vminstance_console(self, vm_id, console_type="vmrc"):
         """
         Get a console for the virtual machine
         Params:
@@ -1055,9 +1064,33 @@ class vimconnector(vimconn.VimConnector):
         self.logger.debug(
             "Get vm instance console, vm_id: %s, console_type: %s", vm_id, console_type
         )
-        raise vimconn.VimConnNotImplemented(
-            "get instance console is not supported in vcenter"
-        )
+        # Check allowed consolo type
+        console_types = "vmrc"
+        if console_type not in console_types:
+            raise vimconn.VimConnException(
+                "console type '{}' not allowed".format(console_type),
+                http_code=vimconn.HTTP_Bad_Request,
+            )
+        VMRC_URL_FORMAT = "vmrc://clone:{ticket}@{vcenter_host}/?moid={vm_moid}"
+
+        session = self._get_vcenter_instance()
+        try:
+            # Get vm
+            vm = self.vcvms_util.get_vm_by_uuid(session, vm_id)
+
+            # Get session ticket
+            ticket = self.vcvms_util.get_vm_clone_session_ticket(session, vm)
+
+            # Build the URL
+            console_url = VMRC_URL_FORMAT.format(
+                ticket=ticket, vcenter_host=self.vcenter_hostname, vm_moid=vm._moId
+            )
+
+            console_dict = {"console_type": console_type, "url": console_url}
+            self.logger.debug("Obtained console_dict: %s", console_dict)
+            return console_dict
+        finally:
+            self._disconnect_si(session)
 
     @handle_connector_exceptions
     def new_network(
@@ -1420,17 +1453,11 @@ class vimconnector(vimconn.VimConnector):
             self.vcenter_port,
             self.user,
         )
-        si = SmartConnect(
-            host=self.vcenter_hostname,
-            user=self.user,
-            pwd=self.passwd,
-            port=self.vcenter_port,
-            sslContext=self.ssl_context,
-        )
-        return si
+        return self.vc_session_pool.get_session()
 
     def _disconnect_si(self, server_instance):
-        Disconnect(server_instance)
+        self.logger.debug("Disconnect session")
+        self.vc_session_pool.return_session(server_instance)
 
     def _get_vcenter_content(self, server_instance):
         return server_instance.RetrieveContent()
