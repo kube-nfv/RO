@@ -636,6 +636,7 @@ class VimConnector:
         disk_list=None,
         availability_zone_index=None,
         availability_zone_list=None,
+        security_group_name=None,
     ):
         """Adds a VM instance to VIM
         Params:
