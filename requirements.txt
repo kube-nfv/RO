@@ -313,8 +313,6 @@ psutil==7.1.0
     # via
     #   openstacksdk
     #   oslo-utils
-py-radix==0.10.0
-    # via ipconflict
 pyasn1==0.6.1
     # via
     #   pyasn1-modules
