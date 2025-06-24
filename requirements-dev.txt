@@ -26,23 +26,23 @@ dnspython==2.7.0
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
     #   pymongo
-motor==3.7.0
+motor==3.7.1
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
 osm-common @ git+https://osm.etsi.org/gerrit/osm/common.git@master
     # via -r requirements-dev.in
-packaging==24.2
+packaging==25.0
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
     #   aiokafka
-pycryptodome==3.21.0
+pycryptodome==3.23.0
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
-pymongo==4.11.2
+pymongo==4.13.2
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
     #   motor
 pyyaml==6.0.2
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
-typing-extensions==4.12.2
+typing-extensions==4.14.0
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
     #   aiokafka
