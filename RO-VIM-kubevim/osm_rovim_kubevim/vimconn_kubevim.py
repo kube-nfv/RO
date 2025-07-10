@@ -23,8 +23,14 @@ TODO:
 from copy import deepcopy
 import logging
 from random import SystemRandom
+from typing import List
 from uuid import uuid4
 
+from kubevim_vivnfm_client.models.mac_address import MacAddress
+from kubevim_vivnfm_client.models.metadata import Metadata
+from kubevim_vivnfm_client.models.type_virtual_nic import TypeVirtualNic
+from kubevim_vivnfm_client.models.user_data import UserData
+from kubevim_vivnfm_client.models.user_data_user_data_transportation_method import UserDataUserDataTransportationMethod
 from osm_ro_plugin import vimconn
 import yaml
 
@@ -404,6 +410,7 @@ class vimconnector(vimconn.VimConnector):
 
     def delete_image(self, image_id):
         # TODO: Implement this
+        self.logger.debug("Delete image unimplemeneted")
         return image_id
 
     # Implemented
@@ -451,6 +458,7 @@ class vimconnector(vimconn.VimConnector):
             except ApiException as e:
                 self._format_exception(e)
 
+    # Implemented ?
     def new_vminstance(
         self,
         name,
@@ -471,46 +479,150 @@ class vimconnector(vimconn.VimConnector):
                 computeName=name,
                 vcImageId=Identifier(value=image_id),
             )
-        req.meta_data = {
+
+        req.meta_data = Metadata(fields={
             "kubernetes.io/description": description,
-        }
+        })
+        req.interface_data = []
+        req.interface_ipam = []
         for net in net_list:
             nic_type = None
             if net["type"] == "virtual":
-                nic_type = VirtualNetworkInterfaceDataTypeVirtualNic.BRIDGE
+                nic_type = TypeVirtualNic.BRIDGE
             elif net["type"] == "PCI_PASSTHROUGH" or net["type"] == "PF":
-                nic_type = VirtualNetworkInterfaceDataTypeVirtualNic.PATHTHROUGH
+                nic_type = TypeVirtualNic.PATHTHROUGH
             # TODO: Differentiate shared and not shared VF's
             elif net["type"] == "SR-IOV" or net["type"] == "VF" or net["type"] == "VFnotShared":
-                nic_type = VirtualNetworkInterfaceDataTypeVirtualNic.SRIOV
+                nic_type = TypeVirtualNic.SRIOV
             else:
                 raise vimconn.VimConnNotSupportedException(f'unknown network type: {net["type"]}')
-            net_data = VirtualNetworkInterfaceData(typeVirtualNic=nic_type)
+            if nic_type is not None:
+                net_data = VirtualNetworkInterfaceData(typeVirtualNic=nic_type)
+
             if net["bw"]:
                 net_data.bandwidth = int(net["bw"]) * 1000
             if "net_id" in net:
                 net_data.network_id = Identifier(value=net["net_id"])
 
+            net_ipam = VirtualNetworkInterfaceIPAM(networkId=net_data.network_id)
+            if "ip_address" in net:
+                net_ipam.ip_address = IPAddress(ip=net["ip_address"])
+            if "mac_address" in net:
+                net_ipam.mac_address = MacAddress(mac=net["mac_address"])
+
+            req.interface_data.append(net_data)
+            req.interface_ipam.append(net_ipam)
+
+        config_drive, userdata = self._create_user_data(cloud_config)
+        req.user_data = UserData(
+                content=str(userdata),
+                method=UserDataUserDataTransportationMethod.CONFIG_DRIVE_PLAINTEXT if config_drive
+                else UserDataUserDataTransportationMethod.CONFIG_DRIVE_MIME_MULTIPART
+            )
         with ApiClient(self.configuration) as api_client:
             api_instance = vi_vnfm_api.ViVnfmApi(api_client)
             try:
                vm_data =  api_instance.vi_vnfm_allocate_virtualised_compute_resource(body=req)
+               return vm_data.compute_data.compute_id, None
             except ApiException as ex:
                 self._format_exception(ex)
 
+    # Implemented
     def get_vminstance(self, vm_id):
+        self.logger.debug(f"Compute {vm_id} get request")
+        with ApiClient(self.configuration) as api_client:
+            api_instance = vi_vnfm_api.ViVnfmApi(api_client)
+            query_filter = f'filter=(eq,computeId/value,{vm_id})'
+            try:
+                api_response = api_instance.vi_vnfm_query_virtualised_compute_resource(query_compute_filter_value=query_filter)
+                if len(api_response.query_result) == 0:
+                    raise vimconn.VimConnNotFoundException(f"not found vm with id {vm_id}")
+                if len(api_response.query_result) > 1:
+                    raise vimconn.VimConnUnexpectedResponse(f"more than one vm was found with id {vm_id}")
+                vm_info = api_response.query_result[0]
+                return vm_info.dict()
+            except ApiException as ex:
+                self._format_exception(ex)
+
+    #Implemented
+    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
+        # Currently only vm_id is enough
+        self.logger.debug(f"Compute {vm_id} delete request")
         with ApiClient(self.configuration) as api_client:
             api_instance = vi_vnfm_api.ViVnfmApi(api_client)
             try:
-                ...
+                api_response = api_instance.vi_vnfm_terminate_virtualised_compute_resource(compute_id_value=vm_id)
+                if api_response.compute_id.value != vm_id:
+                    raise vimconn.VimConnUnexpectedResponse(f"delete vm id {api_response.compute_id.value} mismatch input id {vm_id}")
+                return vm_id
             except ApiException as ex:
                 self._format_exception(ex)
 
-    def delete_vminstance(self, vm_id, created_items=None, volumes_to_hold=None):
-        return None
+    def refresh_vms_status(self, vm_list: List):
+        res = dict()
+        for vm_id in vm_list:
+            try:
+                vm_info = self.get_vminstance(vm_id)
+            except vimconn.VimConnNotFoundException:
+                res[vm_id] = {
+                    "status": "DELETED",
+                    "error_msg": f"vm {vm_id} doesn't exists",
+                }
+                continue
+            except Exception as ex:
+                res[vm_id] = {
+                    "status": "ERROR",
+                    "error_msg": str(ex),
+                }
+                continue
+            running_state = vm_info["runningState"]
+            if running_state == "FAILED":
+                metadata = vm_info["metadata"]["fields"]
+                reason_meta_label = "status.vmi.kubevirt.io/reason"
+                err_msg = "unknown"
+                if reason_meta_label in metadata:
+                    err_msg = metadata[reason_meta_label]
+                res[vm_id] = {
+                    "status": running_state,
+                    "error_msg": err_msg,
+                }
+                continue
 
-    def refresh_vms_status(self, vm_list):
-        return None
+            oper_state = vm_info["operationalState"]
+            if running_state == "RUNNING":
+                vm_status = "ACTIVE"
+            elif running_state == "PAUSED":
+                vm_status = "PAUSED"
+            elif running_state == "STARTING":
+                vm_status = "BUILD"
+            elif running_state == "SUSPENDED":
+                vm_status = "SUSPENDED"
+            elif running_state == "STOPPED" or running_state == "TERMINATING":
+                vm_status = "INACTIVE"
+            else:
+                vm_status = "OTHER"
+                err_msg = "status is {runningState}"
+            
+            vim_info = yaml.safe_dump(vm_info)
+            interfaces = []
+            for iface in vm_info["virtualNetworkInterface"]:
+                iface_dict = dict()
+                iface_dict["vim_info"] = yaml.safe_dump(iface)
+                iface_dict["mac_address"] = iface["macAddress"]["mac"]
+                iface_dict["ip_address"] = iface["ipAddress"]["ip"]
+                iface_dict["vim_net_id"] = iface["networkId"]["value"]
+                iface_dict["vim_interface_id"] = iface["resourceId"]["value"]
+                iface_dict["compute_node"] = vm_info["hostId"]["value"]
+                # TODO: pci and vlan
+                interfaces.append(iface_dict)
+
+            res[vm_id] = {
+                "status": vm_status,
+                "err_msg": err_msg,
+                "vim_info": vim_info,
+                "interfaces": interfaces,
+            }
+        return res
 
     def action_vminstance(self, vm_id, action_dict, created_items={}):
         return None
