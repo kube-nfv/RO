@@ -61,6 +61,9 @@ RUN python3 -m build /build/RO-VIM-aws && \
 RUN python3 -m build /build/RO-VIM-azure && \
     python3 -m pip install /build/RO-VIM-azure/dist/*.whl
 
+RUN python3 -m build /build/RO-VIM-kubevim && \
+    python3 -m pip install /build/RO-VIM-kubevim/dist/*.whl
+
 RUN python3 -m build /build/RO-SDN-dynpac && \
     python3 -m pip install /build/RO-SDN-dynpac/dist/*.whl
 
@@ -90,6 +93,7 @@ RUN python3 -m build /build/RO-VIM-gcp && \
 
 RUN python3 -m build /build/RO-SDN-tapi && \
     python3 -m pip install /build/RO-SDN-tapi/dist/*.whl
+
 
 FROM ubuntu:22.04
 
