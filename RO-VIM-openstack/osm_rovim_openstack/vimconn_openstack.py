@@ -1972,9 +1972,9 @@ class vimconnector(vimconn.VimConnector):
 
             port_dict["security_groups"] = self.security_groups_id
 
-            if security_group_name is not None:
-                self._get_ids_from_name(security_group_name)
-                port_dict["security_groups"] = self.security_groups_id
+        if security_group_name is not None:
+            self._get_ids_from_name(security_group_name)
+            port_dict["security_groups"] = self.security_groups_id
 
     def _prepare_port_dict_binding(self, net: dict, port_dict: dict) -> None:
         """Fill up the network binding depending on network type in the port_dict.
