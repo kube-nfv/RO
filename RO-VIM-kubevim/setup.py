@@ -51,7 +51,7 @@ setup(
     setup_requires=["setuptools-version-command"],
     entry_points={
         "osm_rovim.plugins": [
-            "rovim_openvim = osm_rovim_kubevim.vimconn_kubevim:vimconnector"
+            "rovim_kubevim = osm_rovim_kubevim.vimconn_kubevim:vimconnector"
         ],
     },
 )
