@@ -42,7 +42,7 @@ pymongo==4.13.2
     #   motor
 pyyaml==6.0.2
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
-typing-extensions==4.14.0
+typing-extensions==4.14.1
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
     #   aiokafka
