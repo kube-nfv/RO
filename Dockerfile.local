@@ -27,12 +27,14 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get --yes update && \
 # Upgrade pip and install build tools
 RUN python3 -m pip install -U pip build
 
-COPY . /build
+COPY requirements.txt /build/requirements.txt
 
 RUN git clone https://osm.etsi.org/gerrit/osm/common.git
 
 RUN python3 -m pip install -r requirements.txt \
     -r common/requirements.txt
+
+COPY . /build
 
 RUN python3 -m build /build/common && \
     python3 -m pip install /build/common/dist/*.whl
@@ -42,57 +44,57 @@ RUN python3 -m build /build/RO-plugin && \
 
 RUN python3 -m build /build/NG-RO && \
     python3 -m pip install /build/NG-RO/dist/*.whl
-
-RUN python3 -m build /build/RO-VIM-vmware && \
-    python3 -m pip install /build/RO-VIM-vmware/dist/*.whl
-
-RUN python3 -m build /build/RO-VIM-openstack && \
-    python3 -m pip install /build/RO-VIM-openstack/dist/*.whl
-
-RUN python3 -m build /build/RO-VIM-vcenter && \
-     python3 -m pip install /build/RO-VIM-vcenter/dist/*.whl
-
-RUN python3 -m build /build/RO-VIM-openvim && \
-    python3 -m pip install /build/RO-VIM-openvim/dist/*.whl
-
-RUN python3 -m build /build/RO-VIM-aws && \
-    python3 -m pip install /build/RO-VIM-aws/dist/*.whl
-
-RUN python3 -m build /build/RO-VIM-azure && \
-    python3 -m pip install /build/RO-VIM-azure/dist/*.whl
-
+# 
+# RUN python3 -m build /build/RO-VIM-vmware && \
+#     python3 -m pip install /build/RO-VIM-vmware/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-VIM-openstack && \
+#     python3 -m pip install /build/RO-VIM-openstack/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-VIM-vcenter && \
+#      python3 -m pip install /build/RO-VIM-vcenter/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-VIM-openvim && \
+#     python3 -m pip install /build/RO-VIM-openvim/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-VIM-aws && \
+#     python3 -m pip install /build/RO-VIM-aws/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-VIM-azure && \
+#     python3 -m pip install /build/RO-VIM-azure/dist/*.whl
+# 
 RUN python3 -m build /build/RO-VIM-kubevim && \
     python3 -m pip install /build/RO-VIM-kubevim/dist/*.whl
-
-RUN python3 -m build /build/RO-SDN-dynpac && \
-    python3 -m pip install /build/RO-SDN-dynpac/dist/*.whl
-
-RUN python3 -m build /build/RO-SDN-ietfl2vpn && \
-    python3 -m pip install /build/RO-SDN-ietfl2vpn/dist/*.whl
-
-RUN python3 -m build /build/RO-SDN-onos_vpls && \
-    python3 -m pip install /build/RO-SDN-onos_vpls/dist/*.whl
-
-RUN python3 -m build /build/RO-SDN-onos_openflow && \
-    python3 -m pip install /build/RO-SDN-onos_openflow/dist/*.whl
-
-RUN python3 -m build /build/RO-SDN-odl_openflow && \
-    python3 -m pip install /build/RO-SDN-odl_openflow/dist/*.whl
-
-RUN python3 -m build /build/RO-SDN-floodlight_openflow && \
-    python3 -m pip install /build/RO-SDN-floodlight_openflow/dist/*.whl
-
-RUN python3 -m build /build/RO-SDN-arista_cloudvision && \
-    python3 -m pip install /build/RO-SDN-arista_cloudvision/dist/*.whl
-
-RUN python3 -m build /build/RO-SDN-juniper_contrail && \
-    python3 -m pip install /build/RO-SDN-juniper_contrail/dist/*.whl
-
-RUN python3 -m build /build/RO-VIM-gcp && \
-    python3 -m pip install /build/RO-VIM-gcp/dist/*.whl
-
-RUN python3 -m build /build/RO-SDN-tapi && \
-    python3 -m pip install /build/RO-SDN-tapi/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-SDN-dynpac && \
+#     python3 -m pip install /build/RO-SDN-dynpac/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-SDN-ietfl2vpn && \
+#     python3 -m pip install /build/RO-SDN-ietfl2vpn/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-SDN-onos_vpls && \
+#     python3 -m pip install /build/RO-SDN-onos_vpls/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-SDN-onos_openflow && \
+#     python3 -m pip install /build/RO-SDN-onos_openflow/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-SDN-odl_openflow && \
+#     python3 -m pip install /build/RO-SDN-odl_openflow/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-SDN-floodlight_openflow && \
+#     python3 -m pip install /build/RO-SDN-floodlight_openflow/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-SDN-arista_cloudvision && \
+#     python3 -m pip install /build/RO-SDN-arista_cloudvision/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-SDN-juniper_contrail && \
+#     python3 -m pip install /build/RO-SDN-juniper_contrail/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-VIM-gcp && \
+#     python3 -m pip install /build/RO-VIM-gcp/dist/*.whl
+# 
+# RUN python3 -m build /build/RO-SDN-tapi && \
+#     python3 -m pip install /build/RO-SDN-tapi/dist/*.whl
 
 
 FROM ubuntu:22.04
