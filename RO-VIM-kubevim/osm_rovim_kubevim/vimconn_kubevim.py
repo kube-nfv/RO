@@ -341,7 +341,7 @@ class vimconnector(vimconn.VimConnector):
                 if flavor.flavour_id is None:
                     raise vimconn.VimConnUnexpectedResponse("flavor id can't be empty in response")
                 rsp_flavor_id = flavor.flavour_id.value
-                
+
                 flavNameAnn = "flavour.kubevim.kubenfv.io/attached-name"
                 if flavor.metadata is None or flavor.metadata.fields is None or flavNameAnn not in flavor.metadata.fields:
                     raise vimconn.VimConnUnexpectedResponse(f"flavor missing metadata fields: {flavor_id}")
@@ -364,7 +364,7 @@ class vimconnector(vimconn.VimConnector):
             mem = VirtualMemoryData(virtualMemSize=flavor_data["ram"]) # In Mbytes
             cpu = VirtualCpuData(numVirtualCpu=flavor_data["vcpus"])
             storage = [VirtualStorageData(typeOfStorage="volume", sizeOfStorage=flavor_data["disk"])]
-            
+
             flavor = VirtualComputeFlavour(virtualMemory=mem, virtualCpu=cpu, storageAttributes=storage)
             metadata = Metadata(fields={
                 "flavour.kubevim.kubenfv.io/attached-name": flavor_data["name"]
@@ -665,6 +665,8 @@ class vimconnector(vimconn.VimConnector):
                 ifaceMeta = iface["metadata"]["fields"]
                 ifaceReadyLabel = "interface.vm.kubevirt.io/ready"
                 if ifaceReadyLabel not in ifaceMeta or ifaceMeta[ifaceReadyLabel] == "false":
+                    # Need to think if Active:NoMgmtIp is better suited here
+                    vm_status = "BUILD"
                     continue
                 iface_dict = dict()
                 iface_dict["vim_info"] = yaml.safe_dump(iface)
@@ -672,11 +674,11 @@ class vimconnector(vimconn.VimConnector):
                 if len(iface["ipAddress"]) > 0:
                     iface_dict["ip_address"] = iface["ipAddress"][0]["ip"]
                 else:
-                    iface["ipAddress"] = None
+                    iface_dict["ip_address"] = None
                 if iface["networkId"] is not None:
                     iface_dict["vim_net_id"] = iface["networkId"]["value"]
                 elif iface["metadata"]["fields"]["network.vm.kubevirt.io/management"] == "true":
-                    iface_dict["vim_net_id"] = "menagement"
+                    iface_dict["vim_net_id"] = "management"
                 iface_dict["vim_interface_id"] = iface["resourceId"]["value"]
                 iface_dict["compute_node"] = vm_info["hostId"]["value"]
                 # TODO: pci and vlan
@@ -684,7 +686,7 @@ class vimconnector(vimconn.VimConnector):
 
             res[vm_id] = {
                 "status": vm_status,
-                "err_msg": err_msg,
+                "error_msg": err_msg,
                 "vim_info": vim_info,
                 "interfaces": interfaces,
             }
