@@ -22,7 +22,7 @@ async-timeout==4.0.3
     #   aiokafka
 dataclasses==0.6
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=v17.0
-dnspython==2.7.0
+dnspython==2.8.0
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=v17.0
     #   pymongo
@@ -36,13 +36,13 @@ packaging==25.0
     #   aiokafka
 pycryptodome==3.23.0
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=v17.0
-pymongo==4.13.2
+pymongo==4.15.3
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=v17.0
     #   motor
-pyyaml==6.0.2
+pyyaml==6.0.3
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=v17.0
-typing-extensions==4.14.1
+typing-extensions==4.15.0
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=v17.0
     #   aiokafka

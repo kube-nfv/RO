@@ -16,7 +16,7 @@
 #######################################################################################
 setuptools-version-command==99.9
     # via -r requirements-dist.in
-stdeb==0.10.2
+stdeb==0.11.0
     # via -r requirements-dist.in
 
 # The following packages are considered to be unsafe in a requirements file:
