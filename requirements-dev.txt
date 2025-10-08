@@ -36,7 +36,7 @@ packaging==25.0
     #   aiokafka
 pycryptodome==3.23.0
     # via -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
-pymongo==4.15.1
+pymongo==4.15.2
     # via
     #   -r https://osm.etsi.org/gitweb/?p=osm/common.git;a=blob_plain;f=requirements.txt;hb=master
     #   motor
