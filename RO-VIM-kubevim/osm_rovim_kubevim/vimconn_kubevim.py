@@ -363,7 +363,7 @@ class vimconnector(vimconn.VimConnector):
 
             mem = VirtualMemoryData(virtualMemSize=flavor_data["ram"]) # In Mbytes
             cpu = VirtualCpuData(numVirtualCpu=flavor_data["vcpus"])
-            storage = [VirtualStorageData(typeOfStorage="volume", sizeOfStorage=flavor_data["disk"])]
+            storage = [VirtualStorageData(typeOfStorage="volume", sizeOfStorage=flavor_data["disk"], isBoot=True)]
 
             flavor = VirtualComputeFlavour(virtualMemory=mem, virtualCpu=cpu, storageAttributes=storage)
             metadata = Metadata(fields={
