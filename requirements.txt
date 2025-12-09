@@ -16,7 +16,7 @@
 #######################################################################################
 adal==1.2.7
     # via msrestazure
-atpublic==6.0.2
+atpublic==7.0.0
     # via flufl-enum
 attrs==25.4.0
     # via
@@ -26,34 +26,35 @@ autopage==0.5.2
     # via cliff
 azure-common==1.1.28
     # via
-    #   -r RO-VIM-azure/requirements.in
-    #   azure-mgmt-network
+    #   -r /home/ggdb/osm/RO/RO-VIM-azure/requirements.in
     #   azure-mgmt-resource
-azure-core==1.35.1
+azure-core==1.36.0
     # via
     #   azure-identity
     #   azure-mgmt-core
     #   msrest
 azure-identity==1.25.1
-    # via -r RO-VIM-azure/requirements.in
-azure-mgmt-compute==37.0.0
-    # via -r RO-VIM-azure/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-azure/requirements.in
+azure-mgmt-compute==37.1.0
+    # via -r /home/ggdb/osm/RO/RO-VIM-azure/requirements.in
 azure-mgmt-core==1.6.0
     # via
     #   azure-mgmt-compute
     #   azure-mgmt-network
     #   azure-mgmt-resource
-azure-mgmt-network==29.0.0
-    # via -r RO-VIM-azure/requirements.in
+azure-mgmt-network==30.1.0
+    # via -r /home/ggdb/osm/RO/RO-VIM-azure/requirements.in
 azure-mgmt-resource==24.0.0
-    # via -r RO-VIM-azure/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-azure/requirements.in
+backports-strenum==1.3.1
+    # via cmd2
 bcrypt==5.0.0
     # via paramiko
 boto==2.49.0
-    # via -r RO-VIM-aws/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-aws/requirements.in
 cachetools==5.5.2
     # via google-auth
-certifi==2025.10.5
+certifi==2025.11.12
     # via
     #   msrest
     #   requests
@@ -61,22 +62,22 @@ cffi==2.0.0
     # via
     #   cryptography
     #   pynacl
-charset-normalizer==3.4.3
+charset-normalizer==3.4.4
     # via requests
-cheroot==11.0.0
+cheroot==11.1.2
     # via cherrypy
 cherrypy==18.1.2
-    # via -r NG-RO/requirements.in
-cliff==4.11.0
+    # via -r /home/ggdb/osm/RO/NG-RO/requirements.in
+cliff==4.13.0
     # via
     #   osc-lib
     #   python-neutronclient
     #   python-openstackclient
-cmd2==2.7.0
+cmd2==3.0.0
     # via cliff
-cryptography==46.0.2
+cryptography==46.0.3
     # via
-    #   -r NG-RO/requirements.in
+    #   -r /home/ggdb/osm/RO/NG-RO/requirements.in
     #   adal
     #   azure-identity
     #   msal
@@ -85,8 +86,8 @@ cryptography==46.0.2
     #   pyjwt
     #   pyopenssl
     #   python-openstackclient
-cvprac==1.4.1
-    # via -r RO-SDN-arista_cloudvision/requirements.in
+cvprac==1.4.2
+    # via -r /home/ggdb/osm/RO/RO-SDN-arista_cloudvision/requirements.in
 debtcollector==3.0.0
     # via
     #   oslo-log
@@ -97,29 +98,29 @@ decorator==5.2.1
     # via
     #   dogpile-cache
     #   openstacksdk
-dogpile-cache==1.4.1
+dogpile-cache==1.5.0
     # via openstacksdk
-flufl-enum==7.0.0
+flufl-enum==8.0.0
     # via pyvcloud
 google-api-core==2.8.2
     # via
-    #   -r RO-VIM-gcp/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-gcp/requirements.in
     #   google-api-python-client
 google-api-python-client==2.51.0
-    # via -r RO-VIM-gcp/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-gcp/requirements.in
 google-auth==2.8.0
     # via
-    #   -r RO-VIM-gcp/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-gcp/requirements.in
     #   google-api-core
     #   google-api-python-client
     #   google-auth-httplib2
-google-auth-httplib2==0.2.0
+google-auth-httplib2==0.2.1
     # via google-api-python-client
 google-cloud==0.34.0
-    # via -r RO-VIM-gcp/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-gcp/requirements.in
 googleapis-common-protos==1.56.3
     # via
-    #   -r RO-VIM-gcp/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-gcp/requirements.in
     #   google-api-core
 httplib2==0.31.0
     # via
@@ -127,14 +128,14 @@ httplib2==0.31.0
     #   google-auth-httplib2
 humanfriendly==10.0
     # via pyvcloud
-idna==3.10
+idna==3.11
     # via requests
 importlib-metadata==8.7.0
-    # via -r NG-RO/requirements.in
-invoke==2.2.0
+    # via -r /home/ggdb/osm/RO/NG-RO/requirements.in
+invoke==2.2.1
     # via paramiko
 ipconflict==0.5.0
-    # via -r RO-VIM-aws/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-aws/requirements.in
 iso8601==2.1.0
     # via
     #   keystoneauth1
@@ -144,7 +145,6 @@ iso8601==2.1.0
     #   python-openstackclient
 isodate==0.7.2
     # via
-    #   azure-mgmt-network
     #   azure-mgmt-resource
     #   msrest
 jaraco-functools==4.3.0
@@ -152,7 +152,7 @@ jaraco-functools==4.3.0
     #   cheroot
     #   tempora
 jinja2==3.1.6
-    # via -r NG-RO/requirements.in
+    # via -r /home/ggdb/osm/RO/NG-RO/requirements.in
 jmespath==1.0.1
     # via openstacksdk
 jsonpatch==1.33
@@ -175,7 +175,7 @@ keystoneauth1==5.12.0
     #   python-neutronclient
     #   python-novaclient
 logutils==0.3.5
-    # via -r NG-RO/requirements.in
+    # via -r /home/ggdb/osm/RO/NG-RO/requirements.in
 lxml==6.0.2
     # via pyvcloud
 markdown-it-py==4.0.0
@@ -199,22 +199,23 @@ msgpack==1.1.2
     # via oslo-serialization
 msrest==0.7.1
     # via
-    #   -r RO-VIM-azure/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-azure/requirements.in
     #   azure-mgmt-compute
+    #   azure-mgmt-network
     #   msrestazure
 msrestazure==0.6.4.post1
-    # via -r RO-VIM-azure/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-azure/requirements.in
 netaddr==1.3.0
     # via
-    #   -r RO-VIM-aws/requirements.in
-    #   -r RO-VIM-gcp/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-aws/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-gcp/requirements.in
     #   ipconflict
     #   oslo-config
     #   oslo-utils
     #   python-neutronclient
 oauthlib==3.3.1
     # via requests-oauthlib
-openstacksdk==4.7.1
+openstacksdk==4.8.0
     # via
     #   os-client-config
     #   osc-lib
@@ -222,7 +223,7 @@ openstacksdk==4.7.1
     #   python-openstackclient
 os-client-config==2.3.0
     # via python-neutronclient
-os-service-types==1.8.0
+os-service-types==1.8.2
     # via
     #   keystoneauth1
     #   openstacksdk
@@ -230,13 +231,13 @@ osc-lib==4.2.0
     # via
     #   python-neutronclient
     #   python-openstackclient
-oslo-config==10.0.0
+oslo-config==10.1.0
     # via
     #   oslo-log
     #   python-keystoneclient
-oslo-context==6.1.0
+oslo-context==6.2.0
     # via oslo-log
-oslo-i18n==6.6.0
+oslo-i18n==6.7.1
     # via
     #   osc-lib
     #   oslo-config
@@ -256,7 +257,7 @@ oslo-serialization==5.8.0
     #   python-keystoneclient
     #   python-neutronclient
     #   python-novaclient
-oslo-utils==9.1.0
+oslo-utils==9.2.0
     # via
     #   osc-lib
     #   oslo-log
@@ -273,9 +274,9 @@ packaging==25.0
     #   python-keystoneclient
 paramiko==4.0.0
     # via
-    #   -r RO-VIM-gcp/requirements.in
-    #   -r RO-plugin/requirements.in
-pbr==7.0.1
+    #   -r /home/ggdb/osm/RO/RO-VIM-gcp/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-plugin/requirements.in
+pbr==7.0.3
     # via
     #   keystoneauth1
     #   openstacksdk
@@ -292,27 +293,29 @@ pbr==7.0.1
     #   python-neutronclient
     #   python-novaclient
     #   python-openstackclient
-platformdirs==4.4.0
+platformdirs==4.5.1
     # via openstacksdk
 portend==3.2.1
     # via cherrypy
-prettytable==3.16.0
+prettytable==3.17.0
     # via
-    #   -r RO-VIM-vmware/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-vmware/requirements.in
     #   cliff
     #   python-cinderclient
     #   python-glanceclient
     #   python-novaclient
 progressbar==2.5
-    # via -r RO-VIM-vmware/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-vmware/requirements.in
 protobuf==4.25.8
     # via
     #   google-api-core
     #   googleapis-common-protos
-psutil==7.1.0
+psutil==7.1.3
     # via
     #   openstacksdk
     #   oslo-utils
+py-radix==1.1.0
+    # via ipconflict
 pyasn1==0.6.1
     # via
     #   pyasn1-modules
@@ -329,7 +332,7 @@ pyjwt[crypto]==2.10.1
     # via
     #   adal
     #   msal
-pynacl==1.6.0
+pynacl==1.6.1
     # via paramiko
 pyopenssl==25.3.0
     # via python-glanceclient
@@ -343,7 +346,7 @@ pysocks==1.7.1
     # via requests
 python-cinderclient==7.4.1
     # via
-    #   -r RO-VIM-openstack/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-openstack/requirements.in
     #   python-openstackclient
 python-dateutil==2.9.0.post0
     # via
@@ -351,41 +354,41 @@ python-dateutil==2.9.0.post0
     #   oslo-log
     #   tempora
 python-glanceclient==4.10.0
-    # via -r RO-VIM-openstack/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-openstack/requirements.in
 python-keystoneclient==5.7.0
     # via
-    #   -r RO-VIM-openstack/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-openstack/requirements.in
     #   python-neutronclient
     #   python-openstackclient
 python-neutronclient==11.6.0
-    # via -r RO-VIM-openstack/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-openstack/requirements.in
 python-novaclient==18.11.0
     # via
-    #   -r NG-RO/requirements.in
-    #   -r RO-VIM-openstack/requirements.in
+    #   -r /home/ggdb/osm/RO/NG-RO/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-openstack/requirements.in
 python-openstackclient==8.2.0
-    # via -r RO-VIM-openstack/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-openstack/requirements.in
 pyvcloud==19.1.1
-    # via -r RO-VIM-vmware/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-vmware/requirements.in
 pyvmomi==9.0.0.0
-    # via -r RO-VIM-vmware/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-VIM-vmware/requirements.in
 pyyaml==6.0.3
     # via
-    #   -r NG-RO/requirements.in
+    #   -r /home/ggdb/osm/RO/NG-RO/requirements.in
     #   -r requirements.in
     #   cliff
     #   openstacksdk
     #   oslo-config
     #   oslo-utils
     #   pyvcloud
-referencing==0.36.2
+referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
 requests[socks]==2.32.5
     # via
-    #   -r NG-RO/requirements.in
-    #   -r RO-VIM-vmware/requirements.in
+    #   -r /home/ggdb/osm/RO/NG-RO/requirements.in
+    #   -r /home/ggdb/osm/RO/RO-VIM-vmware/requirements.in
     #   adal
     #   azure-core
     #   cvprac
@@ -408,11 +411,13 @@ requestsexceptions==1.4.0
     # via openstacksdk
 rfc3986==2.0.0
     # via oslo-config
-rich==14.1.0
-    # via rich-argparse
-rich-argparse==1.7.1
+rich==14.2.0
+    # via
+    #   cmd2
+    #   rich-argparse
+rich-argparse==1.7.2
     # via cmd2
-rpds-py==0.27.1
+rpds-py==0.30.0
     # via
     #   jsonschema
     #   referencing
@@ -422,11 +427,10 @@ simplejson==3.20.2
     # via python-cinderclient
 six==1.17.0
     # via
-    #   azure-core
     #   google-auth
     #   msrestazure
     #   python-dateutil
-stevedore==5.5.0
+stevedore==5.6.0
     # via
     #   cliff
     #   dogpile-cache
@@ -453,6 +457,7 @@ typing-extensions==4.15.0
     #   flufl-enum
     #   keystoneauth1
     #   openstacksdk
+    #   os-service-types
     #   oslo-context
     #   pyopenssl
     #   referencing
@@ -462,17 +467,15 @@ tzdata==2025.2
     #   oslo-utils
 uritemplate==4.2.0
     # via google-api-python-client
-urllib3==2.5.0
+urllib3==2.6.1
     # via requests
 uuid==1.30
-    # via -r RO-SDN-arista_cloudvision/requirements.in
+    # via -r /home/ggdb/osm/RO/RO-SDN-arista_cloudvision/requirements.in
 warlock==2.1.0
     # via python-glanceclient
 wcwidth==0.2.14
-    # via
-    #   cmd2
-    #   prettytable
-wrapt==1.17.3
+    # via prettytable
+wrapt==2.0.1
     # via
     #   debtcollector
     #   python-glanceclient
