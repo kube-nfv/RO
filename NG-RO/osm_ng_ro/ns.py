@@ -39,13 +39,13 @@ from jinja2 import (
     UndefinedError,
 )
 from osm_common import (
+    _version as common_version,
     dbmemory,
     dbmongo,
     fslocal,
     fsmongo,
     msgkafka,
     msglocal,
-    version as common_version,
 )
 from osm_common.dbbase import DbBase, DbException
 from osm_common.fsbase import FsBase, FsException
