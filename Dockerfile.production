@@ -78,8 +78,7 @@ RUN test -x /app/ro/.venv/bin/python && /app/ro/.venv/bin/python -c "import sys;
 
 # Install OSM dependency modules
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-  git clone --filter=blob:none --tags https://osm.etsi.org/gerrit/osm/common.git /tmp/osm-common && \
+RUN git clone --filter=blob:none --tags https://osm.etsi.org/gerrit/osm/common.git /tmp/osm-common && \
   cd /tmp/osm-common && \
   git fetch origin ${COMMON_GERRIT_REFSPEC} && \
   git checkout FETCH_HEAD && \
@@ -90,7 +89,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY requirements.txt ./
 
 # Install py-radix from source with a one-line patch (no build isolation)
-RUN --mount=type=cache,target=/root/.cache/pip \
+RUN \
     # py-radix is installed as dependency of the ipconflict package
     # the installation is a bit special as it is not fully compatible with Alpine library versions
     # similar issue reported here: https://github.com/mjschultz/py-radix/issues/70
@@ -99,8 +98,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-build-isolation /tmp/py-radix && \
     pip install -r requirements.txt
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install git+https://github.com/mjschultz/py-radix.git && \
+RUN pip install git+https://github.com/mjschultz/py-radix.git && \
     pip install -r requirements.txt
 
 COPY . .
