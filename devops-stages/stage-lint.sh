@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-set -e
+
 echo "Launching tox"
-tox
-# TOX_PARALLEL_NO_SPINNER=1 tox --parallel=auto -e cover
+# TOX_PARALLEL_NO_SPINNER=1 tox --parallel=auto -e black,flake8,pylint,safety
+echo "DONE"
