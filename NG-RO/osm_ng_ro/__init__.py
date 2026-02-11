@@ -14,15 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ##
+import importlib.metadata
 import logging
-
-from pkg_resources import get_distribution
 
 version = "8.0.1.post0"
 version_date = "2020-06-29"
 
-# Obtain installed package version. Ignore if error, e.g. pkg_resources not installed
+# Obtain installed package version. Ignore if error, e.g. importlib.metadata not installed
 try:
-    version = get_distribution("osm_ng_ro").version
+    version = importlib.metadata.version("osm_ng_ro")
 except Exception as error:
     logging.warning(f"{error} occured while getting the ro version")
