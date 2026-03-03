@@ -29,6 +29,7 @@ import json
 from kubevim_vivnfm_client.models.mac_address import MacAddress
 from kubevim_vivnfm_client.models.metadata import Metadata
 from kubevim_vivnfm_client.models.operational_state import OperationalState
+from kubevim_vivnfm_client.models.resource_quantity import ResourceQuantity
 from kubevim_vivnfm_client.models.type_virtual_nic import TypeVirtualNic
 from kubevim_vivnfm_client.models.user_data import UserData
 from kubevim_vivnfm_client.models.user_data_user_data_transportation_method import UserDataUserDataTransportationMethod
@@ -239,10 +240,12 @@ class vimconnector(vimconn.VimConnector):
             try:
                 api_response = api_instance.vi_vnfm_query_virtualised_network_resource("NETWORK", query_filter)
                 res = []
-                if api_response is None or api_response.query_network_result is None:
+                if api_response is None:
                     raise vimconn.VimConnUnexpectedResponse("response can't be empty")
-                for net in api_response.query_network_result:
-                    res.append(network_from_virtual_network_response(net))
+                # query_network_result can be None when no networks match the filter
+                if api_response.query_network_result is not None:
+                    for net in api_response.query_network_result:
+                        res.append(network_from_virtual_network_response(net))
                 return res
             except ApiException as ex:
                 self._format_exception(ex)
@@ -255,11 +258,12 @@ class vimconnector(vimconn.VimConnector):
             query_filter = f'filter=(eq,networkResourceId/value,{net_id})'
             try:
                 api_response = api_instance.vi_vnfm_query_virtualised_network_resource( "NETWORK", query_filter)
-                if api_response is None or api_response.query_network_result is None:
+                if api_response is None:
                     raise vimconn.VimConnUnexpectedResponse("received empty response")
-                net_data_lst = api_response.query_network_result
-                if len(net_data_lst) == 0:
+                # query_network_result can be None when no networks match the filter
+                if api_response.query_network_result is None or len(api_response.query_network_result) == 0:
                     raise vimconn.VimConnNotFoundException(f"network with id {net_id} not found")
+                net_data_lst = api_response.query_network_result
                 if len(net_data_lst) > 1:
                     raise vimconn.VimConnUnexpectedResponse(f"More that one network found by the id {net_id}")
                 net_data = net_data_lst[0]
@@ -330,11 +334,10 @@ class vimconnector(vimconn.VimConnector):
             query_filter=f'filter=(eq,flavourId/value,{flavor_id})'
             try:
                 api_response = api_instance.vi_vnfm_query_compute_flavour(query_compute_flavour_filter_value=query_filter)
-                if api_response is None or api_response.flavours is None:
+                # flavours can be None when no flavours match the filter
+                if api_response is None or api_response.flavours is None or len(api_response.flavours) == 0:
                     raise vimconn.VimConnNotFoundException(f"failed to find flavor with id: {flavor_id}")
                 flavors = api_response.flavours
-                if len(flavors) == 0:
-                    raise vimconn.VimConnNotFoundException(f"failed to find flavor with id: {flavor_id}")
                 if len(flavors) > 1:
                     raise vimconn.VimConnUnexpectedResponse(f"more that one flavor found with id: {flavor_id}")
                 flavor = flavors[0]
@@ -361,9 +364,9 @@ class vimconnector(vimconn.VimConnector):
             api_instance = vi_vnfm_api.ViVnfmApi(api_client=api_client)
 
 
-            mem = VirtualMemoryData(virtualMemSize=flavor_data["ram"]) # In Mbytes
+            mem = VirtualMemoryData(virtualMemSize=ResourceQuantity(string=f'{flavor_data["ram"]}M'))
             cpu = VirtualCpuData(numVirtualCpu=flavor_data["vcpus"])
-            storage = [VirtualStorageData(typeOfStorage="volume", sizeOfStorage=flavor_data["disk"], isBoot=True)]
+            storage = [VirtualStorageData(typeOfStorage="volume", sizeOfStorage=ResourceQuantity(string=f'{flavor_data["disk"]}Gi'), isBoot=True)]
 
             flavor = VirtualComputeFlavour(virtualMemory=mem, virtualCpu=cpu, storageAttributes=storage)
             metadata = Metadata(fields={
@@ -395,7 +398,7 @@ class vimconnector(vimconn.VimConnector):
     def get_flavor_id_from_data(self, flavor_dict):
         with ApiClient(self.configuration) as api_client:
             api_instance = vi_vnfm_api.ViVnfmApi(api_client)
-            query_filter=f'filter=(eq,virtualMemory/virtualMemSize,{flavor_dict["ram"]});(eq,virtualCpu/numVirtualCpu,{flavor_dict["vcpus"]});(eq,storageAttributes/sizeOfStorage,{flavor_dict["disk"]})'
+            query_filter=f'filter=(eq,virtualMemory/virtualMemSize,{flavor_dict["ram"]}M);(eq,virtualCpu/numVirtualCpu,{flavor_dict["vcpus"]});(eq,storageAttributes/sizeOfStorage,{flavor_dict["disk"]}Gi)'
             try:
                 api_response = api_instance.vi_vnfm_query_compute_flavour(query_compute_flavour_filter_value=query_filter)
                 if api_response.flavours is None or len(api_response.flavours) == 0:
@@ -466,9 +469,12 @@ class vimconnector(vimconn.VimConnector):
             api_instance = vi_vnfm_api.ViVnfmApi(api_client)
             try:
                 api_response = api_instance.vi_vnfm_query_images(img_filter)
-                if api_response == None or api_response.software_images_information == None:
-                    raise vimconn.VimConnNotFoundException(f"images with filter {filter_dict} not found")
                 resp = []
+                if api_response == None:
+                    raise vimconn.VimConnUnexpectedResponse("received empty response")
+                # software_images_information can be None when no images match the filter
+                if api_response.software_images_information is None:
+                    return resp
                 for img in api_response.software_images_information:
                     imgId = img.software_image_id.value
                     img_dict = img.to_dict()
@@ -553,11 +559,12 @@ class vimconnector(vimconn.VimConnector):
             req.interface_ipam.append(net_ipam)
 
         config_drive, userdata = self._create_user_data(cloud_config)
-        req.user_data = UserData(
-                content=str(userdata),
-                method=UserDataUserDataTransportationMethod.CONFIG_DRIVE_PLAINTEXT if config_drive
-                else UserDataUserDataTransportationMethod.CONFIG_DRIVE_MIME_MULTIPART
-            )
+        if userdata:
+            req.user_data = UserData(
+                    content=str(userdata),
+                    method=UserDataUserDataTransportationMethod.CONFIG_DRIVE_PLAINTEXT if config_drive
+                    else UserDataUserDataTransportationMethod.CONFIG_DRIVE_MIME_MULTIPART
+                )
         with ApiClient(self.configuration) as api_client:
             api_instance = vi_vnfm_api.ViVnfmApi(api_client)
             try:
@@ -592,7 +599,8 @@ class vimconnector(vimconn.VimConnector):
             query_filter = f'filter=(eq,computeId/value,{vm_id})'
             try:
                 api_response = api_instance.vi_vnfm_query_virtualised_compute_resource(query_compute_filter_value=query_filter)
-                if len(api_response.query_result) == 0:
+                # query_result can be None when no VMs match the filter
+                if api_response.query_result is None or len(api_response.query_result) == 0:
                     raise vimconn.VimConnNotFoundException(f"not found vm with id {vm_id}")
                 if len(api_response.query_result) > 1:
                     raise vimconn.VimConnUnexpectedResponse(f"more than one vm was found with id {vm_id}")
