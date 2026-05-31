@@ -193,14 +193,22 @@ class vimconnector(vimconn.VimConnector):
             subnet.is_dhcp_enabled = True
 
         # TODO: Add dhcp pool
-        if net_type == "bridge":
-            net.network_type = NetworkType("OVERLAY")
-        if net_type in ["data", "ptp"]:
+        if net_type in ["data", "ptp"] or provider_network_profile:
             net.network_type = NetworkType("UNDERLAY")
             if provider_network_profile is None:
                 raise vimconn.VimConnNotSupportedException(f"provider network should be defined for the {net_type} network type")
-            net.provider_network = provider_network_profile["provider_network"]
-            net.segmentation_id = provider_network_profile["segmentation-id"]
+            net.provider_network = (
+                provider_network_profile.get("physical-network")
+                or provider_network_profile.get("provider_network")
+            )
+            seg_id = (
+                provider_network_profile.get("segmentation-id")
+                or provider_network_profile.get("segmentation_id")
+            )
+            if seg_id and str(seg_id) != "0":
+                net.segmentation_id = str(seg_id)
+        else:
+            net.network_type = NetworkType("OVERLAY")
 
         if subnet:
             net.layer3_attributes = [subnet]
@@ -558,12 +566,11 @@ class vimconnector(vimconn.VimConnector):
             req.interface_data.append(net_data)
             req.interface_ipam.append(net_ipam)
 
-        config_drive, userdata = self._create_user_data(cloud_config)
+        _, userdata = self._create_user_data(cloud_config)
         if userdata:
             req.user_data = UserData(
                     content=str(userdata),
-                    method=UserDataUserDataTransportationMethod.CONFIG_DRIVE_PLAINTEXT if config_drive
-                    else UserDataUserDataTransportationMethod.CONFIG_DRIVE_MIME_MULTIPART
+                    method=UserDataUserDataTransportationMethod.NO_CLOUD,
                 )
         with ApiClient(self.configuration) as api_client:
             api_instance = vi_vnfm_api.ViVnfmApi(api_client)
@@ -574,8 +581,14 @@ class vimconnector(vimconn.VimConnector):
                     ifaceMeta = iface.metadata
                     if ifaceMeta is None or ifaceMeta.fields is None:
                         continue
+                    # Skip the KubeVirt-managed PodNetwork interface (ovn-default,
+                    # tagged with network.vm.kubevirt.io/management=true by kube-vim).
+                    # All Multus-attached interfaces (no such label) must be processed
+                    # so their vim_id gets recorded; otherwise ns_thread raises KeyError
+                    # on net_list iface["vim_id"] and the whole VDU CREATE task is
+                    # marked FAILED even though kube-vim already created the VM.
                     mgmtIfaceLabel = "network.vm.kubevirt.io/management"
-                    if mgmtIfaceLabel not in ifaceMeta.fields or ifaceMeta.fields[mgmtIfaceLabel] == "true":
+                    if mgmtIfaceLabel in ifaceMeta.fields and ifaceMeta.fields[mgmtIfaceLabel] == "true":
                         continue
                     if iface.network_id is None:
                         continue
